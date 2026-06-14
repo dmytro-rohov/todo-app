@@ -2,17 +2,28 @@ const express = require("express");
 const cors = require("cors");
 
 const app = express();
+const pool = require("./db");
 
 app.use(cors());
 app.use(express.json());
 
-let tasks = [
-  {id: 1, title: "Backend test", completed: false}
-];
-app.get("/tasks", (req,res) => {
-  res.json(tasks);
+const tasksRoutes = require("./routes/tasks");
+const categoriesRoutes = require("./routes/categories");
+
+app.use("/tasks", tasksRoutes);
+app.use("/categories", categoriesRoutes);
+
+pool.query("SELECT NOW()", (err, res) => {
+  if (err) {
+    console.log("DB ERROR");
+    console.log(err);
+  } else {
+    console.log("DB CONNECTED");
+    console.log(res.rows);
+  }
 });
 
+
 app.listen(3000, () => {
-  console.log("Server works at 3000 port");
+  console.log("Server running");
 });

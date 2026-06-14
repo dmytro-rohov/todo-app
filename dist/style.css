@@ -653,7 +653,6 @@
 .modal-main {
   padding: 32px;
   background-color: var(--white-color);
-  min-width: 512px;
 }
 
 .modal-group {
