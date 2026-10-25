@@ -101,3 +101,7 @@ psql -U postgres -d todo_app -f database.sql
 5. Odpalic server
 npm run dev
 ```
+
+# Stopka
+
+zrobione przez mytko.dev
