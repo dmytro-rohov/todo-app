@@ -81,26 +81,36 @@ Aplikacja działa w architekturze klient–serwer:
 
 ---
 
-## Instalacja i uruchomienie projektu
+## Instalacja i uruchomienie projektu (lokalnie)
 
-### 1. Klonowanie repozytorium
+Wymagania: Node.js 24, PostgreSQL.
+
 ```bash
-1. git clone <URL_REPOZYTORIUM>
-cd todo
+# 1. Baza danych: dwie role (właściciel schematu i aplikacja) – patrz deploy/db-roles.sql.example
 
-2. Pobrac backend dependencies
-cd todo-backend
+# 2. Backend
+cd backend
 npm install
+cp .env.example .env        # uzupełnić DATABASE_URL / MIGRATION_DATABASE_URL
+npm run migrate             # tworzy/aktualizuje schemat (migrations/*.sql)
+npm run dev                 # http://localhost:3000 – API + frontend
 
-3. Stworzyc baze danych 
-createdb todo_app
+# 3. Style (SCSS -> frontend/dist/style.css)
+cd ../frontend
+npm install
+npm run build:css
 
-4. Zimportowac baze danych z schmematu
-psql -U postgres -d todo_app -f database.sql
-
-5. Odpalic server
-npm run dev
+# 4. Testy
+cd ../backend
+npm test                    # testy integracyjne wymagają TEST_DATABASE_URL, patrz docs/PRODUCTION.md
+../deploy/smoke-test.sh     # pełny test obrazu Docker (wymaga Dockera)
 ```
+
+Schemat bazy jest zarządzany przez migracje w `backend/migrations/` (dawny `database.sql` = `001_baseline.sql`).
+
+## Produkcja
+
+Obraz Docker, Compose, zmienne środowiskowe, kopie zapasowe, rollback i kryteria akceptacji: [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
 # Stopka
 
