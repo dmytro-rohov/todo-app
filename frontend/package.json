@@ -1,0 +1,16 @@
+{
+  "name": "todo-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mytko Tasks static frontend (SCSS build only)",
+  "scripts": {
+    "build:css": "sass --no-source-map --style=compressed styles/style.scss dist/style.css",
+    "watch:css": "sass --watch styles/style.scss dist/style.css"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "devDependencies": {
+    "sass": "1.89.2"
+  }
+}

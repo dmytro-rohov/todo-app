@@ -1,24 +1,15 @@
-const API_URL = "http://localhost:3000/categories";
+import { request, jsonOptions } from "./request.js";
+
+const API_URL = "/api/categories";
 
 export async function getCategories() {
-  const response = await fetch(API_URL);
-  const data = await response.json();
-  return data;
+  return request(API_URL);
 }
- 
+
 export async function addCategory(category) {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(category)
-  });
-  return await response.json();
+  return request(API_URL, jsonOptions("POST", category));
 }
 
 export async function deleteCategory(id) {
-  await fetch(`${API_URL}/${id}`, {
-    method: "DELETE"
-  });
+  return request(`${API_URL}/${id}`, { method: "DELETE" });
 }

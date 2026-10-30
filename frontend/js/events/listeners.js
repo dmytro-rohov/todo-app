@@ -51,7 +51,8 @@ input.addEventListener("keydown", (e) => {
 
 // delete one
 document.addEventListener("click", async (e) => {
-  if (e.target.classList.contains("delete-one")) {
+  // category and modal buttons share the class but carry no task id
+  if (e.target.classList.contains("delete-one") && e.target.dataset.id) {
     const id = Number(e.target.dataset.id);
     await deleteTask(id);
     state.tasksArr = await getTasks();
@@ -78,7 +79,11 @@ document.addEventListener("change", async (e) => {
     const updatedTask = state.tasksArr.find(task => task.id === id)
     if (!updatedTask) return;
     updatedTask.completed = isChecked;
-    await updateTask(updatedTask);
+    try {
+      await updateTask(updatedTask);
+    } catch(error) {
+      alert(error.message);
+    }
     state.tasksArr = await getTasks();
     renderAllTasks();
   }
@@ -111,17 +116,13 @@ document.querySelector(".confirm-btn").addEventListener("click", async () => {
     state.tasksArr = await getTasks();
 
     renderAllTasks();
+    renderCategories();
 
   } catch(error) {
 
     alert(error.message);
 
   }
-
-  await addTask(newTask);
-  state.tasksArr = await getTasks();
-  renderAllTasks();
-  renderCategories();
 
 
   state.selectedCategoryId = null;
@@ -137,7 +138,8 @@ document.querySelector(".categories-list").addEventListener("click", (e) => {
   if (!li) return;
 
   const index = [...li.parentElement.children].indexOf(li);
-  const category = categories[index];
+  const category = state.categoriesArr[index];
+  if (!category) return;
 
   // toggle click
   if (state.activeCategoryFilter == category.id) {
@@ -165,7 +167,12 @@ document.querySelector(".new-category-input").addEventListener("keydown", async 
       color: getRandomColor()
     };
 
-    await addCategory(newCategory);
+    try {
+      await addCategory(newCategory);
+    } catch(error) {
+      alert(error.message);
+      return;
+    }
     state.categoriesArr.length = 0;
     state.categoriesArr.push(...await getCategories());
 
@@ -203,9 +210,12 @@ document.querySelector(".modal-categories").addEventListener("click", async (e) 
     await deleteCategory(id);
 
     state.categoriesArr = await getCategories();
+    // tasks of a deleted category lose their category_id (ON DELETE SET NULL)
+    state.tasksArr = await getTasks();
 
     renderCategoriesModal();
     renderCategories();
+    renderAllTasks();
 
     return;
   }
