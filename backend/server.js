@@ -1,29 +1,63 @@
-const express = require("express");
-const cors = require("cors");
+const { loadConfig } = require("./config");
+const { createPool } = require("./db");
+const { createApp } = require("./app");
+const { listMigrations } = require("./migrations");
 
-const app = express();
-const pool = require("./db");
+let config;
+try {
+  config = loadConfig();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
-app.use(cors());
-app.use(express.json());
-
-const tasksRoutes = require("./routes/tasks");
-const categoriesRoutes = require("./routes/categories");
-
-app.use("/tasks", tasksRoutes);
-app.use("/categories", categoriesRoutes);
-
-pool.query("SELECT NOW()", (err, res) => {
-  if (err) {
-    console.log("DB ERROR");
-    console.log(err);
-  } else {
-    console.log("DB CONNECTED");
-    console.log(res.rows);
-  }
+const pool = createPool({
+  connectionString: config.databaseUrl,
+  max: config.pgPoolMax,
+  statementTimeoutMs: config.pgStatementTimeoutMs
 });
 
+const migrationVersions = listMigrations(config.migrationsDir).map(m => m.version);
+const { app, markShuttingDown, stop } = createApp({ config, pool, migrationVersions });
 
-app.listen(3000, () => {
-  console.log("Server running");
+const server = app.listen(config.port, config.host, () => {
+  console.log(`Server listening on ${config.host}:${config.port}`);
 });
+
+// Startup DB probe is informational only; /readyz reports actual readiness.
+pool.query("SELECT 1").then(
+  () => console.log("Database reachable"),
+  (error) => console.error("Database not reachable yet:", error.code || error.message)
+);
+
+let shuttingDown = false;
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received, shutting down`);
+
+  markShuttingDown();
+
+  const forceExit = setTimeout(() => {
+    console.error("Shutdown timed out, forcing exit");
+    process.exit(1);
+  }, config.shutdownTimeoutMs);
+  forceExit.unref();
+
+  // Stops accepting connections and waits for in-flight requests.
+  server.close(async (error) => {
+    if (error) console.error("HTTP server close error:", error.message);
+    stop();
+    try {
+      await pool.end();
+    } catch (poolError) {
+      console.error("Pool close error:", poolError.message);
+    }
+    process.exit(error ? 1 : 0);
+  });
+  server.closeIdleConnections();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

@@ -1,111 +1,63 @@
 const express = require("express");
-const router = express.Router();
 
-const pool = require("../db");
+const { parseId, isValidDate, validateTask } = require("../validation");
 
+const TASK_COLUMNS = `
+  id,
+  title,
+  completed,
+  TO_CHAR(date, 'YYYY-MM-DD') AS date,
+  category_id AS "categoryId"
+`;
 
-// helpers
-function validateTask(data) {
+// PostgreSQL foreign_key_violation: category_id points to a missing category.
+const FOREIGN_KEY_VIOLATION = "23503";
 
-  if (!data.title) {
-    return "Title is required";
-  }
+module.exports = function createTasksRouter(pool) {
+  const router = express.Router();
 
-  if (data.title.trim().length < 3) {
-    return "Title too short";
-  }
-
-  if (data.title.length > 100) {
-    return "Title too long";
-  }
-
-  if (!data.date) {
-    return "Date is required";
-  }
-
-  return null;
-}
-
-// get
-router.get("/", async (req, res) => {
-  try {
+  // get
+  router.get("/", async (req, res) => {
     const result = await pool.query(`
-    SELECT
-      id,
-      title,
-      completed,
-      TO_CHAR(date, 'YYYY-MM-DD') AS date,
-      category_id AS "categoryId"
-    FROM tasks
-    ORDER BY date DESC
-      `);
-      res.json(result.rows);
-  } catch(error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Server error"
-    });
-  }
-});
+      SELECT ${TASK_COLUMNS}
+      FROM tasks
+      ORDER BY date DESC, id ASC
+    `);
+    res.json(result.rows);
+  });
 
-// post
-router.post("/", async (req, res) => {
-  const error = validateTask(req.body);
+  // post
+  router.post("/", async (req, res) => {
+    const { error, value } = validateTask(req.body);
+    if (error) {
+      return res.status(400).json({ message: error });
+    }
 
-  if (error) {
-    return res.status(400).json({
-      message: error
-    });
-  }
-  try {
-    const {
-      title,
-      completed,
-      date,
-      categoryId
-    } = req.body;
+    try {
+      const result = await pool.query(
+        `INSERT INTO tasks
+        (title, completed, date, category_id)
+        VALUES ($1, $2, $3, $4)
+        RETURNING ${TASK_COLUMNS}`,
+        [value.title, value.completed, value.date, value.categoryId]
+      );
+      res.status(201).json(result.rows[0]);
+    } catch (dbError) {
+      if (dbError.code === FOREIGN_KEY_VIOLATION) {
+        return res.status(400).json({ message: "Category does not exist" });
+      }
+      throw dbError;
+    }
+  });
 
-    await pool.query(
-      `INSERT INTO tasks 
-      (title, completed, date, category_id)
-      VALUES ($1, $2, $3, $4)`,
-      [
-        title,
-        completed,
-        date,
-        categoryId
-      ]
-    );
-    res.status(201).json({
-      message: "Task added"
-    });
-  } catch(error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Server error post method"
-    });
-  }
-});
+  // delete
+  router.delete("/:id", async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) {
+      return res.status(400).json({ message: "Invalid task id" });
+    }
 
-
-
-// delete
-
-
-// router.delete("/date/:date", (req, res) =>{
-//   const date = req.params.date;
-//   tasks = tasks.filter(task => task.date !== date)
-//   res.json({
-//     message: "All tasks deleted"
-//   });
-// })
-
-router.delete("/:id", async (req, res) => {
-  try {
-
-    const id = Number(req.params.id);
-
-    await pool.query(
+    const result = await pool.query(
       `
       DELETE FROM tasks
       WHERE id = $1
@@ -113,28 +65,18 @@ router.delete("/:id", async (req, res) => {
       [id]
     );
 
-    res.json({
-      message: "Task deleted"
-    });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+    res.json({ message: "Task deleted" });
+  });
 
-  } catch(error) {
-
-    console.error(error);
-
-    res.status(500).json({
-      message: "Server error"
-    });
-  }
-});
-
-
-// delete by date
-
-router.delete("/date/:date", async (req, res) => {
-
-  try {
-
+  // delete by date
+  router.delete("/date/:date", async (req, res) => {
     const date = req.params.date;
+    if (!isValidDate(date)) {
+      return res.status(400).json({ message: "Date must be YYYY-MM-DD" });
+    }
 
     await pool.query(
       `
@@ -144,65 +86,47 @@ router.delete("/date/:date", async (req, res) => {
       [date]
     );
 
-    res.json({
-      message: "All tasks deleted"
-    });
+    res.json({ message: "All tasks deleted" });
+  });
 
-  } catch(error) {
+  // put
+  router.put("/:id", async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) {
+      return res.status(400).json({ message: "Invalid task id" });
+    }
 
-    console.error(error);
+    const { error, value } = validateTask(req.body);
+    if (error) {
+      return res.status(400).json({ message: error });
+    }
 
-    res.status(500).json({
-      message: "Server error"
-    });
-  }
-});
+    try {
+      const result = await pool.query(
+        `
+        UPDATE tasks
+        SET
+          title = $1,
+          completed = $2,
+          date = $3,
+          category_id = $4
+        WHERE id = $5
+        RETURNING ${TASK_COLUMNS}
+        `,
+        [value.title, value.completed, value.date, value.categoryId, id]
+      );
 
-// put
+      if (result.rowCount === 0) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      res.json(result.rows[0]);
+    } catch (dbError) {
+      if (dbError.code === FOREIGN_KEY_VIOLATION) {
+        return res.status(400).json({ message: "Category does not exist" });
+      }
+      throw dbError;
+    }
+  });
 
-router.put("/:id", async (req, res) => {
-
-  try {
-
-    const id = Number(req.params.id);
-
-    const {
-      title,
-      completed,
-      date,
-      categoryId
-    } = req.body;
-
-    const result = await pool.query(
-      `
-      UPDATE tasks
-      SET
-        title = $1,
-        completed = $2,
-        date = $3,
-        category_id = $4
-      WHERE id = $5
-      RETURNING *
-      `,
-      [
-        title,
-        completed,
-        date,
-        categoryId,
-        id
-      ]
-    );
-
-    res.json(result.rows[0]);
-
-  } catch(error) {
-
-    console.error(error);
-
-    res.status(500).json({
-      message: "Server error"
-    });
-  }
-});
-
-module.exports = router;
+  return router;
+};
