@@ -39,7 +39,7 @@ backup design.
 | Validation | Types, lengths, real calendar dates, ids ≤ int4. Unknown category → 400. The JSON body limit is 10 kB. |
 | Headers | CSP, HSTS (production), nosniff, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, COOP/CORP, Permissions-Policy. `X-Powered-By` is removed. |
 | Errors | A central handler returns only generic messages. Database errors are logged by code only. |
-| Health | `/healthz` (liveness) and `/readyz` (DB reachable + all shipped migrations applied) return only `{"status":"ok"|"unavailable"}`. |
+| Health | `/healthz` (liveness) and `/readyz` (DB reachable + all shipped migrations applied) return only `{"status":"ok"|"unavailable"}`. Both are deliberately exempt from Basic auth (and from the auth lockout) so the container HEALTHCHECK and Caddy's active health check work without credentials; they serve nothing else. `/healthz` is also exempt from the rate limit. Caddy does not expose `/readyz` publicly (it triggers a DB query); Caddy's `health_uri` and the HEALTHCHECK reach it on the upstream directly. |
 | Container | Non-root uid 1000. The app tree is root-owned and read-only. Read-only rootfs, `/tmp` tmpfs (noexec), `cap_drop: ALL`, `no-new-privileges`, no npm/yarn at runtime. Limits: 0.5 CPU / 256 MB / 128 pids. |
 | DB privileges | The app role has SELECT/INSERT/UPDATE/DELETE on `tasks` and `categories`, sequence usage, and SELECT on `schema_migrations`. It has no DDL, TRUNCATE or ownership. |
 
@@ -72,7 +72,7 @@ docker compose up -d
 # 3. verify
 docker compose ps                       # app healthy, migrate exited 0
 curl -fsS https://task.mytko.dev/healthz
-curl -fsS https://task.mytko.dev/readyz
+curl -fsS http://127.0.0.1:3100/readyz  # on the host; publicly 404 by design
 ```
 
 A failed migration exits non-zero. The failed migration's transaction is rolled back, and `app` does not start or replace the running one. Fix it forward and re-run.
@@ -132,7 +132,7 @@ All must hold before announcing task.mytko.dev:
 2. `docker compose ps`: `migrate` exited 0 and `app` is `healthy`.
 3. `docker inspect` of `app` shows user `1000:1000`, `ReadonlyRootfs=true`, `CapDrop=[ALL]`, memory limit 256 MiB, and no port bound to anything other than `127.0.0.1`.
 4. `curl -sI https://task.mytko.dev/` returns `401` with `WWW-Authenticate: Basic`, a valid TLS certificate, and `Strict-Transport-Security` and `Content-Security-Policy` headers.
-5. `curl -s https://task.mytko.dev/healthz` and `/readyz` both return exactly `{"status":"ok"}`.
+5. `curl -s https://task.mytko.dev/healthz` and, on the host, `curl -s http://127.0.0.1:3100/readyz` both return exactly `{"status":"ok"}`. `curl -s -o /dev/null -w '%{http_code}' https://task.mytko.dev/readyz` returns `404`.
 6. In a browser:
    - Log in with the owner credentials.
    - Create a category and a task, toggle it, delete it, and use "Wyczyść wszystko".
@@ -153,3 +153,9 @@ All must hold before announcing task.mytko.dev:
 - Basic auth has no logout or MFA. If more than one user is needed, replace it with real accounts and per-user data (schema change).
 - `cors` remains in `backend/package.json` but is no longer used. Remove it together with a lockfile regeneration (requires npm).
 - Line endings in the repository are mixed (CRLF/LF). Consider adding `.gitattributes`.
+- **Historical credential in Git.** Commit `e1510f2` (`todo-backend/db.js`, an ancestor of `main` and published to `origin`) contains a hardcoded PostgreSQL superuser password for `postgres@localhost`. Treat it as compromised:
+  - rotate it on every PostgreSQL instance where it was ever used;
+  - never reuse it for `tasks_owner` or `tasks_app`;
+  - check that no server exposes PostgreSQL with that login.
+
+  Rewriting history is optional and owner-approved only, because it requires a force push. Rotation is what actually removes the risk.

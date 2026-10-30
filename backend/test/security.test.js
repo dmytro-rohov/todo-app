@@ -21,6 +21,36 @@ describe("health endpoints", () => {
     assert.deepEqual(await res.json(), { status: "ok" });
     assert.equal(res.headers.get("cache-control"), "no-store");
   });
+
+  test("health endpoints ignore credentials (wrong ones never yield 401)", async () => {
+    for (const path of ["/healthz", "/readyz"]) {
+      const res = await ctx.request(path, { auth: basic(USERNAME, "wrong") });
+      assert.equal(res.status, 200, path);
+    }
+  });
+
+  test("health paths do not unlock anything else", async () => {
+    for (const path of ["/healthz/../api/tasks", "/healthz/x", "/readyz/x", "/api/healthz", "/api/readyz"]) {
+      const res = await ctx.request(path, { auth: null });
+      assert.notEqual(res.status, 200, path);
+    }
+  });
+});
+
+describe("healthcheck contract under brute force", () => {
+  test("container/Caddy health checks keep working while the IP is locked out", async () => {
+    const ctx = await startApp({ pool: fakePool(), env: { AUTH_FAIL_MAX: "2" } });
+    try {
+      for (let i = 0; i < 2; i++) {
+        await ctx.request("/api/tasks", { auth: basic(USERNAME, `guess-${i}`) });
+      }
+      assert.equal((await ctx.request("/api/tasks")).status, 429);
+      assert.equal((await ctx.request("/healthz", { auth: null })).status, 200);
+      assert.equal((await ctx.request("/readyz", { auth: null })).status, 200);
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 describe("readiness failures do not leak details", () => {

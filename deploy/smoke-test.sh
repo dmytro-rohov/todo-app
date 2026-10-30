@@ -46,8 +46,13 @@ docker run --rm --network "$NETWORK" \
   -v "$PWD/../backend/test:/app/backend/test:ro" \
   -e TEST_MIGRATION_DATABASE_URL=postgres://tasks_owner:owner-test-only@db:5432/tasks_test \
   -e TEST_DATABASE_URL=postgres://tasks_app:app-test-only@db:5432/tasks_test \
-  mytko-tasks:test node --test "backend/test/*.test.js"
+  mytko-tasks:test node --test backend/test/unit.test.js backend/test/security.test.js backend/test/integration.test.js
 pass "node test suite (unit, security, integration) inside the image"
+# deploy-contract.test.js inspects the checkout (Dockerfile, deploy/), not the image
+if command -v node >/dev/null; then
+  node --test ../backend/test/deploy-contract.test.js >/dev/null
+  pass "deploy contract tests on the checkout"
+fi
 # the integration suite drops the schema; restore it
 "${COMPOSE[@]}" run --rm migrate >/dev/null
 

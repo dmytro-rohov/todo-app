@@ -7,6 +7,11 @@ task.mytko.dev {
 		max_size 64KB
 	}
 
+	# /readyz runs an unauthenticated DB query. Caddy's active health check
+	# below and the container HEALTHCHECK reach the upstream directly, so the
+	# public route is not needed. /healthz (static, no DB) stays reachable.
+	respond /readyz 404
+
 	reverse_proxy 127.0.0.1:3100 {
 		health_uri /readyz
 		health_interval 15s
