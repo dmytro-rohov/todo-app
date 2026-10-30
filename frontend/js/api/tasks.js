@@ -1,47 +1,33 @@
-const API_URL = "http://localhost:3000/tasks";
+import { request } from "./http.js";
+
+const TASKS_PATH = "/tasks";
 
 export async function getTasks() {
-  const response = await fetch(API_URL);
-  const data = await response.json();
-  return data;
+  return request(TASKS_PATH);
 }
- 
+
 export async function addTask(task) {
-  const response = await fetch(API_URL, {
+  return request(TASKS_PATH, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(task)
+    body: task
   });
-  
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message);
-  }
-
-  return data;
 }
 
 export async function updateTask(task) {
-  await fetch(`${API_URL}/${task.id}`, {
+  return request(`${TASKS_PATH}/${encodeURIComponent(task.id)}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(task)
+    body: task
   });
 }
 
 export async function deleteTask(id) {
-  await fetch(`${API_URL}/${id}`, {
+  return request(`${TASKS_PATH}/${encodeURIComponent(id)}`, {
     method: "DELETE"
   });
 }
 
 export async function deleteTaskByDate(date) {
-  await fetch(`${API_URL}/date/${date}`, {
+  return request(`${TASKS_PATH}/date/${encodeURIComponent(date)}`, {
     method: "DELETE"
   });
 }

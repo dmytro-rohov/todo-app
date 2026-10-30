@@ -8,7 +8,6 @@ import {
 
 import {
   getTasks,
-  addTask,
   updateTask,
   deleteTask,
   deleteTaskByDate
@@ -40,6 +39,8 @@ import {
 
 import { getRandomColor } from "../utils/helpers.js";
 
+import { createTask } from "../actions/tasks.js";
+
 export function initListeners() {
 
 // input keybord
@@ -51,11 +52,16 @@ input.addEventListener("keydown", (e) => {
 
 // delete one
 document.addEventListener("click", async (e) => {
-  if (e.target.classList.contains("delete-one")) {
+  if (e.target.classList.contains("delete-one") && e.target.closest(".task-item")) {
     const id = Number(e.target.dataset.id);
-    await deleteTask(id);
-    state.tasksArr = await getTasks();
-    renderAllTasks();
+    try {
+      await deleteTask(id);
+      state.tasksArr = await getTasks();
+      renderAllTasks();
+      renderCategories();
+    } catch(error) {
+      alert(error.message);
+    }
   }
 });
 
@@ -63,9 +69,15 @@ document.addEventListener("click", async (e) => {
 document.addEventListener("click", async (e) => {
   if (e.target.classList.contains("delete-btn")) {
     const date = e.target.dataset.date;
-    await deleteTaskByDate(date);
-    state.tasksArr = await getTasks();
-    renderAllTasks();
+    if (!date) return;
+    try {
+      await deleteTaskByDate(date);
+      state.tasksArr = await getTasks();
+      renderAllTasks();
+      renderCategories();
+    } catch(error) {
+      alert(error.message);
+    }
   }
 });
 
@@ -78,7 +90,11 @@ document.addEventListener("change", async (e) => {
     const updatedTask = state.tasksArr.find(task => task.id === id)
     if (!updatedTask) return;
     updatedTask.completed = isChecked;
-    await updateTask(updatedTask);
+    try {
+      await updateTask({ id, completed: isChecked });
+    } catch(error) {
+      alert(error.message);
+    }
     state.tasksArr = await getTasks();
     renderAllTasks();
   }
@@ -104,24 +120,15 @@ document.querySelector(".confirm-btn").addEventListener("click", async () => {
     completed: false,
     categoryId: state.selectedCategoryId,
     date: todayKey
-  }; try {
+  };
 
-    await addTask(newTask);
-
-    state.tasksArr = await getTasks();
-
+  try {
+    state.tasksArr = await createTask(newTask);
     renderAllTasks();
-
+    renderCategories();
   } catch(error) {
-
     alert(error.message);
-
   }
-
-  await addTask(newTask);
-  state.tasksArr = await getTasks();
-  renderAllTasks();
-  renderCategories();
 
 
   state.selectedCategoryId = null;
@@ -137,7 +144,8 @@ document.querySelector(".categories-list").addEventListener("click", (e) => {
   if (!li) return;
 
   const index = [...li.parentElement.children].indexOf(li);
-  const category = categories[index];
+  const category = state.categoriesArr[index];
+  if (!category) return;
 
   // toggle click
   if (state.activeCategoryFilter == category.id) {
@@ -165,9 +173,13 @@ document.querySelector(".new-category-input").addEventListener("keydown", async 
       color: getRandomColor()
     };
 
-    await addCategory(newCategory);
-    state.categoriesArr.length = 0;
-    state.categoriesArr.push(...await getCategories());
+    try {
+      await addCategory(newCategory);
+      state.categoriesArr = await getCategories();
+    } catch(error) {
+      alert(error.message);
+      return;
+    }
 
     renderCategories();
     renderCategoriesModal();
@@ -200,12 +212,18 @@ document.querySelector(".modal-categories").addEventListener("click", async (e) 
   const id = Number(li.dataset.id);
 
   if (e.target.classList.contains("delete-one")) {
-    await deleteCategory(id);
-
-    state.categoriesArr = await getCategories();
+    try {
+      await deleteCategory(id);
+      state.categoriesArr = await getCategories();
+      state.tasksArr = await getTasks();
+    } catch(error) {
+      alert(error.message);
+      return;
+    }
 
     renderCategoriesModal();
     renderCategories();
+    renderAllTasks();
 
     return;
   }
