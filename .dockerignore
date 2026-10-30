@@ -1,0 +1,13 @@
+# Build context allowlist: only what the Dockerfile copies.
+*
+!backend/package.json
+!backend/package-lock.json
+!backend/*.js
+!backend/routes/
+!backend/migrations/
+!backend/scripts/
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/index.html
+!frontend/js/
+!frontend/styles/*.scss

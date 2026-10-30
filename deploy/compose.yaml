@@ -1,0 +1,73 @@
+# Production manifest for task.mytko.dev. Executed only by the operator /
+# Mytko release pipeline; nothing here creates the database or touches Caddy.
+#
+#   cp app.env.example app.env && cp migrate.env.example migrate.env   (fill in, chmod 600)
+#   APP_IMAGE=registry.example/mytko-tasks@sha256:<digest> docker compose up -d
+#
+# `migrate` runs to completion before `app` starts (schema first, code second).
+# PostgreSQL is external and operator-provisioned (see docs/PRODUCTION.md).
+# There is no data volume: the application stores nothing on disk.
+
+name: mytko-tasks
+
+x-hardening: &hardening
+  image: ${APP_IMAGE:?set APP_IMAGE to an immutable image digest}
+  read_only: true
+  init: true
+  user: "1000:1000"
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs:
+    - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+  # Only needed when PostgreSQL runs on the Docker host itself.
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  migrate:
+    <<: *hardening
+    command: ["node", "backend/migrate.js"]
+    env_file: [migrate.env]
+    restart: "no"
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+          pids: 64
+
+  app:
+    <<: *hardening
+    env_file: [app.env]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    # Caddy on the host proxies task.mytko.dev -> 127.0.0.1:${APP_PORT}.
+    # Never published on a public interface.
+    ports:
+      - "127.0.0.1:${APP_PORT:-3100}:3000"
+    stop_signal: SIGTERM
+    # > SHUTDOWN_TIMEOUT_MS so in-flight requests finish before SIGKILL.
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD", "node", "backend/scripts/healthcheck.js"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+          pids: 128
+        reservations:
+          memory: 64M

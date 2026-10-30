@@ -1,0 +1,17 @@
+# Reference site block for the operator. Not applied automatically.
+# TLS certificates are obtained by Caddy once DNS for task.mytko.dev points here.
+task.mytko.dev {
+	encode zstd gzip
+
+	request_body {
+		max_size 64KB
+	}
+
+	reverse_proxy 127.0.0.1:3100 {
+		health_uri /readyz
+		health_interval 15s
+		health_timeout 3s
+	}
+
+	header -Server
+}
