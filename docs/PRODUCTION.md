@@ -5,6 +5,9 @@ Mytko release pipeline. Nothing in this repository deploys, creates
 databases, sets DNS, changes Caddy or handles real secrets; every step marked
 **operator** is performed outside the codebase.
 
+For exact-artifact disposable acceptance and the external executor handoff,
+follow [VALIDATION.md](VALIDATION.md). No deployment is authorized by that checklist.
+
 ## 1. Architecture
 
 ```
@@ -45,7 +48,7 @@ backup design.
 
 ## 3. Operator prerequisites (before first release)
 
-1. **Lockfile for the SCSS build.** With Node 24 run `cd frontend && npm install` and commit `frontend/package-lock.json`. The Dockerfile uses `npm ci` and refuses to build without it.
+1. **Lockfile for the SCSS build.** The reviewed `frontend/package-lock.json` pins Sass 1.89.2. Preserve it and use `npm ci`; do not regenerate during release validation.
 2. **Pin the base image.** Build with `--build-arg NODE_IMAGE=node:24-bookworm-slim@sha256:<digest>` and record the digest.
 3. **Build and publish** the image from the reviewed commit, tagged by its git SHA (`--build-arg GIT_REVISION=<sha>`). Use the digest in `APP_IMAGE`.
 4. **PostgreSQL**, version ≥ 15 recommended:
@@ -58,7 +61,7 @@ backup design.
 6. **Backups** are configured and one restore has been tested (section 5) before real data is entered.
 7. **DNS.** `task.mytko.dev` A/AAAA records point to the OVH host.
 8. **Caddy.** Add a site block equivalent to `deploy/Caddyfile.example` and reload Caddy. Caddy must reach `127.0.0.1:3100`.
-9. **Smoke test.** `deploy/smoke-test.sh` passes on the build host (Docker + Compose v2 + curl).
+9. **Smoke test.** `TASKS_DISPOSABLE_APPROVED=yes TEST_IMAGE=<immutable-image> TEST_POSTGRES_IMAGE=<approved-postgres-17-digest> deploy/smoke-test.sh` passes on the approved disposable build host (Docker + Compose v2 + curl).
 
 ## 4. Release procedure (operator)
 
@@ -128,7 +131,7 @@ Application code and database schema are versioned and rolled back separately.
 
 All must hold before announcing task.mytko.dev:
 
-1. `deploy/smoke-test.sh` passes against the exact image digest being released.
+1. `TASKS_DISPOSABLE_APPROVED=yes TEST_IMAGE=<immutable-image> TEST_POSTGRES_IMAGE=<approved-postgres-17-digest> deploy/smoke-test.sh` passes against the exact image digest being released.
 2. `docker compose ps`: `migrate` exited 0 and `app` is `healthy`.
 3. `docker inspect` of `app` shows user `1000:1000`, `ReadonlyRootfs=true`, `CapDrop=[ALL]`, memory limit 256 MiB, and no port bound to anything other than `127.0.0.1`.
 4. `curl -sI https://task.mytko.dev/` returns `401` with `WWW-Authenticate: Basic`, a valid TLS certificate, and `Strict-Transport-Security` and `Content-Security-Policy` headers.
