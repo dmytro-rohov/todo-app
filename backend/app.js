@@ -67,7 +67,7 @@ function createApp({ config, pool, migrationVersions = [] }) {
     next();
   });
   api.use(csrfProtection({ publicOrigin: config.publicOrigin }));
-  api.use(express.json({ limit: "10kb" }));
+  api.use(express.json({ limit: "10kb", inflate: false }));
   api.use("/tasks", createTasksRouter(pool));
   api.use("/categories", createCategoriesRouter(pool));
   api.use((req, res) => {
@@ -86,6 +86,9 @@ function createApp({ config, pool, migrationVersions = [] }) {
     if (res.headersSent) return next(error);
     if (error.type === "entity.parse.failed") {
       return res.status(400).json({ message: "Invalid JSON" });
+    }
+    if (error.type === "encoding.unsupported") {
+      return res.status(415).json({ message: "Compressed request bodies are not supported" });
     }
     if (error.type === "entity.too.large") {
       return res.status(413).json({ message: "Request body too large" });

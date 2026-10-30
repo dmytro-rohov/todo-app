@@ -349,3 +349,124 @@ describe("input handling", () => {
     }
   });
 });
+
+
+describe("proxy and IP rate-limit regressions", () => {
+  test("direct clients cannot rotate X-Forwarded-For to bypass limits", async () => {
+    const ctx = await startApp({ pool: fakePool(), env: { TRUST_PROXY: "false", RATE_LIMIT_MAX: "2" } });
+    try {
+      for (const [i, expected] of [200, 200, 429].entries()) {
+        assert.equal((await ctx.request("/api/tasks", { headers: { "x-forwarded-for": `198.51.100.${i + 1}` } })).status, expected);
+      }
+    } finally { await ctx.close(); }
+  });
+
+  test("trusted proxy chain uses nearest untrusted hop, not spoofed leftmost IP", async () => {
+    const ctx = await startApp({ pool: fakePool(), env: { TRUST_PROXY: "loopback", RATE_LIMIT_MAX: "2" } });
+    try {
+      for (const [i, expected] of [200, 200, 429].entries()) {
+        assert.equal((await ctx.request("/api/tasks", {
+          headers: { "x-forwarded-for": `203.0.113.${i + 1}, 198.51.100.9` }
+        })).status, expected);
+      }
+      assert.equal((await ctx.request("/api/tasks", { headers: { "x-forwarded-for": "198.51.100.10" } })).status, 200);
+    } finally { await ctx.close(); }
+  });
+
+  test("IPv4 and mapped IPv6 spellings share the rate-limit bucket", async () => {
+    const ctx = await startApp({ pool: fakePool(), env: { TRUST_PROXY: "loopback", RATE_LIMIT_MAX: "2" } });
+    try {
+      for (const [i, ip] of ["198.51.100.9", "::ffff:198.51.100.9", "::ffff:c633:6409"].entries()) {
+        assert.equal((await ctx.request("/api/tasks", { headers: { "x-forwarded-for": ip } })).status, i < 2 ? 200 : 429);
+      }
+    } finally { await ctx.close(); }
+  });
+
+  test("mapped spellings and spoofed chain cannot bypass auth lockout", async () => {
+    const ctx = await startApp({ pool: fakePool(), env: { TRUST_PROXY: "loopback", AUTH_FAIL_MAX: "2" } });
+    try {
+      for (const ip of ["198.51.100.9", "::ffff:c633:6409"]) {
+        assert.equal((await ctx.request("/api/tasks", {
+          auth: basic(USERNAME, "incorrect"), headers: { "x-forwarded-for": ip }
+        })).status, 401);
+      }
+      assert.equal((await ctx.request("/api/tasks", {
+        headers: { "x-forwarded-for": "203.0.113.5, ::ffff:198.51.100.9" }
+      })).status, 429);
+    } finally { await ctx.close(); }
+  });
+
+  test("proxy-addr does not trust IPv4 peers through short IPv6 prefixes (GHSA-jqcg)", () => {
+    const proxyaddr = require("proxy-addr");
+    const req = { socket: { remoteAddress: "198.51.100.9" }, headers: { "x-forwarded-for": "203.0.113.99" } };
+    for (const subnet of ["::ffff:10.0.0.0/8", "::/1"]) {
+      assert.equal(proxyaddr(req, proxyaddr.compile(subnet)), "198.51.100.9", subnet);
+    }
+    const mapped = { socket: { remoteAddress: "::ffff:10.1.2.3" }, headers: req.headers };
+    assert.equal(proxyaddr(mapped, proxyaddr.compile("::ffff:10.0.0.0/104")), "203.0.113.99");
+    assert.equal(proxyaddr(req, proxyaddr.compile("::ffff:10.0.0.0/104")), "198.51.100.9");
+  });
+});
+
+describe("body-size and decompression DoS regressions", () => {
+  test("10 KiB boundary is enforced before any DB mutation", async () => {
+    let inserts = 0;
+    const ctx = await startApp({ pool: fakePool({ "INSERT INTO categories": () => {
+      inserts++; return { rows: [{ id: 1 }], rowCount: 1 };
+    } }) });
+    try {
+      const json = JSON.stringify({ name: "Praca", color: "#123456" });
+      const exact = json + " ".repeat(10240 - Buffer.byteLength(json));
+      assert.equal((await ctx.request("/api/categories", { method: "POST", headers: SAME_ORIGIN_JSON, body: exact })).status, 201);
+      const large = await ctx.request("/api/categories", { method: "POST", headers: SAME_ORIGIN_JSON, body: exact + " " });
+      assert.equal(large.status, 413);
+      assert.deepEqual(await large.json(), { message: "Request body too large" });
+      assert.equal(inserts, 1);
+    } finally { await ctx.close(); }
+  });
+
+  test("chunked bodies cannot bypass the size limit without Content-Length", async () => {
+    const ctx = await startApp({ pool: fakePool() });
+    try {
+      const code = await new Promise((resolve, reject) => {
+        const req = http.request(ctx.url + "/api/categories", {
+          method: "POST", headers: { authorization: AUTH, ...SAME_ORIGIN_JSON }
+        }, res => { res.resume(); resolve(res.statusCode); });
+        req.on("error", reject);
+        req.write('{"name":"');
+        for (let i = 0; i < 11; i++) req.write("x".repeat(1024));
+        req.end('"}');
+      });
+      assert.equal(code, 413);
+      assert.equal((await ctx.request("/healthz", { auth: null })).status, 200);
+    } finally { await ctx.close(); }
+  });
+
+  test("compressed bodies including trailing garbage are rejected and process survives", async () => {
+    const { gzipSync } = require("node:zlib");
+    const ctx = await startApp({ pool: fakePool() });
+    try {
+      const gzip = gzipSync(Buffer.from('{"name":"Praca","color":"#123456"}'));
+      for (const body of [gzip, Buffer.concat([gzip, Buffer.from("trailing garbage")]), gzipSync(Buffer.from("x".repeat(100000)))]) {
+        const res = await ctx.request("/api/categories", {
+          method: "POST", headers: { ...SAME_ORIGIN_JSON, "content-encoding": "gzip" }, body
+        });
+        assert.equal(res.status, 415);
+      }
+      assert.equal((await ctx.request("/healthz", { auth: null })).status, 200);
+    } finally { await ctx.close(); }
+  });
+
+  test("oversized requests consume rate budget before body parsing", async () => {
+    const ctx = await startApp({ pool: fakePool(), env: { RATE_LIMIT_MAX: "2" } });
+    try {
+      for (let i = 0; i < 2; i++) {
+        assert.equal((await ctx.request("/api/categories", {
+          method: "POST", headers: SAME_ORIGIN_JSON, body: "x".repeat(10241)
+        })).status, 413);
+      }
+      assert.equal((await ctx.request("/api/tasks")).status, 429);
+      assert.equal((await ctx.request("/healthz", { auth: null })).status, 200);
+    } finally { await ctx.close(); }
+  });
+});

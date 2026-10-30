@@ -229,3 +229,14 @@ bash deploy/smoke-test.sh
 This invocation does not replace npm ci/audit/build in sections 2–3. It needs no
 production credentials or host service changes. A successful run is required
 before production readiness can be considered by reviewers and the operator.
+
+
+## 7. Dependency security follow-up
+
+The RC source was superseded by MW-TASKS-SEC-DEPENDENCIES-01; see
+[SECURITY-DEPENDENCIES.md](SECURITY-DEPENDENCIES.md) for exact versions, audit
+results and reproduction. Use the new reviewed commit for EXPECTED_SOURCE_SHA.
+Production TRUST_PROXY now accepts only false/loopback/explicit proxy peer IPs
+or host CIDRs. Do not reuse the former broad private-subnet value. Test Compose
+uses TRUST_PROXY=false because smoke connects directly. Full Docker/PostgreSQL
+smoke is still required for a freshly built image from the new commit.

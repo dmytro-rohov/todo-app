@@ -6,7 +6,8 @@ databases, sets DNS, changes Caddy or handles real secrets; every step marked
 **operator** is performed outside the codebase.
 
 For exact-artifact disposable acceptance and the external executor handoff,
-follow [VALIDATION.md](VALIDATION.md). No deployment is authorized by that checklist.
+follow [VALIDATION.md](VALIDATION.md). No deployment is authorized by that checklist. Dependency remediation and the
+strict proxy-peer contract are recorded in [SECURITY-DEPENDENCIES.md](SECURITY-DEPENDENCIES.md).
 
 ## 1. Architecture
 
@@ -39,7 +40,7 @@ backup design.
 | CSRF | Unsafe methods require `Sec-Fetch-Site: same-origin`. When fetch metadata is absent, a present `Origin` must equal `PUBLIC_ORIGIN`. Bodies must be `application/json`. There is no CORS. |
 | XSS | Frontend escapes all user data inserted with `innerHTML`. Colours must be `#rrggbb` both server-side and client-side. A strict CSP is set (`script-src 'self'; style-src 'self'`, no inline). |
 | Rate limits | 300 req/min per IP. After 10 failed logins, an IP is locked out for 15 minutes; the lockout is checked before scrypt runs. Limits are in memory, so they are valid for one replica only. |
-| Validation | Types, lengths, real calendar dates, ids ≤ int4. Unknown category → 400. The JSON body limit is 10 kB. |
+| Validation | Types, lengths, real calendar dates, ids ≤ int4. Unknown category → 400. The JSON body limit is 10 KiB; compressed requests are rejected (415). |
 | Headers | CSP, HSTS (production), nosniff, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, COOP/CORP, Permissions-Policy. `X-Powered-By` is removed. |
 | Errors | A central handler returns only generic messages. Database errors are logged by code only. |
 | Health | `/healthz` (liveness) and `/readyz` (DB reachable + all shipped migrations applied) return only `{"status":"ok"|"unavailable"}`. Both are deliberately exempt from Basic auth (and from the auth lockout) so the container HEALTHCHECK and Caddy's active health check work without credentials; they serve nothing else. `/healthz` is also exempt from the rate limit. Caddy does not expose `/readyz` publicly (it triggers a DB query); Caddy's `health_uri` and the HEALTHCHECK reach it on the upstream directly. |
@@ -55,7 +56,9 @@ backup design.
    - Create `tasks_owner`, `tasks_app` and the `tasks` database, following `deploy/db-roles.sql.example`. Use passwords from the secret store.
    - Make the database reachable from the Docker bridge. When PostgreSQL runs on the host, `pg_hba.conf` and `listen_addresses` must allow the bridge subnet.
    - Use `sslmode=require` if traffic leaves the host.
-5. **Secrets.** Create `deploy/app.env` and `deploy/migrate.env` from the `*.example` files on the server only, with `chmod 600`.
+5. **Secrets and proxy trust.** Set TRUST_PROXY to loopback plus only the actual proxy peer IP (host /32 or /128). Broad private ranges, true and hop counts are rejected in production. Confirm Caddy replaces client-supplied forwarding headers; see SECURITY-DEPENDENCIES.md.
+
+   Create `deploy/app.env` and `deploy/migrate.env` from the `*.example` files on the server only, with `chmod 600`.
    - Generate the hash with `printf '%s' "$PASSWORD" | docker run --rm -i "$APP_IMAGE" node backend/scripts/hash-password.js`. The password must be at least 12 characters.
    - Escape any `$` in DB passwords inside env files as `$$`, or avoid `$` in them.
 6. **Backups** are configured and one restore has been tested (section 5) before real data is entered.

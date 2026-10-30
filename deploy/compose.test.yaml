@@ -47,7 +47,7 @@ services:
     environment:
       DATABASE_URL: postgres://tasks_app:app-test-only@db:5432/tasks_test
       PUBLIC_ORIGIN: https://task.mytko.dev
-      TRUST_PROXY: loopback, uniquelocal
+      TRUST_PROXY: "false"
       AUTH_USERNAME: owner
       # hash of "test-only-password"
       AUTH_PASSWORD_HASH: "scrypt:16384:8:1:hDX18qgPCawsPpbprjvkBw==:INT4yIkfvL190MRpfRUbjQXsIR55Qsetv+0T+Bp3ohM="

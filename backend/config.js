@@ -1,4 +1,5 @@
 const path = require("node:path");
+const { isIP } = require("node:net");
 
 const { parsePasswordHash } = require("./security");
 
@@ -53,7 +54,7 @@ function loadConfig(env = process.env) {
     pgPoolMax: toInt(env.PG_POOL_MAX, 10),
     pgStatementTimeoutMs: toInt(env.PG_STATEMENT_TIMEOUT_MS, 10000),
     publicOrigin,
-    trustProxy: parseTrustProxy(env.TRUST_PROXY),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY, isProduction),
     auth: {
       disabled: authDisabled,
       username: authUsername,
@@ -80,7 +81,21 @@ function toInt(value, fallback) {
   return parsed;
 }
 
-function parseTrustProxy(value) {
+function parseTrustProxy(value, isProduction) {
+  // Trust only actual proxy peers in production, never every private client
+  // or a hop count (which depends on every route having the same length).
+  if (isProduction && value && value !== "false") {
+    const peers = value.split(",").map(item => item.trim());
+    for (const peer of peers) {
+      const [address, prefix, extra] = peer.split("/");
+      const family = isIP(address);
+      const hostPrefix = family === 4 ? "32" : "128";
+      if (peer !== "loopback" && (!family || extra !== undefined ||
+          (prefix !== undefined && prefix !== hostPrefix))) {
+        throw new Error("Production TRUST_PROXY requires loopback or explicit proxy IPs (/32 or /128)");
+      }
+    }
+  }
   if (value === undefined || value === "" || value === "false") return false;
   if (value === "true") return true;
   if (/^\d+$/.test(value)) return Number(value);

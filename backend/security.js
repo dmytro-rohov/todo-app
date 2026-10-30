@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const { SocketAddress } = require("node:net");
 const { promisify } = require("node:util");
 
 const scrypt = promisify(crypto.scrypt);
@@ -83,11 +84,21 @@ function createWindowCounter({ windowMs, maxEntries = 10000 }) {
   };
 }
 
+// One bucket for equivalent IPv4 / IPv4-mapped IPv6 spellings. Node's parser
+// also canonicalizes hex IPv6; malformed forwarded addresses fall back to peer.
+function clientAddress(req) {
+  const ip = req.ip;
+  const parsed = SocketAddress.parse(ip.includes(":") ? `[${ip}]:0` : `${ip}:0`);
+  if (!parsed) return req.socket.remoteAddress;
+  const address = parsed.address;
+  return address.startsWith("::ffff:") && address.includes(".") ? address.slice(7) : address;
+}
+
 function rateLimit({ windowMs, max }) {
   const counter = createWindowCounter({ windowMs });
   const middleware = (req, res, next) => {
     if (max === 0) return next();
-    const entry = counter.hit(req.ip);
+    const entry = counter.hit(clientAddress(req));
     if (entry.count > max) {
       res.set("Retry-After", String(Math.ceil((entry.resetAt - Date.now()) / 1000)));
       return res.status(429).json({ message: "Too many requests" });
@@ -119,8 +130,8 @@ function basicAuth({ username, passwordHash, failWindowMs, failMax }) {
   }
 
   const middleware = async (req, res, next) => {
-    if (failMax > 0 && failures.peek(req.ip).count >= failMax) {
-      const entry = failures.peek(req.ip);
+    if (failMax > 0 && failures.peek(clientAddress(req)).count >= failMax) {
+      const entry = failures.peek(clientAddress(req));
       res.set("Retry-After", String(Math.ceil((entry.resetAt - Date.now()) / 1000)));
       return res.status(429).json({ message: "Too many failed login attempts" });
     }
@@ -151,7 +162,7 @@ function basicAuth({ username, passwordHash, failWindowMs, failMax }) {
       return next(error);
     }
 
-    failures.hit(req.ip);
+    failures.hit(clientAddress(req));
     return challenge(res);
   };
   middleware.stop = failures.stop;

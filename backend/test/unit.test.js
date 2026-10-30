@@ -42,8 +42,12 @@ describe("configuration", () => {
   });
 
   test("TRUST_PROXY parsing", () => {
-    assert.deepEqual(loadConfig({ ...PROD, TRUST_PROXY: "loopback, uniquelocal" }).trustProxy, ["loopback", "uniquelocal"]);
-    assert.equal(loadConfig({ ...PROD, TRUST_PROXY: "1" }).trustProxy, 1);
+    assert.deepEqual(loadConfig({ ...PROD, TRUST_PROXY: "loopback, 172.18.0.1/32" }).trustProxy, ["loopback", "172.18.0.1/32"]);
+    assert.equal(loadConfig({ ...PROD, NODE_ENV: "development", TRUST_PROXY: "1" }).trustProxy, 1);
+    for (const value of ["true", "1", "uniquelocal", "10.0.0.0/8", "::ffff:10.0.0.0/8", "::/1", "0.0.0.0/0"]) {
+      assert.throws(() => loadConfig({ ...PROD, TRUST_PROXY: value }), /Production TRUST_PROXY/);
+    }
+    assert.deepEqual(loadConfig({ ...PROD, TRUST_PROXY: "::ffff:172.18.0.1/128" }).trustProxy, ["::ffff:172.18.0.1/128"]);
   });
 
   test("rejects non-numeric limits", () => {
