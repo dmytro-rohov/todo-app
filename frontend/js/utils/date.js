@@ -36,8 +36,8 @@ export function getTodayKey() {
 // group by date
 export function groupTasksByDate(tasks) {
   return tasks.reduce((acc, task) => {
-    
-    if (!task) return;
+
+    if (!task) return acc;
     if (!acc[task.date]) {
       acc[task.date] = [];
     }

@@ -1,5 +1,5 @@
-@layer reset {
-  /* 1. Use a more-intuitive box-sizing model */
+// Wrapped in the "reset" cascade layer by style.scss.
+/* 1. Use a more-intuitive box-sizing model */
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -64,5 +64,4 @@ a, button {
 */
 #root, #__next {
   isolation: isolate;
-}
 }

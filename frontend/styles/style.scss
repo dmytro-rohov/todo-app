@@ -1,7 +1,10 @@
+@use "sass:meta";
+
+// Cascade layer order: later layers win regardless of selector specificity.
 @layer reset, base, components, main, utilities;
 
 @layer reset {
-    @import "./reset.scss";
+    @include meta.load-css("reset");
 }
 
 @layer base {
