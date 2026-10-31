@@ -20,7 +20,7 @@ export function bindOrdering(root, getTasks, reload, announce) {
     const index=column.findIndex(t=>t.id===id);
     if(e.key==='ArrowUp' && index>0) { e.preventDefault(); move(id,task.status,column[index-1].id); }
     if(e.key==='ArrowDown' && index<column.length-1) { e.preventDefault(); move(id,task.status,column[index+2]?.id??null); }
-    if(['ArrowLeft','ArrowRight'].includes(e.key)) { e.preventDefault(); const target=statuses[statuses.indexOf(task.status)+(e.key==='ArrowLeft'?-1:1)]; if(target) move(id,target,null); }
+    if(['ArrowLeft','ArrowRight'].includes(e.key)) { const target=statuses[statuses.indexOf(task.status)+(e.key==='ArrowLeft'?-1:1)]; if(target) { e.preventDefault(); move(id,target,null); } }
   });
   root.addEventListener('pointerdown',e=>{
     const handle=e.target.closest('[data-move]'); if(!handle || saving || e.button!==0) return;

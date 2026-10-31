@@ -180,13 +180,23 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
     ctx = await startApp({ pool: freshPool, migrationVersions: VERSIONS });
     try {
       const tasks = await (await ctx.request("/api/tasks")).json();
-      assert.deepEqual(tasks, [{
+      assert.equal(tasks.length, 1);
+      assert.deepEqual(tasks[0], {
         id: taskId,
         title: "<img src=x onerror=alert(1)>", // stored verbatim; escaped at render time
         completed: true,
         date: "2026-10-30",
-        categoryId: null
-      }]);
+        categoryId: null,
+        description: "",
+        status: "done",
+        priority: "P2",
+        position: taskId,
+        dueDate: "2026-10-30",
+        createdAt: tasks[0].createdAt,
+        updatedAt: tasks[0].updatedAt,
+        completedAt: tasks[0].completedAt,
+        archivedAt: null
+      });
 
       assert.equal((await ctx.request("/api/tasks/date/2026-10-30", { method: "DELETE", headers: SAME_ORIGIN_JSON })).status, 200);
       assert.deepEqual(await (await ctx.request("/api/tasks")).json(), []);
@@ -194,6 +204,78 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
       await ctx.close();
       await freshPool.end();
     }
+  });
+
+  test("migration 003 preserves legacy rows, maps dates, and keeps legacy completion writes compatible", async () => {
+    await owner.query(`CREATE TABLE public.categories (id serial PRIMARY KEY, name varchar(50) NOT NULL, color varchar(7) NOT NULL)`);
+    await owner.query(`CREATE TABLE public.tasks (id serial PRIMARY KEY, title varchar(255) NOT NULL, completed boolean, date date NOT NULL, category_id integer REFERENCES public.categories(id) ON DELETE SET NULL)`);
+    await owner.query("INSERT INTO tasks (title, completed, date) VALUES ('Open legacy', false, '2026-10-30'), ('Done legacy', true, '2026-10-31')");
+    assert.deepEqual(await migrate(), ["001_baseline", "002_task_integrity", "003_kanban"]);
+    const rows = await owner.query("SELECT id, completed, status, due_date, position, completed_at FROM tasks ORDER BY id");
+    assert.equal(rows.rows[0].status, "todo");
+    assert.equal(String(rows.rows[0].due_date), "2026-10-30");
+    assert.equal(rows.rows[0].completed_at, null);
+    assert.equal(rows.rows[1].status, "done");
+    assert.equal(String(rows.rows[1].due_date), "2026-10-31");
+    assert.ok(rows.rows[1].completed_at);
+    assert.deepEqual(rows.rows.map(row => String(row.position)), rows.rows.map(row => String(row.id)));
+    await owner.query("UPDATE tasks SET completed = false WHERE id = $1", [rows.rows[1].id]);
+    const reopened = await owner.query("SELECT completed, status, completed_at FROM tasks WHERE id = $1", [rows.rows[1].id]);
+    assert.deepEqual(reopened.rows[0], { completed: false, status: "todo", completed_at: null });
+    assert.deepEqual(await migrate(), []);
+  });
+
+  test("concurrent moves serialize snapshots and preserve every task exactly once", async () => {
+    await migrate();
+    const ctx = await startApp({ pool: appPool, migrationVersions: VERSIONS });
+    try {
+      const ids = [];
+      for (const title of ["Move A", "Move B", "Move C"]) {
+        const response = await ctx.request("/api/tasks", { method: "POST", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ title, date: "2026-10-31" }) });
+        ids.push((await response.json()).id);
+      }
+      const snapshot = (await (await ctx.request("/api/tasks")).json()).map(({ id, status, position }) => ({ id, status, position: Number(position) }));
+      const requests = [ids[0], ids[1]].map(id => ctx.request("/api/tasks/move", { method: "POST", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ id, status: "done", beforeId: null, expected: snapshot }) }));
+      const results = await Promise.all(requests);
+      assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
+      const finalRows = await (await ctx.request("/api/tasks")).json();
+      assert.deepEqual(finalRows.map(row => row.id).sort((a, b) => a - b), ids.slice().sort((a, b) => a - b));
+      assert.equal(new Set(finalRows.map(row => row.id)).size, ids.length);
+    } finally { await ctx.close(); }
+  });
+
+  test("Kanban task contract supports filters, completion lifecycle, null due dates, and errors", async () => {
+    await migrate();
+    const ctx = await startApp({ pool: appPool, migrationVersions: VERSIONS });
+    try {
+      const create = async body => ctx.request("/api/tasks", { method: "POST", headers: SAME_ORIGIN_JSON, body: JSON.stringify(body) });
+      const first = await create({ title: "Kanban one", date: "2026-10-31", status: "todo", priority: "P1", dueDate: null });
+      assert.equal(first.status, 201);
+      const task = await first.json();
+      assert.equal(task.completed, false);
+      assert.equal(task.status, "todo");
+      assert.equal(task.dueDate, null);
+      assert.equal(task.completedAt, null);
+      const second = await create({ title: "Kanban two", date: "2026-11-01", completed: true });
+      assert.equal(second.status, 201);
+      const done = await second.json();
+      assert.equal(done.status, "done");
+      assert.ok(done.completedAt);
+      const completed = await ctx.request("/api/tasks?status=done&priority=P2");
+      assert.equal(completed.status, 200);
+      assert.deepEqual((await completed.json()).map(row => row.id), [done.id]);
+      assert.equal((await ctx.request("/api/tasks?status=invalid")).status, 400);
+      assert.equal((await ctx.request("/api/tasks?categoryId=bad")).status, 400);
+      const reopened = await ctx.request(`/api/tasks/${done.id}`, { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ status: "todo", dueDate: null }) });
+      assert.equal(reopened.status, 200);
+      const reopenedTask = await reopened.json();
+      assert.equal(reopenedTask.completed, false);
+      assert.equal(reopenedTask.completedAt, null);
+      assert.equal(reopenedTask.dueDate, null);
+      assert.equal((await ctx.request("/api/tasks/not-an-id", { method: "PATCH", headers: SAME_ORIGIN_JSON, body: "{}" })).status, 400);
+      assert.equal((await ctx.request("/api/tasks/999999", { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ status: "todo" }) })).status, 404);
+      assert.equal((await ctx.request(`/api/tasks/${task.id}`, { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ status: "bad" }) })).status, 400);
+    } finally { await ctx.close(); }
   });
 
   test("server.js shuts down gracefully on SIGTERM and data survives a process restart", async () => {
