@@ -45,7 +45,7 @@ function createApp({ config, pool, migrationVersions = [] }) {
       if (!ready) return res.status(503).json({ status: "unavailable" });
       res.json({ status: "ok" });
     } catch (error) {
-      console.error("readiness check failed:", error.code || error.message);
+      console.error("readiness check failed");
       res.status(503).json({ status: "unavailable" });
     }
   });
@@ -93,7 +93,7 @@ function createApp({ config, pool, migrationVersions = [] }) {
     if (error.type === "entity.too.large") {
       return res.status(413).json({ message: "Request body too large" });
     }
-    console.error(`${req.method} ${req.path} failed:`, error.code || "", error.message);
+    console.error("Request failed", req.method);
     res.status(500).json({ message: "Server error" });
   });
 

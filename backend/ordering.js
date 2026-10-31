@@ -1,0 +1,35 @@
+const { parseId } = require('./validation');
+const statuses = ['todo', 'in_progress', 'done'];
+function validateMove(body) {
+  return body && parseId(body.id) !== null && statuses.includes(body.status) &&
+    (body.beforeId === null || parseId(body.beforeId) !== null) &&
+    Array.isArray(body.expected) && body.expected.every(t => t && parseId(t.id) !== null && statuses.includes(t.status) && Number.isSafeInteger(t.position)) &&
+    new Set(body.expected.map(t => Number(t.id))).size === body.expected.length;
+}
+async function moveTask(pool, body) {
+  if (!validateMove(body)) return { status: 400, message: 'Invalid move' };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Conflicts with all concurrent INSERT/UPDATE/DELETE writers, not just moves.
+    await client.query('LOCK TABLE tasks IN SHARE ROW EXCLUSIVE MODE');
+    const { rows } = await client.query('SELECT id, status, position FROM tasks WHERE archived_at IS NULL ORDER BY position, id');
+    const canonical = list => JSON.stringify(list.map(t => [Number(t.id), t.status, Number(t.position)]).sort((a,b)=>a[0]-b[0]));
+    if (canonical(rows) !== canonical(body.expected)) { await client.query('ROLLBACK'); return { status: 409, message: 'Board changed; refresh and retry' }; }
+    const task = rows.find(t=>t.id===Number(body.id));
+    if (!task || Number(body.beforeId)===task.id) { await client.query('ROLLBACK'); return { status: 400, message: 'Invalid move target' }; }
+    const target = rows.filter(t=>t.status===body.status && t.id!==task.id);
+    const index = body.beforeId===null ? target.length : target.findIndex(t=>t.id===Number(body.beforeId));
+    if(index<0) { await client.query('ROLLBACK'); return { status: 400, message: 'Invalid move target' }; }
+    target.splice(index,0,{...task,status:body.status});
+    const source=rows.filter(t=>t.status===task.status && t.id!==task.id);
+    const lists=task.status===body.status ? [target] : [source,target];
+    for(const list of lists) for(let position=0;position<list.length;position++) {
+      const row=list[position];
+      await client.query('UPDATE tasks SET status=$1, position=$2 WHERE id=$3',[row.status,position,row.id]);
+    }
+    await client.query('COMMIT'); return { status: 200, message: 'Task moved' };
+  } catch(error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+}
+module.exports = { moveTask, validateMove };

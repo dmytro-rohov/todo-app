@@ -188,7 +188,8 @@ function csrfProtection({ publicOrigin }) {
       if (fetchSite !== "same-origin" && fetchSite !== "none") {
         return res.status(403).json({ message: "Cross-site request rejected" });
       }
-    } else if (origin && origin !== publicOrigin) {
+    }
+    if (origin && origin !== publicOrigin) {
       return res.status(403).json({ message: "Cross-site request rejected" });
     }
 
@@ -218,6 +219,7 @@ const CONTENT_SECURITY_POLICY = [
 function securityHeaders({ isProduction }) {
   return (req, res, next) => {
     res.set({
+      "Cache-Control": "no-store",
       "Content-Security-Policy": CONTENT_SECURITY_POLICY,
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",

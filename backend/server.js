@@ -27,7 +27,7 @@ const server = app.listen(config.port, config.host, () => {
 // Startup DB probe is informational only; /readyz reports actual readiness.
 pool.query("SELECT 1").then(
   () => console.log("Database reachable"),
-  (error) => console.error("Database not reachable yet:", error.code || error.message)
+  (error) => console.error("Database not reachable yet:", "database operation failed")
 );
 
 let shuttingDown = false;
@@ -47,12 +47,12 @@ function shutdown(signal) {
 
   // Stops accepting connections and waits for in-flight requests.
   server.close(async (error) => {
-    if (error) console.error("HTTP server close error:", error.message);
+    if (error) console.error("HTTP server close error:", "operation failed");
     stop();
     try {
       await pool.end();
     } catch (poolError) {
-      console.error("Pool close error:", poolError.message);
+      console.error("Pool close error:", "operation failed");
     }
     process.exit(error ? 1 : 0);
   });

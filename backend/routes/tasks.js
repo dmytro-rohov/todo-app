@@ -1,4 +1,5 @@
 const express = require("express");
+const { validateTaskPatch } = require("../task-domain");
 
 const { parseId, isValidDate, validateTask } = require("../validation");
 
@@ -7,7 +8,9 @@ const TASK_COLUMNS = `
   title,
   completed,
   TO_CHAR(date, 'YYYY-MM-DD') AS date,
-  category_id AS "categoryId"
+  category_id AS "categoryId", description, status, priority, position,
+  TO_CHAR(due_date, 'YYYY-MM-DD') AS "dueDate",
+  created_at AS "createdAt", updated_at AS "updatedAt", completed_at AS "completedAt", archived_at AS "archivedAt"
 `;
 
 // PostgreSQL foreign_key_violation: category_id points to a missing category.
@@ -16,13 +19,21 @@ const FOREIGN_KEY_VIOLATION = "23503";
 module.exports = function createTasksRouter(pool) {
   const router = express.Router();
 
+  router.post("/move", async (req, res) => {
+    const result = await require("../ordering").moveTask(pool, req.body);
+    res.status(result.status).json({ message: result.message });
+  });
+
   // get
   router.get("/", async (req, res) => {
-    const result = await pool.query(`
-      SELECT ${TASK_COLUMNS}
-      FROM tasks
-      ORDER BY date DESC, id ASC
-    `);
+    const conditions = ["archived_at IS NULL"];
+    const params = [];
+    for (const [key, column, choices] of [["status", "status", ["todo", "in_progress", "done"]], ["priority", "priority", ["P0", "P1", "P2", "P3"]], ["categoryId", "category_id", null]]) {
+      if (req.query[key] === undefined) continue;
+      if (choices ? !choices.includes(req.query[key]) : parseId(req.query[key]) === null) return res.status(400).json({ message: "Invalid filter" });
+      params.push(req.query[key]); conditions.push(`${column} = $${params.length}`);
+    }
+    const result = await pool.query(`SELECT ${TASK_COLUMNS} FROM tasks WHERE ${conditions.join(" AND ")} ORDER BY position ASC, id ASC`, params);
     res.json(result.rows);
   });
 
@@ -33,13 +44,17 @@ module.exports = function createTasksRouter(pool) {
       return res.status(400).json({ message: error });
     }
 
+    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position"].includes(key)));
+    const extraValidation = Object.keys(extras).length ? validateTaskPatch(extras) : { value: {} };
+    if (extraValidation.error) return res.status(400).json({ message: extraValidation.error });
+    const domain = extraValidation.value;
     try {
       const result = await pool.query(
         `INSERT INTO tasks
-        (title, completed, date, category_id)
-        VALUES ($1, $2, $3, $4)
+        (title, completed, date, category_id, description, status, priority, due_date, position)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING ${TASK_COLUMNS}`,
-        [value.title, value.completed, value.date, value.categoryId]
+        [value.title, value.completed, value.date, value.categoryId, domain.description || "", domain.status || (value.completed ? "done" : "todo"), domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null]
       );
       res.status(201).json(result.rows[0]);
     } catch (dbError) {
@@ -87,6 +102,33 @@ module.exports = function createTasksRouter(pool) {
     );
 
     res.json({ message: "All tasks deleted" });
+  });
+
+  // Partial updates do not revalidate unchanged historical titles.
+  router.patch("/:id", async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Invalid task id" });
+    const { error, value } = validateTaskPatch(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const columns = { title: "title", description: "description", status: "status", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position" };
+    const params = [];
+    const assignments = Object.entries(value).map(([key, val]) => {
+      params.push(val); return `${columns[key]} = $${params.length}`;
+    });
+    if (value.status !== undefined) {
+      params.push(value.status === "done");
+      assignments.push(`completed = $${params.length}`);
+      assignments.push(value.status === "done" ? "completed_at = COALESCE(completed_at, now())" : "completed_at = NULL");
+    }
+    params.push(id);
+    try {
+      const result = await pool.query(`UPDATE tasks SET ${assignments.join(", ")}, updated_at = now() WHERE id = $${params.length} RETURNING ${TASK_COLUMNS}`, params);
+      if (!result.rowCount) return res.status(404).json({ message: "Task not found" });
+      return res.json(result.rows[0]);
+    } catch (error) {
+      if (error.code === FOREIGN_KEY_VIOLATION) return res.status(400).json({ message: "Category does not exist" });
+      throw error;
+    }
   });
 
   // put

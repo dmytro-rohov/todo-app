@@ -87,6 +87,12 @@ fi
 # the integration suite drops the schema; restore it
 "${COMPOSE[@]}" run --rm --no-deps --pull never migrate >/dev/null
 
+# New domain probe uses only this run's disposable app/network.
+docker run --rm --pull never --network "$NETWORK" \
+  -v "$WORK/tests:/app/backend/test:ro" \
+  -e TASKS_DISPOSABLE_APPROVED=yes -e SMOKE_BASE=http://app:3000 \
+  "$TEST_IMAGE" node backend/test/release-smoke.js
+
 # --- health, auth, headers ---------------------------------------------------
 expect "healthz is public" 200 "$(status "$BASE/healthz")"
 expect "healthz body is minimal" '{"status":"ok"}' "$(curl --noproxy '*' -s "$BASE/healthz")"

@@ -86,7 +86,7 @@ test("every module reachable from main.js resolves with matching named exports",
     }
   }
 
-  assert.ok(seen.size > 5, "module graph should include the app modules");
+  assert.ok(seen.has(join(frontendDir, "js", "board.js")), "entry point must load the Kanban module");
 });
 
 test("no API module hardcodes a localhost URL", () => {

@@ -14,7 +14,7 @@ function createPool({ connectionString, max = 10, statementTimeoutMs = 10000, ap
   // error on the pool. Without a listener this would crash the process; the
   // pool discards the broken client and reconnects on the next query.
   pool.on("error", (error) => {
-    console.error("PostgreSQL idle client error:", error.code || error.message);
+    console.error("PostgreSQL idle client error:", "connection error");
   });
 
   return pool;

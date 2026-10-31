@@ -302,7 +302,7 @@ describe("input handling", () => {
   test("normalizes a valid task (trimmed title, completed defaults to false)", async () => {
     const res = await post("/api/tasks", { title: "  Kupić mleko  ", date: "2026-10-30", categoryId: 2 });
     assert.equal(res.status, 201);
-    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2]);
+    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null]);
   });
 
   test("unknown category -> 400 instead of 500", async () => {
@@ -467,6 +467,53 @@ describe("body-size and decompression DoS regressions", () => {
       }
       assert.equal((await ctx.request("/api/tasks")).status, 429);
       assert.equal((await ctx.request("/healthz", { auth: null })).status, 200);
+    } finally { await ctx.close(); }
+  });
+});
+
+describe('TASKS-06 private surface', () => {
+  let ctx;
+  before(async()=>{ctx=await startApp({pool:fakePool()});});
+  after(()=>ctx.close());
+  for(const [method,path] of [['POST','/api/tasks/move'],['PATCH','/api/tasks/1'],['GET','/api/archive'],['GET','/api/attachments/1'],['GET','/api/export'],['GET','/dist/style.css']]) {
+    test(`anonymous ${method} ${path} is challenged before routing`,async()=>{
+      const res=await ctx.request(path,{method,auth:null});
+      assert.equal(res.status,401); assert.match(res.headers.get('www-authenticate'),/^Basic /);
+      assert.equal(res.headers.get('cache-control'),'no-store');
+      assert.equal(res.headers.get('set-cookie'),null);
+    });
+  }
+  test('contradictory same-origin metadata cannot override foreign Origin',async()=>{
+    const res=await ctx.request('/api/tasks/1',{method:'DELETE',headers:{'sec-fetch-site':'same-origin',origin:'https://evil.example'}});
+    assert.equal(res.status,403);
+  });
+  test('CORS preflight does not grant foreign access',async()=>{
+    const res=await ctx.request('/api/tasks',{method:'OPTIONS',headers:{origin:'https://evil.example','access-control-request-method':'POST'}});
+    assert.equal(res.headers.get('access-control-allow-origin'),null);
+  });
+});
+
+
+describe("PATCH task contract", () => {
+  test("returns the same camelCase task shape as reads and persists status/order", async () => {
+    const returned = { id: 7, title: "Updated", completed: true, date: "2026-10-31", categoryId: null, description: "Details", status: "done", priority: "P1", position: 2, dueDate: null, createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T01:00:00.000Z", completedAt: "2026-10-31T01:00:00.000Z", archivedAt: null };
+    let params;
+    const ctx = await startApp({ pool: fakePool({
+      "UPDATE tasks SET": (sql, values) => { params = values; return { rows: [returned], rowCount: 1 }; }
+    }) });
+    try {
+      const res = await ctx.request("/api/tasks/7", { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ status: "done", position: 2 }) });
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), returned);
+      assert.deepEqual(params, ["done", 2, true, 7]);
+    } finally { await ctx.close(); }
+  });
+
+  test("uses the creation title limit for partial updates", async () => {
+    const ctx = await startApp({ pool: fakePool() });
+    try {
+      const res = await ctx.request("/api/tasks/7", { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ title: "x".repeat(101) }) });
+      assert.equal(res.status, 400);
     } finally { await ctx.close(); }
   });
 });

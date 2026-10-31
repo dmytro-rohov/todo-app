@@ -834,3 +834,26 @@ header, footer {
         justify-content: center;
     }
 }
+@layer utilities {
+#kanban { max-width: 1440px; margin: auto; padding: 1.5rem; color: #19233b; background: #f5f7fc; min-height: 100vh;
+ header, .board-tools { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: space-between; margin-bottom: 1.5rem; }
+ button, input, select, textarea { font: inherit; padding: .65rem; border: 1px solid #75839b; border-radius: .4rem; }
+ button { cursor: pointer; background: #fff; color: #19233b; } button:disabled { opacity: .5; }
+ label { display: grid; gap: .3rem; } :focus-visible { outline: 3px solid #5543c4; outline-offset: 2px; }
+ .board-columns { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; }
+ section { background: #e8edf6; padding: 1rem; border-radius: .7rem; min-width: 0; }
+ .board-card { background: white; border: 1px solid #b9c4d8; border-radius: .6rem; padding: 1rem; margin: 1rem 0; overflow-wrap: anywhere; }
+ [data-category] { border: 1px solid; border-radius: .3rem; padding: .15rem .4rem; }
+ dialog { margin: auto; width: min(95vw, 36rem); max-height: 90vh; overflow: auto; padding: 1.5rem; border-radius: .7rem; }
+ form { display: grid; gap: .7rem; } dialog::backdrop { background: #10182bb3; }
+ @media(max-width: 900px) { .board-columns { grid-template-columns: 1fr; } }
+}
+}
+
+@layer utilities {
+#kanban .move-handle { touch-action: none; cursor: grab; }
+#kanban .moving { opacity: .6; outline: 3px solid #5543c4; cursor: grabbing; }
+#kanban .drop-indicator { border-top: 4px solid #5543c4; }
+#kanban .board-card { transition: border-color .15s; }
+@media (prefers-reduced-motion: reduce) { #kanban * { transition: none !important; animation: none !important; } }
+}

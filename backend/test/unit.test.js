@@ -113,7 +113,7 @@ describe("validation", () => {
 describe("migrations on disk", () => {
   test("are ordered and checksummed", () => {
     const migrations = listMigrations(path.join(__dirname, "..", "migrations"));
-    assert.deepEqual(migrations.map(m => m.version), ["001_baseline", "002_task_integrity"]);
+    assert.deepEqual(migrations.map(m => m.version), ["001_baseline", "002_task_integrity", "003_kanban"]);
     for (const m of migrations) assert.match(m.checksum, /^[0-9a-f]{64}$/);
   });
 });
