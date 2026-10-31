@@ -38,10 +38,18 @@ chmod a+r "$WORK"/tests/*.js "$WORK/initdb.sql"
 export TEST_INITDB_SQL="$WORK/initdb.sql"
 
 cleanup() {
-  "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+  local result=$?
+  trap - EXIT
+  if ! "${COMPOSE[@]}" down -v --remove-orphans; then
+    echo "Cleanup failed for isolated project $PROJECT; operator cleanup required" >&2
+    result=1
+  fi
   rm -rf "$WORK"
+  exit "$result"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 pass() { echo "ok   - $1"; }
 fail() { echo "FAIL - $1"; exit 1; }
@@ -65,7 +73,7 @@ wait_ready
 pass "exact image starts, migrations run, app becomes ready"
 
 NETWORK=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$("${COMPOSE[@]}" ps -q app)")
-docker run --rm --network "$NETWORK" \
+docker run --rm --pull never --network "$NETWORK" \
   -v "$WORK/tests:/app/backend/test:ro" \
   -e TEST_MIGRATION_DATABASE_URL=postgres://tasks_owner:owner-test-only@db:5432/tasks_test \
   -e TEST_DATABASE_URL=postgres://tasks_app:app-test-only@db:5432/tasks_test \

@@ -252,9 +252,19 @@ test("rendered test Compose ignores ambient production URLs and owns its volume/
   assert.ok(!config.volumes.dbdata.external);
   assert.equal(config.networks.default.name, "tasks-contract-only_default");
   assert.ok(!config.networks.default.external);
+  assert.equal(config.networks.default.internal, true);
   for (const service of Object.values(config.services)) {
     assert.equal(service.container_name, undefined);
     assert.equal(service.env_file, undefined);
     for (const port of service.ports || []) assert.equal(port.host_ip, "127.0.0.1");
   }
 });
+
+ test("smoke fails closed on cleanup and prevents implicit image pull", () => {
+  const script = read("deploy/smoke-test.sh");
+  assert.match(script, /docker run --rm --pull never --network/);
+  assert.match(script, /if ! "\$\{COMPOSE\[@\]\}" down -v --remove-orphans/);
+  assert.match(script, /Cleanup failed for isolated project/);
+  assert.match(script, /trap 'exit 143' TERM/);
+  assert.doesNotMatch(script, /down[^\n]*\|\| true/);
+ });

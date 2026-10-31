@@ -67,3 +67,8 @@ services:
 
 volumes:
   dbdata:
+
+# No external network access is needed by the preloaded test artifacts.
+networks:
+  default:
+    internal: true
