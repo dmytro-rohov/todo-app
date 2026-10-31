@@ -1,55 +1,63 @@
-const fs = require("node:fs");
-const path = require("node:path");
-const util = require("node:util");
-
-const { loadConfig, ConfigError } = require("./config");
+const { loadConfig } = require("./config");
 const { createPool } = require("./db");
 const { createApp } = require("./app");
-
-// Local development convenience: read backend/.env when it exists.
-// Variables already set in the environment always win; in production they
-// come from the service manager.
-const envFile = path.join(__dirname, ".env");
-if (fs.existsSync(envFile)) {
-  const values = util.parseEnv(fs.readFileSync(envFile, "utf8"));
-  for (const [key, value] of Object.entries(values)) {
-    if (process.env[key] === undefined) {
-      process.env[key] = value;
-    }
-  }
-}
+const { listMigrations } = require("./migrations");
 
 let config;
 try {
   config = loadConfig();
-} catch(error) {
-  if (error instanceof ConfigError) {
-    console.error(`Configuration error: ${error.message}`);
-    process.exit(1);
-  }
-  throw error;
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
 }
 
-const pool = createPool(config.databaseUrl);
-const app = createApp({ pool, corsOrigin: config.corsOrigin });
-
-pool.query("SELECT 1")
-  .then(() => console.log("DB CONNECTED"))
-  .catch((error) => console.error(`DB ERROR: ${error.message}`));
-
-const server = app.listen(config.port, config.host, (error) => {
-  if (error) {
-    console.error(`Cannot start server: ${error.message}`);
-    process.exit(1);
-  }
-  console.log(`Server running on http://${config.host}:${config.port}`);
+const pool = createPool({
+  connectionString: config.databaseUrl,
+  max: config.pgPoolMax,
+  statementTimeoutMs: config.pgStatementTimeoutMs
 });
 
-function shutdown() {
-  server.close(() => {
-    pool.end().finally(() => process.exit(0));
+const migrationVersions = listMigrations(config.migrationsDir).map(m => m.version);
+const { app, markShuttingDown, stop } = createApp({ config, pool, migrationVersions });
+
+const server = app.listen(config.port, config.host, () => {
+  console.log(`Server listening on ${config.host}:${config.port}`);
+});
+
+// Startup DB probe is informational only; /readyz reports actual readiness.
+pool.query("SELECT 1").then(
+  () => console.log("Database reachable"),
+  (error) => console.error("Database not reachable yet:", error.code || error.message)
+);
+
+let shuttingDown = false;
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received, shutting down`);
+
+  markShuttingDown();
+
+  const forceExit = setTimeout(() => {
+    console.error("Shutdown timed out, forcing exit");
+    process.exit(1);
+  }, config.shutdownTimeoutMs);
+  forceExit.unref();
+
+  // Stops accepting connections and waits for in-flight requests.
+  server.close(async (error) => {
+    if (error) console.error("HTTP server close error:", error.message);
+    stop();
+    try {
+      await pool.end();
+    } catch (poolError) {
+      console.error("Pool close error:", poolError.message);
+    }
+    process.exit(error ? 1 : 0);
   });
+  server.closeIdleConnections();
 }
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

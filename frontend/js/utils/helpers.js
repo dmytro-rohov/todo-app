@@ -27,7 +27,7 @@ export function escapeHtml(value) {
 }
 
 // only plain hex colors may reach inline style attributes
-export function safeColor(value, fallback = "#ccc") {
+export function safeColor(value, fallback = "#cccccc") {
   return typeof value === "string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)
     ? value
     : fallback;

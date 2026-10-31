@@ -1,81 +1,119 @@
-const path = require("node:path");
-const fs = require("node:fs/promises");
 const express = require("express");
-const cors = require("cors");
 
-const { createTasksRouter } = require("./routes/tasks");
-const { createCategoriesRouter } = require("./routes/categories");
+const createTasksRouter = require("./routes/tasks");
+const createCategoriesRouter = require("./routes/categories");
+const { checkSchema } = require("./migrations");
+const {
+  basicAuth,
+  csrfProtection,
+  rateLimit,
+  securityHeaders
+} = require("./security");
 
-const DEFAULT_FRONTEND_DIR = path.join(__dirname, "..", "frontend");
+const READINESS_TIMEOUT_MS = 2000;
 
-function createApp({ pool, corsOrigin = null, frontendDir = DEFAULT_FRONTEND_DIR }) {
-  if (!pool) {
-    throw new Error("createApp requires a database pool");
-  }
-
+// Builds the Express app. `migrationVersions` are the migrations shipped with
+// this release; readiness fails until the database has all of them.
+function createApp({ config, pool, migrationVersions = [] }) {
   const app = express();
+  const state = { shuttingDown: false };
+  const stoppables = [];
 
   app.disable("x-powered-by");
+  app.set("trust proxy", config.trustProxy);
 
-  // The frontend is served from the same origin, so CORS is only needed when
-  // the UI is opened from another origin (e.g. a separate dev server).
-  if (corsOrigin) {
-    app.use(cors({ origin: corsOrigin }));
+  app.use(securityHeaders({ isProduction: config.isProduction }));
+
+  // Liveness: the process is up. No dependencies, no details.
+  app.get("/healthz", (req, res) => {
+    res.set("Cache-Control", "no-store").json({ status: "ok" });
+  });
+
+  const limiter = rateLimit(config.rateLimit);
+  stoppables.push(limiter);
+  app.use(limiter);
+
+  // Readiness: database reachable and schema migrated. Never returns error
+  // details, connection info or versions.
+  app.get("/readyz", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (state.shuttingDown) {
+      return res.status(503).json({ status: "unavailable" });
+    }
+    try {
+      const ready = await withTimeout(checkSchema(pool, migrationVersions), READINESS_TIMEOUT_MS);
+      if (!ready) return res.status(503).json({ status: "unavailable" });
+      res.json({ status: "ok" });
+    } catch (error) {
+      console.error("readiness check failed:", error.code || error.message);
+      res.status(503).json({ status: "unavailable" });
+    }
+  });
+
+  if (!config.auth.disabled) {
+    const auth = basicAuth({
+      username: config.auth.username,
+      passwordHash: config.auth.passwordHash,
+      failWindowMs: config.rateLimit.authFailWindowMs,
+      failMax: config.rateLimit.authFailMax
+    });
+    stoppables.push(auth);
+    app.use(auth);
   }
 
-  app.use(express.json());
-
-  app.get("/health", async (req, res) => {
-    try {
-      await pool.query("SELECT 1");
-      res.json({ status: "ok" });
-    } catch(error) {
-      console.error(error);
-      res.status(503).json({ status: "error", message: "Database unavailable" });
-    }
+  const api = express.Router();
+  api.use((req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
   });
-
-  app.use("/tasks", createTasksRouter(pool));
-  app.use("/categories", createCategoriesRouter(pool));
-
-  // Only the files the browser needs are public: never the whole frontend
-  // directory (package.json, tests, node_modules).
-  app.get("/", async (req, res, next) => {
-    try {
-      const index = await fs.readFile(path.join(frontendDir, "index.html"));
-      res.type("html").send(index);
-    } catch (error) {
-      next(error);
-    }
+  api.use(csrfProtection({ publicOrigin: config.publicOrigin }));
+  api.use(express.json({ limit: "10kb", inflate: false }));
+  api.use("/tasks", createTasksRouter(pool));
+  api.use("/categories", createCategoriesRouter(pool));
+  api.use((req, res) => {
+    res.status(404).json({ message: "Not found" });
   });
-  app.use("/js", express.static(path.join(frontendDir, "js"), { fallthrough: false }));
-  app.use("/dist", express.static(path.join(frontendDir, "dist"), { fallthrough: false }));
+  app.use("/api", api);
+
+  app.use(express.static(config.staticDir, { index: "index.html", dotfiles: "ignore" }));
 
   app.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });
 
-  // eslint-disable-next-line no-unused-vars
+  // Central error handler: never leaks stack traces or database messages.
   app.use((error, req, res, next) => {
-    const status = Number.isInteger(error.status) ? error.status : 500;
-
-    if (status >= 500) {
-      console.error(error);
-    }
-
-    let message = "Server error";
+    if (res.headersSent) return next(error);
     if (error.type === "entity.parse.failed") {
-      message = "Invalid JSON body";
-    } else if (status === 404) {
-      message = "Not found";
-    } else if (status < 500) {
-      message = "Bad request";
+      return res.status(400).json({ message: "Invalid JSON" });
     }
-
-    res.status(status).json({ message });
+    if (error.type === "encoding.unsupported") {
+      return res.status(415).json({ message: "Compressed request bodies are not supported" });
+    }
+    if (error.type === "entity.too.large") {
+      return res.status(413).json({ message: "Request body too large" });
+    }
+    console.error(`${req.method} ${req.path} failed:`, error.code || "", error.message);
+    res.status(500).json({ message: "Server error" });
   });
 
-  return app;
+  return {
+    app,
+    markShuttingDown() {
+      state.shuttingDown = true;
+    },
+    stop() {
+      stoppables.forEach(item => item.stop());
+    }
+  };
+}
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("timeout")), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 module.exports = { createApp };

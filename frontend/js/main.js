@@ -12,14 +12,8 @@ import { initEasters } from "./events/easterEggs.js";
 
 async function init() {
 
-  try {
-    state.tasksArr = await getTasks();
-    state.categoriesArr = await getCategories();
-  } catch(error) {
-    console.error(error);
-    document.querySelector(".tasks-wrapper").textContent =
-      `Nie udało się pobrać danych: ${error.message}`;
-  }
+  state.tasksArr = await getTasks();
+  state.categoriesArr = await getCategories();
 
   renderAllTasks();
   renderCategoriesModal();

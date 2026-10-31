@@ -1,0 +1,23 @@
+# Reference site block for the operator. Not applied automatically.
+# TLS certificates are obtained by Caddy once DNS for task.mytko.dev points here.
+task.mytko.dev {
+	encode zstd gzip
+
+	request_body {
+		max_size 64KB
+	}
+
+	# /readyz runs an unauthenticated DB query. Caddy's active health check
+	# below and the container HEALTHCHECK reach the upstream directly, so the
+	# public route is not needed. /healthz (static, no DB) stays reachable.
+	@readiness path_regexp (?i)^/readyz/?$
+	respond @readiness 404
+
+	reverse_proxy 127.0.0.1:3100 {
+		health_uri /readyz
+		health_interval 15s
+		health_timeout 3s
+	}
+
+	header -Server
+}

@@ -1,33 +1,23 @@
-import { request } from "./http.js";
+import { request, jsonOptions } from "./request.js";
 
-const TASKS_PATH = "/tasks";
+const API_URL = "/api/tasks";
 
 export async function getTasks() {
-  return request(TASKS_PATH);
+  return request(API_URL);
 }
 
 export async function addTask(task) {
-  return request(TASKS_PATH, {
-    method: "POST",
-    body: task
-  });
+  return request(API_URL, jsonOptions("POST", task));
 }
 
 export async function updateTask(task) {
-  return request(`${TASKS_PATH}/${encodeURIComponent(task.id)}`, {
-    method: "PUT",
-    body: task
-  });
+  return request(`${API_URL}/${task.id}`, jsonOptions("PUT", task));
 }
 
 export async function deleteTask(id) {
-  return request(`${TASKS_PATH}/${encodeURIComponent(id)}`, {
-    method: "DELETE"
-  });
+  return request(`${API_URL}/${id}`, { method: "DELETE" });
 }
 
 export async function deleteTaskByDate(date) {
-  return request(`${TASKS_PATH}/date/${encodeURIComponent(date)}`, {
-    method: "DELETE"
-  });
+  return request(`${API_URL}/date/${encodeURIComponent(date)}`, { method: "DELETE" });
 }
