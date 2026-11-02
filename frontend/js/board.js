@@ -40,8 +40,8 @@ export async function initBoard() {
       $('#category-filter').innerHTML='<option value="">Wszystkie</option>'+options; $('#category-filter').value=selected;
       form.elements.categoryId.innerHTML='<option value="">Bez kategorii</option>'+options;
       $('#category-list').innerHTML=categoryRows(categories);
-      render(); $('#board-message').textContent='';
-    } catch(e) { $('#board-message').textContent=e.message; }
+      render(); $('#board-message').textContent=''; return true;
+    } catch(e) { $('#board-message').textContent=e.message; return false; }
   }
   function open(task = null) {
     editing=task; form.reset(); $('#form-error').textContent='';

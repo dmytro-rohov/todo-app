@@ -50,3 +50,13 @@ test("ArrowUp, ArrowLeft, ArrowRight and column boundaries issue one or zero req
   assert.equal((await scenario(tasks, 1, "ArrowUp")).length, 0);
   assert.equal((await scenario(tasks, 4, "ArrowRight")).length, 0);
 });
+test('successful move followed by failed reload does not announce refreshed success',async()=>{
+ const root=new Root();const messages=[];
+ globalThis.fetch=async()=>Response.json({message:'moved'});
+ bindOrdering(root,()=>[{id:1,status:'todo',position:0}],async()=>false,message=>messages.push(message));
+ await root.key(handle(1),'ArrowRight');
+ await new Promise(resolve=>setTimeout(resolve,20));
+ assert.ok(messages.some(message=>message.includes('odczyt tablicy')));
+ assert.ok(!messages.includes('Zmieniono położenie zadania.'));
+ assert.equal(root.attributes['aria-busy'],'false');
+});

@@ -39,3 +39,32 @@ test('task API contract uses same origin and exactly the requested mutations', a
   await getTasks(); await addTask({ title: 'Test' }); await updateTask({ id: 7 }); await deleteTask(7); await deleteTaskByDate('2026-10-31');
   assert.deepEqual(calls, [['GET','/api/tasks'],['POST','/api/tasks'],['PUT','/api/tasks/7'],['DELETE','/api/tasks/7'],['DELETE','/api/tasks/date/2026-10-31']]);
 });
+test('HTTP helper aborts a stalled response body without retry', async () => {
+  let calls = 0;
+  globalThis.fetch = async (url, init) => {
+    calls++;
+    return { ok: true, text: () => new Promise((resolve,reject) => init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true})) };
+  };
+  // AbortSignal.timeout timers are unref'ed in Node; keep this test alive.
+  const keepAlive = setTimeout(()=>{},1000);
+  try { await assert.rejects(legacyRequest('/api/tasks',{timeoutMs:10}),e=>e instanceof ApiError && e.status===0 && /czas/.test(e.message)); assert.equal(calls,1); }
+  finally { clearTimeout(keepAlive); }
+});
+test('HTTP helper translates response stream failure into ApiError', async()=>{
+  globalThis.fetch=async()=>({ok:true,text:async()=>{throw new Error('stream failed');}});
+  await assert.rejects(legacyRequest('/api/tasks'),e=>e instanceof ApiError && e.status===0);
+});
+for (const status of [400,401,403,404,409,500,503]) test(`ApiError preserves HTTP ${status} without retry`, async()=>{
+  let calls=0; globalThis.fetch=async()=>{calls++;return Response.json({message:'Controlled error'},{status});};
+  await assert.rejects(legacyRequest('/api/tasks',{method:'POST',body:{title:'test'}}),e=>e instanceof ApiError && e.status===status && e.message==='Controlled error');assert.equal(calls,1);
+});
+test('caller AbortController cancels request without retry',async()=>{
+ const controller=new AbortController();let calls=0;
+ globalThis.fetch=async(url,init)=>{calls++;return new Promise((resolve,reject)=>{if(init.signal.aborted)reject(init.signal.reason);else init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true});});};
+ const pending=legacyRequest('/api/tasks',{signal:controller.signal});controller.abort();
+ await assert.rejects(pending,e=>e instanceof ApiError && e.status===0);assert.equal(calls,1);
+});
+test('request header wait is bounded by same deadline',async()=>{
+ globalThis.fetch=async(url,init)=>new Promise((resolve,reject)=>init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true}));
+ const keepAlive=setTimeout(()=>{},1000);try{await assert.rejects(legacyRequest('/api/tasks',{timeoutMs:10}),e=>e instanceof ApiError && /czas/.test(e.message));}finally{clearTimeout(keepAlive);}
+});

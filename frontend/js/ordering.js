@@ -6,7 +6,7 @@ export function bindOrdering(root, getTasks, reload, announce) {
     saving=true; root.setAttribute('aria-busy','true'); announce('Zapisywanie kolejności…');
     try {
       await request('/api/tasks/move',{method:'POST',body:{id,status,beforeId,expected:getTasks().map(({id,status,position})=>({id,status,position:Number(position)}))}});
-      await reload(); announce('Zmieniono położenie zadania.');
+      if (await reload() === false) { announce('Zapisano zmianę, ale odczyt tablicy nie powiódł się. Odśwież dane.'); return; } announce('Zmieniono położenie zadania.');
       root.querySelector(`[data-move="${id}"]`)?.focus();
     } catch(error) { announce(error.message); } // Pessimistic UI: never mutate local order before success.
     finally { saving=false; root.setAttribute('aria-busy','false'); }
