@@ -65,6 +65,7 @@ chmod 600 "$ENV_FILE"
 # Preserve checkout permissions; unprivileged containers read disposable copies.
 mkdir "$WORK/tests"
 cp ../backend/test/*.js "$WORK/tests/"
+cp "$PACKAGE_DIR/integration.test.js" "$WORK/tests/integration.test.js"
 python3 - "$WORK/tests/release-smoke.js" <<'PYS'
 import sys
 from pathlib import Path
@@ -131,10 +132,18 @@ TEST_MIGRATION_DATABASE_URL=postgres://tasks_owner:$OWNER_PASSWORD@db:5432/tasks
 TEST_DATABASE_URL=postgres://tasks_app:$APP_PASSWORD@db:5432/tasks_test
 EOF
 chmod 600 "$WORK/test.env"
+TEST_ARGS=(node --test backend/test/unit.test.js backend/test/security.test.js backend/test/integration.test.js)
+if [[ ${INTEGRATION_FOCUS_ONLY:-} == yes ]]; then
+  TEST_ARGS=(node --test --test-name-pattern='schema enforces integrity|CRUD over HTTP persists|migration 003 preserves' backend/test/integration.test.js)
+fi
 docker run --rm --pull never --user "$HELPER_USER" --network "$NETWORK" \
   --env-file "$WORK/test.env" \
   -v "$WORK/tests:/app/backend/test:ro" \
-  "$TEST_IMAGE" node --test backend/test/unit.test.js backend/test/security.test.js backend/test/integration.test.js
+  "$TEST_IMAGE" "${TEST_ARGS[@]}"
+if [[ ${INTEGRATION_FOCUS_ONLY:-} == yes ]]; then
+  echo "Focused three-case regression completed; NOT full acceptance/browser PASS"
+  exit 0
+fi
 pass "node test suite (unit, security, integration) inside the image"
 # deploy-contract.test.js inspects the checkout (Dockerfile, deploy/), not the image
 if command -v node >/dev/null; then
