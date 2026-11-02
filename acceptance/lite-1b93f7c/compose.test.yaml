@@ -1,0 +1,82 @@
+# Disposable local/CI stack: PostgreSQL + the exact prebuilt release image.
+# Driven by deploy/smoke-test.sh. Test-only credentials, loopback ports only.
+
+name: mytko-tasks-test
+
+x-hardening: &hardening
+  labels:
+    dev.mytko.acceptance: "${ACCEPTANCE_RUN_ID:?}"
+  image: ${TEST_IMAGE:?set TEST_IMAGE to the immutable preloaded artifact}
+  read_only: true
+  init: true
+  user: "1000:1000"
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs:
+    - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+
+services:
+  db:
+    labels:
+      dev.mytko.acceptance: "${ACCEPTANCE_RUN_ID:?}"
+    image: ${TEST_POSTGRES_IMAGE:?set approved PostgreSQL 17 digest}
+    environment:
+      POSTGRES_PASSWORD: ${SUPER_PASSWORD:?}
+    volumes:
+      - ${TEST_INITDB_SQL:-./test/initdb.sql}:/docker-entrypoint-initdb.d/initdb.sql:ro
+      - dbdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${TEST_DB_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "tasks_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *hardening
+    command: ["node", "backend/migrate.js"]
+    environment:
+      MIGRATION_DATABASE_URL: postgres://tasks_owner:${OWNER_PASSWORD:?}@db:5432/tasks_test
+      APP_DB_ROLE: tasks_app
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    healthcheck:
+      disable: true
+
+  app:
+    <<: *hardening
+    environment:
+      DATABASE_URL: postgres://tasks_app:${APP_PASSWORD:?}@db:5432/tasks_test
+      PUBLIC_ORIGIN: https://task.mytko.dev
+      TRUST_PROXY: "false"
+      AUTH_USERNAME: owner
+      # hash of "test-only-password"
+      AUTH_PASSWORD_HASH: "${AUTH_PASSWORD_HASH:?}"
+      SHUTDOWN_TIMEOUT_MS: "10000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${TEST_APP_PORT:-3101}:3000"
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+          pids: 128
+
+volumes:
+  dbdata:
+    labels:
+      dev.mytko.acceptance: "${ACCEPTANCE_RUN_ID:?}"
+
+# No external network access is needed by the preloaded test artifacts.
+networks:
+  default:
+    internal: true
+    labels:
+      dev.mytko.acceptance: "${ACCEPTANCE_RUN_ID:?}"
