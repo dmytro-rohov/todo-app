@@ -254,6 +254,10 @@ for database in tasks_test tasks_restore_test; do
 done
 cmp "$WORK/tasks_test.schema" "$WORK/tasks_restore_test.schema"
 pass "independent restore schema/data/ledger match; source unchanged; corrupt archive rejected"
+# Run browser QA while the disposable stack and its per-run credentials are alive.
+E2E_BASE="$BASE" AUTH_PASSWORD="$AUTH_PASSWORD" TASKS_DISPOSABLE_APPROVED=yes \
+  node "$PACKAGE_DIR/browser/run.cjs"
+pass "browser acceptance completed with per-run credentials"
 if [[ -n "${EVIDENCE_DIR:-}" ]]; then
   cp "$WORK/source-before.json" "$WORK/restored.json" "$WORK/source-after.json" "$WORK/backup.dump" "$EVIDENCE_DIR/"
 fi

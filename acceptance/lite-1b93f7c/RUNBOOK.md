@@ -31,23 +31,27 @@ available/allowed to this agent. Local registry success is unrelated evidence.
 
 ## Disposable acceptance execution
 
-Operator provisions isolated runner, exact clean candidate checkout, approved
-Node24/Postgres17 digests and network access to official registry. Do not use any
-existing DEV/ORHEA/MOTO database. No host socket exposed to agent. The script uses
-explicit image fetch authorization; smoke never pulls/builds images implicitly.
+Operator provisions an isolated runner, an exact clean candidate checkout, and
+preloads the approved Node24/Postgres17 digests. Do not use any existing
+DEV/ORHEA/MOTO database or registry access. No host socket is exposed to this
+agent. Preflight and execute verify the local RepoDigests and use pull-disabled
+Docker operations throughout.
 Do not inherit Docker production credentials/context: use a reviewed local daemon
 and sanitized environment. Review source scripts before enabling destructive tests.
 
+The package's `images.env` contains the approved immutable references; it is
+configuration only and contains no credentials. From the clean candidate checkout
+with this package at `acceptance/lite-1b93f7c/`, run the exact handoff below.
+
 ```bash
-SOURCE_DIR=/operator/provided/clean-candidate \
-TASKS_DISPOSABLE_APPROVED=yes ALLOW_IMAGE_FETCH=yes \
-NODE_IMAGE=node:24-bookworm-slim@sha256:APPROVED_NODE_DIGEST \
-TEST_POSTGRES_IMAGE=postgres:17-alpine@sha256:APPROVED_PG_DIGEST \
-bash /path/to/package/acceptance.sh
+SOURCE_DIR="$PWD" TASKS_DISPOSABLE_APPROVED=yes \
+bash acceptance/lite-1b93f7c/acceptance.sh execute
 ```
 
-Placeholders deliberately fail digest validation. Script verifies source, clean
-status and free loopback ports, captures source/image/provenance/build/smoke logs.
+The script verifies source, clean status, local RepoDigests, Linux/amd64 image
+metadata and free loopback ports. It captures source/build/smoke evidence and all
+Docker operations are explicitly pull-disabled. The browser stage runs before the
+per-run stack cleanup, using the random password generated for that stack.
 Unique Compose project's own volumes/network only; failure cleanup is not hidden.
 Smoke exposes PostgreSQL only on loopback for disposable tests, never publicly.
 Production must not publish PostgreSQL. Restore is truly run by smoke once approved,
@@ -55,12 +59,11 @@ not by this Session. Inspect logs for each migration/backfill/grant/concurrent-m
 restart/outage/restore assertion. Explicit induced rollback/deadlock acceptance
 remains a manual/integration gap; do not mark it PASS from fake-client tests.
 
-Browser needs separate disposable app stack because smoke cleans its project.
-Use candidate e2e/lite-acceptance.cjs with supplied Playwright/Chromium:
-TASKS_DISPOSABLE_APPROVED=yes E2E_BASE=http://127.0.0.1:3101 node e2e/lite-acceptance.cjs
-Record screenshots/traces and console. Script covers desktop/mobile/category/task/
-keyboard/mouse/reload/409; manually exercise 401/403/500, network timeout, focus,
-form validation, touch and CSRF. Missing automation is not accepted evidence.
+The integrated browser stage requires the package browser dependencies and a
+Chromium executable already available on the isolated runner. It covers desktop /
+mobile category/task/keyboard/mouse/reload/409 behavior with the same stack
+credentials; manually exercise 401/403/500, network timeout, focus, form
+validation, touch and CSRF. Missing automation is not accepted evidence.
 
 ## OVH first publication — separate approval mandatory
 
@@ -96,12 +99,18 @@ PR readiness: source review possible. Publication: NO-GO until actual acceptance
 
 ## Exact handoff
 
-Read-only endpoint preflight (against the separately running disposable app):
+Run from the clean candidate checkout after placing this package at
+`acceptance/lite-1b93f7c/`:
 
-    SOURCE_DIR=/operator/provided/clean-candidate HTTP_BASE=http://127.0.0.1:3101 bash /path/to/package/acceptance.sh preflight
+```bash
+SOURCE_DIR="$PWD" TASKS_DISPOSABLE_APPROVED=yes \
+bash acceptance/lite-1b93f7c/acceptance.sh preflight
+SOURCE_DIR="$PWD" TASKS_DISPOSABLE_APPROVED=yes \
+bash acceptance/lite-1b93f7c/acceptance.sh execute
+```
 
-After separate approval, execute with operator-approved immutable image references:
-
-    SOURCE_DIR=/operator/provided/clean-candidate TASKS_DISPOSABLE_APPROVED=yes ALLOW_IMAGE_FETCH=yes NODE_IMAGE=node:24-bookworm-slim@sha256:APPROVED_NODE_DIGEST TEST_POSTGRES_IMAGE=postgres:17-alpine@sha256:APPROVED_PG_DIGEST bash /path/to/package/acceptance.sh
-
-The runner writes a mode-600 structured acceptance report in the preserved evidence directory and removes only resources whose project and acceptance labels match the exact run identifiers.
+Preflight is read-only and validates the exact local images. Execute builds with
+`--pull=false`, starts the labeled disposable stack with `--pull never`, runs the
+smoke and integrated browser stages, then preserves redacted evidence while
+refusing automatic Docker cleanup. Do not declare E2E PASS until this command
+completes on the approved disposable runner.

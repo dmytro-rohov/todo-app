@@ -1,11 +1,20 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const {spawnSync}=require('node:child_process');const path=require('node:path');
 const read=n=>fs.readFileSync(path.join(__dirname,n),'utf8');
+const packageFiles=['acceptance.sh','images.env','verify.py','compose.test.yaml','smoke.sh','browser/auth.cjs','browser/run.cjs','browser/package.json','browser/package-lock.json'];
 test('restore targets dedicated DB only',()=>{const s=read('smoke.sh');for(const line of s.split('\n').filter(l=>l.includes('pg_restore')&&!l.includes('--version')))assert.ok(line.includes('-d tasks_restore_test'));assert.ok(s.includes('cmp "$WORK/source-before.json" "$WORK/source-after.json"'));});
 test('approval gate blocks before Docker',()=>{const r=spawnSync('bash',[path.join(__dirname,'acceptance.sh')],{env:{PATH:process.env.PATH},encoding:'utf8'});assert.equal(r.status,2);assert.match(r.stderr,/approval required/);});
 test('all package shell scripts parse',()=>{for(const n of ['smoke.sh','acceptance.sh'])assert.equal(spawnSync('bash',['-n',path.join(__dirname,n)]).status,0);});
 test('inspect redaction never persists env or command secrets',()=>{
  const payload=JSON.stringify([{Id:'x',Config:{Env:['PASSWORD=private'],Cmd:['private'],Labels:{}}}]);
  const r=spawnSync('python3',[path.join(__dirname,'redact.py')],{input:payload,encoding:'utf8'});assert.equal(r.status,0);assert.ok(!r.stdout.includes('private'));
+});
+test('git archive contains every required acceptance file',()=>{
+ const root=path.resolve(__dirname,'../..');
+ const archive=spawnSync('git',['archive','--format=tar','HEAD','acceptance/lite-1b93f7c'],{cwd:root,encoding:'buffer'});
+ assert.equal(archive.status,0,archive.stderr?.toString());
+ const listing=spawnSync('tar',['-tf','-'],{input:archive.stdout,encoding:'utf8'});
+ assert.equal(listing.status,0,listing.stderr);
+ for(const file of packageFiles) assert.ok(listing.stdout.split('\n').includes(`acceptance/lite-1b93f7c/${file}`),file);
 });
 test('approved platform image refs are exact',()=>{
  const env=read('images.env');assert.match(env,/node@sha256:a43f7fc3/);assert.match(env,/postgres@sha256:e4cb9368/);
@@ -34,6 +43,15 @@ test('private fixtures never embed auth password or mount generated init SQL',()
  assert.ok(script.includes('--env AUTH_PASSWORD'));
  assert.ok(script.includes('exec -T db psql -X'));
  assert.doesNotMatch(read('compose.test.yaml'),/docker-entrypoint-initdb/);
+});
+test('execute is local-only and runs browser before cleanup',()=>{
+ const script=read('acceptance.sh');
+ assert.doesNotMatch(script,/docker (?:pull|buildx imagetools)/);
+ assert.match(script,/--pull=false/);
+ const smoke=read('smoke.sh');
+ assert.match(smoke,/browser\/run\.cjs/);
+ assert.match(smoke,/AUTH_PASSWORD=\"\$AUTH_PASSWORD\"/);
+ assert.match(smoke,/node \"\$PACKAGE_DIR\/browser\/run\.cjs\"/);
 });
 test('preflight does not require an application before it starts',()=>{
  const script=read('acceptance.sh');assert.doesNotMatch(script,/HTTP_BASE_required/);

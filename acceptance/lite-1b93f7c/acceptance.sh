@@ -20,8 +20,14 @@ export NODE_IMAGE TEST_POSTGRES_IMAGE
 command -v ss
 command -v curl
 docker compose version
-check_image() { local image=$1; docker image inspect "$image" >/dev/null || { echo "FAIL phase=preflight error=image_not_local" >&2; exit 1; }; [[ "$(docker image inspect --format "{{.Os}}/{{.Architecture}}" "$image")" == linux/amd64 ]] || { echo "FAIL phase=preflight error=image_platform" >&2; exit 1; }; }; check_image "$NODE_IMAGE"; check_image "$TEST_POSTGRES_IMAGE"
-[[ "$(docker image inspect --format '{{.RepoDigests}}' "$NODE_IMAGE")" == *"$NODE_IMAGE"* ]] || { echo "FAIL phase=preflight error=image_digest" >&2; exit 1; }; [[ "$(docker image inspect --format '{{.RepoDigests}}' "$TEST_POSTGRES_IMAGE")" == *"$TEST_POSTGRES_IMAGE"* ]] || { echo "FAIL phase=preflight error=image_digest" >&2; exit 1; }
+check_image() {
+  local image=$1
+  docker image inspect "$image" >/dev/null || { echo "FAIL phase=preflight error=image_not_local image=$image" >&2; exit 1; }
+  [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" == linux/amd64 ]] || { echo "FAIL phase=preflight error=image_platform image=$image" >&2; exit 1; }
+  docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image" | grep -Fx -- "$image" >/dev/null || { echo "FAIL phase=preflight error=image_digest image=$image" >&2; exit 1; }
+}
+check_image "$NODE_IMAGE"
+check_image "$TEST_POSTGRES_IMAGE"
 docker info >/dev/null
 [[ -z $(docker ps -q --filter publish=3101) ]]
 [[ -z $(docker ps -q --filter publish=55432) ]]
@@ -34,11 +40,6 @@ REPORT="$EVIDENCE_DIR/acceptance-report.json"
 trap 'code=$?; status=FAIL; [[ $code == 0 ]] && status=PASS; printf "{\"status\":\"%s\",\"phase\":\"%s\",\"error\":null}\n" "$status" "${phase:-unknown}" > "$REPORT"; exit "$code"' EXIT
 printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$EVIDENCE_DIR/source.txt"
 bash scripts/validate-lite.sh 2>&1 | tee "$EVIDENCE_DIR/local-validation.log"
-docker buildx imagetools inspect "$NODE_IMAGE" > "$EVIDENCE_DIR/node-provenance.txt"
-docker buildx imagetools inspect "$TEST_POSTGRES_IMAGE" > "$EVIDENCE_DIR/postgres-provenance.txt"
-[[ ${ALLOW_IMAGE_FETCH:-} == yes ]] || { echo 'Explicit approved image-fetch permission required' >&2; exit 2; }
-docker pull "$NODE_IMAGE"
-docker pull "$TEST_POSTGRES_IMAGE"
 docker buildx build --pull=false --platform linux/amd64 --load --build-arg NODE_IMAGE="$NODE_IMAGE" --build-arg GIT_REVISION="$EXPECTED_SOURCE_SHA" -t "mytko-tasks:qa-$EXPECTED_SOURCE_SHA" . 2>&1 | tee "$EVIDENCE_DIR/build.log"
 export TEST_IMAGE TEST_POSTGRES_IMAGE
 TEST_IMAGE=$(docker image inspect --format '{{.Id}}' "mytko-tasks:qa-$EXPECTED_SOURCE_SHA")
