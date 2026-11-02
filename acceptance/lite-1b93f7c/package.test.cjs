@@ -4,6 +4,25 @@ const packageFiles=['acceptance.sh','images.env','verify.py','compose.test.yaml'
 test('restore targets dedicated DB only',()=>{const s=read('smoke.sh');for(const line of s.split('\n').filter(l=>l.includes('pg_restore')&&!l.includes('--version')))assert.ok(line.includes('-d tasks_restore_test'));assert.ok(s.includes('cmp "$WORK/source-before.json" "$WORK/source-after.json"'));});
 test('approval gate blocks before Docker',()=>{const r=spawnSync('bash',[path.join(__dirname,'acceptance.sh')],{env:{PATH:process.env.PATH},encoding:'utf8'});assert.equal(r.status,2);assert.match(r.stderr,/approval required/);});
 test('all package shell scripts parse',()=>{for(const n of ['smoke.sh','acceptance.sh'])assert.equal(spawnSync('bash',['-n',path.join(__dirname,n)]).status,0);});
+test('RepoDigest normalization accepts only approved official aliases and exact digests',()=>{
+ const script=path.join(__dirname,'acceptance.sh');
+ const digest='sha256:'+'a'.repeat(64);
+ const check=(image,repoDigest,expected)=>{
+  const r=spawnSync('bash',[script,'test-repo-digest',image,repoDigest],{encoding:'utf8'});
+  assert.equal(r.status,expected?0:1,`${image} ${repoDigest}`);
+ };
+ for(const [image,repositories] of [
+  ['docker.io/library/node@'+digest,['docker.io/library/node','node']],
+  ['node@'+digest,['docker.io/library/node','node']],
+  ['docker.io/library/postgres@'+digest,['docker.io/library/postgres','postgres']],
+  ['postgres@'+digest,['docker.io/library/postgres','postgres']]
+ ]) for(const repo of repositories) check(image,repo+'@'+digest,true);
+ check('docker.io/library/node@'+digest,'docker.io/library/other@'+digest,false);
+ check('docker.io/library/node@'+digest,'docker.io/library/node@'+'b'.repeat(64),false);
+ check('docker.io/library/node@'+digest,'docker.io/library/node',false);
+ check('docker.io/library/node@'+digest,'sha256:'+digest.slice(7),false);
+ check('docker.io/library/ubuntu@'+digest,'ubuntu@'+digest,false);
+});
 test('inspect redaction never persists env or command secrets',()=>{
  const payload=JSON.stringify([{Id:'x',Config:{Env:['PASSWORD=private'],Cmd:['private'],Labels:{}}}]);
  const r=spawnSync('python3',[path.join(__dirname,'redact.py')],{input:payload,encoding:'utf8'});assert.equal(r.status,0);assert.ok(!r.stdout.includes('private'));

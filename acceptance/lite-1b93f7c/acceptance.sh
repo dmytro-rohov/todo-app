@@ -4,6 +4,33 @@ set -euo pipefail
 umask 077
 phase=preflight
 MODE=${1:-run}
+repo_digest_matches() {
+  local image=$1
+  local repo_digest=$2
+  local image_repo=${image%@*}
+  local expected_digest=${image##*@}
+  local repo=${repo_digest%@*}
+  local digest=${repo_digest##*@}
+
+  case "$image_repo" in
+    docker.io/library/node|node)
+      [[ "$repo" == docker.io/library/node || "$repo" == node ]] || return 1
+      ;;
+    docker.io/library/postgres|postgres)
+      [[ "$repo" == docker.io/library/postgres || "$repo" == postgres ]] || return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  [[ "$expected_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
+  [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
+  [[ "$digest" == "$expected_digest" ]]
+}
+if [[ $MODE == test-repo-digest ]]; then
+  repo_digest_matches "$2" "$3"
+  exit $?
+fi
 if [[ $MODE != preflight ]]; then [[ ${TASKS_DISPOSABLE_APPROVED:-} == yes ]] || { echo "Disposable runner approval required" >&2; exit 2; }; fi
 phase=execute
 export PACKAGE_DIR
@@ -24,7 +51,11 @@ check_image() {
   local image=$1
   docker image inspect "$image" >/dev/null || { echo "FAIL phase=preflight error=image_not_local image=$image" >&2; exit 1; }
   [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" == linux/amd64 ]] || { echo "FAIL phase=preflight error=image_platform image=$image" >&2; exit 1; }
-  docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image" | grep -Fx -- "$image" >/dev/null || { echo "FAIL phase=preflight error=image_digest image=$image" >&2; exit 1; }
+  local digest_match=0
+  while IFS= read -r repo_digest; do
+    if repo_digest_matches "$image" "$repo_digest"; then digest_match=1; break; fi
+  done < <(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image")
+  (( digest_match == 1 )) || { echo "FAIL phase=preflight error=image_digest image=$image" >&2; exit 1; }
 }
 check_image "$NODE_IMAGE"
 check_image "$TEST_POSTGRES_IMAGE"
