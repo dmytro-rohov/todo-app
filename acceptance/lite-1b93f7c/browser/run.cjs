@@ -4,8 +4,9 @@ const assert = require('node:assert/strict');
 const {credentials}=require('./auth.cjs');
 (async()=>{
   if(process.env.TASKS_DISPOSABLE_APPROVED!=='yes' || process.env.E2E_BASE!=='http://127.0.0.1:3101') throw Error('Disposable loopback acceptance target required');
-  const browser=await chromium.launch();
+  let browser;
   try {
+    browser=await chromium.launch();
     for(const viewport of [{width:1440,height:900},{width:390,height:844}]) {
       const context=await browser.newContext({viewport,httpCredentials:credentials()});
       const page=await context.newPage();const errors=[];
@@ -54,5 +55,5 @@ const {credentials}=require('./auth.cjs');
       assert.deepEqual(errors.filter(message=>!message.includes('409')),[]);
       await context.close();
     }
-  } finally {await browser.close();}
+  } finally {if (browser) await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

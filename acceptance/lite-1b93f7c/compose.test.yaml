@@ -23,7 +23,6 @@ services:
     environment:
       POSTGRES_PASSWORD: ${SUPER_PASSWORD:?}
     volumes:
-      - ${TEST_INITDB_SQL:-./test/initdb.sql}:/docker-entrypoint-initdb.d/initdb.sql:ro
       - dbdata:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:${TEST_DB_PORT:-55432}:5432"
@@ -77,6 +76,8 @@ volumes:
 # No external network access is needed by the preloaded test artifacts.
 networks:
   default:
-    internal: true
+    internal: false
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
     labels:
       dev.mytko.acceptance: "${ACCEPTANCE_RUN_ID:?}"

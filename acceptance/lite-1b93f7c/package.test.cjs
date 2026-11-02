@@ -17,7 +17,7 @@ test('browser auth rejects defaults and accepts approved random handoff',()=>{
  assert.equal(credentials({TASKS_DISPOSABLE_APPROVED:'yes',AUTH_PASSWORD:'a'.repeat(64)}).password.length,64);
 });
 test('cleanup refuses non-atomic Docker removal',()=>{
- const script=read('smoke.sh');assert.ok(script.includes('Automatic Docker cleanup refused'));
+ const script=read('smoke.sh');assert.ok(script.includes('Automatic Docker cleanup refused')); assert.ok(script.includes('ownership.py'));
  assert.doesNotMatch(script,/"\$\{COMPOSE\[@\]\}" down/);
  assert.doesNotMatch(script,/docker (?:system|volume) prune/);
 });
@@ -26,4 +26,15 @@ test('db-only execute refuses without approval before invoking Docker',()=>{
 });
 test('db-only never pulls or automatically removes Docker resources',()=>{
  const code=read('db-only');assert.ok(code.includes('--pull=never'));assert.ok(!code.includes("'docker','pull'"));assert.ok(!code.includes("'docker','rm'"));assert.ok(!code.includes('prune'));assert.ok(code.includes('tasks_restore_test'));
+});
+test('private fixtures never embed auth password or mount generated init SQL',()=>{
+ const script=read('smoke.sh');
+ assert.doesNotMatch(script,/chmod a\+|os\.environ\['AUTH_PASSWORD'\]/);
+ assert.ok(script.includes('--user "$HELPER_USER"'));
+ assert.ok(script.includes('--env AUTH_PASSWORD'));
+ assert.ok(script.includes('exec -T db psql -X'));
+ assert.doesNotMatch(read('compose.test.yaml'),/docker-entrypoint-initdb/);
+});
+test('preflight does not require an application before it starts',()=>{
+ const script=read('acceptance.sh');assert.doesNotMatch(script,/HTTP_BASE_required/);
 });

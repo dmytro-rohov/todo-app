@@ -25,53 +25,62 @@ cd "${SOURCE_DIR:?}/deploy"
 export TEST_IMAGE TEST_POSTGRES_IMAGE
 # Never reuse the fixed Compose project (or its database volume).
 PROJECT="tasks-validation-$(date +%s)-$$-$RANDOM"
-COMPOSE=(docker compose --env-file /dev/null -p "$PROJECT" -f "${PACKAGE_DIR:?}/compose.test.yaml")
+WORK=$(mktemp -d)
+chmod 700 "$WORK"
+trap 'rm -rf -- "$WORK"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+ENV_FILE="$WORK/compose.env"
+# Compose reads this mode 600 file; no secret is placed in a process argument.
+: > "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+COMPOSE=(docker compose --env-file "$ENV_FILE" -p "$PROJECT" -f "${PACKAGE_DIR:?}/compose.test.yaml")
 BASE="http://127.0.0.1:${TEST_APP_PORT:-3101}"
 AUTH_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 export AUTH_PASSWORD
 AUTH="owner:$AUTH_PASSWORD"
+CURL_CONFIG="$WORK/curl.conf"
+printf 'user = "owner:%s"\n' "$AUTH_PASSWORD" > "$CURL_CONFIG"
+chmod 600 "$CURL_CONFIG"
 AUTH_PASSWORD_HASH=$(node -e 'require(process.env.SOURCE_DIR+"/backend/security").hashPassword(process.env.AUTH_PASSWORD).then(console.log)')
 export AUTH_PASSWORD_HASH
 SAME_ORIGIN=(-H "Sec-Fetch-Site: same-origin" -H "Content-Type: application/json")
-WORK=$(mktemp -d)
 # Hex credentials are generated anew per run and never printed.
 OWNER_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 APP_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 RESTORE_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 SUPER_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 export OWNER_PASSWORD APP_PASSWORD RESTORE_PASSWORD SUPER_PASSWORD
+cat > "$ENV_FILE" <<EOF
+TEST_IMAGE=$TEST_IMAGE
+TEST_POSTGRES_IMAGE=$TEST_POSTGRES_IMAGE
+ACCEPTANCE_RUN_ID=$ACCEPTANCE_RUN_ID
+SUPER_PASSWORD=$SUPER_PASSWORD
+OWNER_PASSWORD=$OWNER_PASSWORD
+APP_PASSWORD=$APP_PASSWORD
+AUTH_PASSWORD_HASH=$AUTH_PASSWORD_HASH
+EOF
+chmod 600 "$ENV_FILE"
 
 # Preserve checkout permissions; unprivileged containers read disposable copies.
 mkdir "$WORK/tests"
 cp ../backend/test/*.js "$WORK/tests/"
 python3 - "$WORK/tests/release-smoke.js" <<'PYS'
-import os,sys
+import sys
 from pathlib import Path
-p=Path(sys.argv[1]);p.write_text(p.read_text().replace('test-only-password',os.environ['AUTH_PASSWORD']))
+p=Path(sys.argv[1]);p.write_text(p.read_text().replace("Buffer.from('owner:test-only-password')", "Buffer.from('owner:'+process.env.AUTH_PASSWORD)"))
 PYS
-python3 - "$PACKAGE_DIR/initdb.sql" "$WORK/initdb.sql" <<'PYGEN'
-import os,sys
-from pathlib import Path
-s=Path(sys.argv[1]).read_text()
-for old,key in [('owner-test-only','OWNER_PASSWORD'),('app-test-only','APP_PASSWORD'),('restore-test-only','RESTORE_PASSWORD')]:s=s.replace(old,os.environ[key])
-Path(sys.argv[2]).write_text(s)
-PYGEN
-chmod a+rx "$WORK" "$WORK/tests"
-chmod a+r "$WORK"/tests/*.js "$WORK/initdb.sql"
-export TEST_INITDB_SQL="$WORK/initdb.sql"
+# All fixtures remain private and helpers run with the host fixture owner's uid.
+find "$WORK" -type d -exec chmod 700 {} +
+find "$WORK" -type f -exec chmod 600 {} +
+HELPER_USER="$(id -u):$(id -g)"
 
 cleanup() {
   local result=$?
   trap - EXIT
-  if [[ -n "${EVIDENCE_DIR:-}" ]]; then "${COMPOSE[@]}" logs --no-color > "$EVIDENCE_DIR/compose.log" 2>&1 || result=1; fi
-  if ! python3 "$PACKAGE_DIR/ownership.py" "$PROJECT" "$ACCEPTANCE_RUN_ID"; then
-    echo "Foreign ownership; cleanup refused; evidence retained: $WORK" >&2
-    exit 1
-  fi
-  # Docker deletion has no atomic compare-label-and-delete contract. Fail closed.
-  echo "Automatic Docker cleanup refused: inspect owned resources for project $PROJECT run $ACCEPTANCE_RUN_ID manually" >&2
-  result=1
-  rm -rf "$WORK"
+  rm -rf -- "$WORK"
+  python3 "$PACKAGE_DIR/ownership.py" "$PROJECT" "$ACCEPTANCE_RUN_ID" || result=1
+  echo "Automatic Docker cleanup refused; resources retained for explicit operator cleanup project=$PROJECT run=$ACCEPTANCE_RUN_ID" >&2
   exit "$result"
 }
 trap cleanup EXIT
@@ -95,15 +104,36 @@ wait_ready() {
 # Both artifacts must already exist; never pull/build implicitly during smoke.
 docker image inspect "$TEST_IMAGE" >/dev/null
 docker image inspect "$TEST_POSTGRES_IMAGE" >/dev/null
+for image in "$TEST_IMAGE" "$TEST_POSTGRES_IMAGE"; do
+  [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" == linux/amd64 ]] || fail "local image platform $image"
+done
+[[ "$(docker image inspect --format '{{join .RepoDigests " "}}' "$TEST_POSTGRES_IMAGE")" == *"$TEST_POSTGRES_IMAGE"* ]] || fail "local postgres digest"
+"${COMPOSE[@]}" up -d --no-build --pull never db
+for attempt in $(seq 1 60); do
+  if "${COMPOSE[@]}" exec -T db pg_isready -U postgres >/dev/null 2>&1; then break; fi
+  [[ $attempt -lt 60 ]] || fail "database startup deadline"
+  sleep 1
+done
+python3 - "$PACKAGE_DIR/initdb.sql" <<'SQLGEN' | "${COMPOSE[@]}" exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres >/dev/null
+import os,sys
+from pathlib import Path
+s=Path(sys.argv[1]).read_text()
+for old,key in [('owner-test-only','OWNER_PASSWORD'),('app-test-only','APP_PASSWORD'),('restore-test-only','RESTORE_PASSWORD')]:s=s.replace(old,os.environ[key])
+print(s)
+SQLGEN
 "${COMPOSE[@]}" up -d --no-build --pull never app
 wait_ready
 pass "exact image starts, migrations run, app becomes ready"
 
 NETWORK=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$("${COMPOSE[@]}" ps -q app)")
-docker run --rm --pull never --network "$NETWORK" \
+cat > "$WORK/test.env" <<EOF
+TEST_MIGRATION_DATABASE_URL=postgres://tasks_owner:$OWNER_PASSWORD@db:5432/tasks_test
+TEST_DATABASE_URL=postgres://tasks_app:$APP_PASSWORD@db:5432/tasks_test
+EOF
+chmod 600 "$WORK/test.env"
+docker run --rm --pull never --user "$HELPER_USER" --network "$NETWORK" \
+  --env-file "$WORK/test.env" \
   -v "$WORK/tests:/app/backend/test:ro" \
-  -e TEST_MIGRATION_DATABASE_URL=postgres://tasks_owner:${OWNER_PASSWORD}@db:5432/tasks_test \
-  -e TEST_DATABASE_URL=postgres://tasks_app:${APP_PASSWORD}@db:5432/tasks_test \
   "$TEST_IMAGE" node --test backend/test/unit.test.js backend/test/security.test.js backend/test/integration.test.js
 pass "node test suite (unit, security, integration) inside the image"
 # deploy-contract.test.js inspects the checkout (Dockerfile, deploy/), not the image
@@ -116,17 +146,21 @@ fi
 
 # Transaction-fault probe, isolated from destructive baseline integration suite.
 cp "$PACKAGE_DIR/transaction.test.js" "$WORK/tests/transaction.test.js"
-chmod a+r "$WORK/tests/transaction.test.js"
-docker run --rm --pull never --network "$NETWORK" \
+chmod 600 "$WORK/tests/transaction.test.js"
+cat > "$WORK/test.env" <<EOF
+TEST_MIGRATION_DATABASE_URL=postgres://tasks_owner:$OWNER_PASSWORD@db:5432/tasks_test
+TEST_DATABASE_URL=postgres://tasks_app:$APP_PASSWORD@db:5432/tasks_test
+EOF
+chmod 600 "$WORK/test.env"
+docker run --rm --pull never --user "$HELPER_USER" --network "$NETWORK" \
+  --env-file "$WORK/test.env" \
   -v "$WORK/tests:/app/backend/test:ro" \
-  -e TEST_MIGRATION_DATABASE_URL=postgres://tasks_owner:${OWNER_PASSWORD}@db:5432/tasks_test \
-  -e TEST_DATABASE_URL=postgres://tasks_app:${APP_PASSWORD}@db:5432/tasks_test \
   "$TEST_IMAGE" node --test backend/test/transaction.test.js
 
 # New domain probe uses only this run's disposable app/network.
-docker run --rm --pull never --network "$NETWORK" \
+docker run --rm --pull never --user "$HELPER_USER" --network "$NETWORK" \
   -v "$WORK/tests:/app/backend/test:ro" \
-  -e TASKS_DISPOSABLE_APPROVED=yes -e SMOKE_BASE=http://app:3000 \
+  --env AUTH_PASSWORD -e TASKS_DISPOSABLE_APPROVED=yes -e SMOKE_BASE=http://app:3000 \
   "$TEST_IMAGE" node backend/test/release-smoke.js
 
 # --- health, auth, headers ---------------------------------------------------
@@ -135,21 +169,21 @@ expect "healthz body is minimal" '{"status":"ok"}' "$(curl --noproxy '*' -s "$BA
 expect "readyz body is minimal" '{"status":"ok"}' "$(curl --noproxy '*' -s "$BASE/readyz")"
 expect "app shell requires auth" 401 "$(status "$BASE/")"
 expect "API requires auth" 401 "$(status "$BASE/api/tasks")"
-expect "wrong password rejected" 401 "$(status -u owner:wrong "$BASE/api/tasks")"
-expect "app shell with auth" 200 "$(status -u "$AUTH" "$BASE/")"
-expect "compiled stylesheet served" 200 "$(status -u "$AUTH" "$BASE/dist/style.css")"
-curl --noproxy '*' -s -D - -o /dev/null -u "$AUTH" "$BASE/" | grep -qi "^content-security-policy: default-src 'self'" \
+expect "wrong password rejected" 401 "$(status --user owner:wrong "$BASE/api/tasks")"
+expect "app shell with auth" 200 "$(status --config "$CURL_CONFIG" "$BASE/")"
+expect "compiled stylesheet served" 200 "$(status --config "$CURL_CONFIG" "$BASE/dist/style.css")"
+curl --noproxy '*' -s -D - -o /dev/null --config "$CURL_CONFIG" "$BASE/" | grep -qi "^content-security-policy: default-src 'self'" \
   && pass "CSP header present" || fail "CSP header present"
 
 # --- CRUD + CSRF ---------------------------------------------------------------
-CATEGORY_ID=$(curl --noproxy '*' -s -u "$AUTH" "${SAME_ORIGIN[@]}" -d '{"name":"Praca","color":"#4e45e4"}' "$BASE/api/categories" \
+CATEGORY_ID=$(curl --noproxy '*' -s --config "$CURL_CONFIG" "${SAME_ORIGIN[@]}" -d '{"name":"Praca","color":"#4e45e4"}' "$BASE/api/categories" \
   | sed -E 's/.*"id":([0-9]+).*/\1/')
 [[ "$CATEGORY_ID" =~ ^[0-9]+$ ]] && pass "create category" || fail "create category"
-expect "create task" 201 "$(status -u "$AUTH" "${SAME_ORIGIN[@]}" \
+expect "create task" 201 "$(status --config "$CURL_CONFIG" "${SAME_ORIGIN[@]}" \
   -d "{\"title\":\"Smoke task\",\"date\":\"2026-10-30\",\"categoryId\":$CATEGORY_ID}" "$BASE/api/tasks")"
-expect "cross-site write rejected" 403 "$(status -u "$AUTH" -H "Sec-Fetch-Site: cross-site" \
+expect "cross-site write rejected" 403 "$(status --config "$CURL_CONFIG" -H "Sec-Fetch-Site: cross-site" \
   -H "Content-Type: application/json" -d '{"title":"csrf","date":"2026-10-30"}' "$BASE/api/tasks")"
-has_task() { curl --noproxy '*' -s -u "$AUTH" "$BASE/api/tasks" | grep -q '"title":"Smoke task"'; }
+has_task() { curl --noproxy '*' -s --config "$CURL_CONFIG" "$BASE/api/tasks" | grep -q '"title":"Smoke task"'; }
 has_task && pass "task readable" || fail "task readable"
 
 # --- runtime hardening ---------------------------------------------------------

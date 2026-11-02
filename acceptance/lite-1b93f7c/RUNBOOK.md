@@ -92,3 +92,16 @@ form validation, touch and CSRF. Missing automation is not accepted evidence.
 
 This is an executable preparation package, not proof of provisioned OVH resources.
 PR readiness: source review possible. Publication: NO-GO until actual acceptance.
+
+
+## Exact handoff
+
+Read-only endpoint preflight (against the separately running disposable app):
+
+    SOURCE_DIR=/operator/provided/clean-candidate HTTP_BASE=http://127.0.0.1:3101 bash /path/to/package/acceptance.sh preflight
+
+After separate approval, execute with operator-approved immutable image references:
+
+    SOURCE_DIR=/operator/provided/clean-candidate TASKS_DISPOSABLE_APPROVED=yes ALLOW_IMAGE_FETCH=yes NODE_IMAGE=node:24-bookworm-slim@sha256:APPROVED_NODE_DIGEST TEST_POSTGRES_IMAGE=postgres:17-alpine@sha256:APPROVED_PG_DIGEST bash /path/to/package/acceptance.sh
+
+The runner writes a mode-600 structured acceptance report in the preserved evidence directory and removes only resources whose project and acceptance labels match the exact run identifiers.
