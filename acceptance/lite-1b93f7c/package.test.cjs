@@ -1,6 +1,6 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const {spawnSync}=require('node:child_process');const path=require('node:path');
 const read=n=>fs.readFileSync(path.join(__dirname,n),'utf8');
-const packageFiles=['acceptance.sh','images.env','verify.py','compose.test.yaml','smoke.sh','browser/auth.cjs','browser/run.cjs','browser/package.json','browser/package-lock.json'];
+const packageFiles=['acceptance.sh','images.env','verify.py','compose.test.yaml','smoke.sh','browser/auth.cjs','browser/run.cjs','browser/package.json','browser/package-lock.json','browser/runtime-contract.json','browser/runtime.cjs','browser/runtime.test.cjs','browser/stack_check.py','browser/stack_check.test.py'];
 test('restore targets dedicated DB only',()=>{const s=read('smoke.sh');for(const line of s.split('\n').filter(l=>l.includes('pg_restore')&&!l.includes('--version')))assert.ok(line.includes('-d tasks_restore_test'));assert.ok(s.includes('cmp "$WORK/source-before.json" "$WORK/source-after.json"'));});
 test('approval gate blocks before Docker',()=>{const r=spawnSync('bash',[path.join(__dirname,'acceptance.sh')],{env:{PATH:process.env.PATH},encoding:'utf8'});assert.equal(r.status,2);assert.match(r.stderr,/approval required/);});
 test('all package shell scripts parse',()=>{for(const n of ['smoke.sh','acceptance.sh'])assert.equal(spawnSync('bash',['-n',path.join(__dirname,n)]).status,0);});
@@ -76,4 +76,34 @@ test('execute is local-only and runs browser before cleanup',()=>{
 });
 test('preflight does not require an application before it starts',()=>{
  const script=read('acceptance.sh');assert.doesNotMatch(script,/HTTP_BASE_required/);
+});
+test('disposable stack origin matches the loopback browser origin',()=>{
+ const compose=read('compose.test.yaml');
+ assert.match(compose,/PUBLIC_ORIGIN: "http:\/\/127\.0\.0\.1:\$\{TEST_APP_PORT:-3101\}"/);
+ assert.match(read('smoke.sh'),/BASE="http:\/\/127\.0\.0\.1:\$\{TEST_APP_PORT:-3101\}"/);
+});
+test('full execute requires browser runtime before build and browser PASS after smoke',()=>{
+ const s=read('acceptance.sh');
+ const runtimeAt=s.indexOf('browser_runtime "$EVIDENCE_DIR"\nphase=execute');
+ assert.ok(runtimeAt>0 && runtimeAt<s.indexOf('docker buildx build'),'Chromium check precedes build');
+ assert.ok(s.indexOf('require_browser_pass',s.indexOf('smoke.sh" 2>&1'))>0,'browser PASS gate after smoke');
+ assert.match(s,/\$code == 3 \]\] && status=BLOCKED/);
+ assert.doesNotMatch(s,/Browser QA and independent security review remain required/);
+});
+test('preflight launches Chromium through the central runtime',()=>{
+ const s=read('acceptance.sh');const pre=s.slice(s.indexOf('if [[ $MODE == preflight ]]; then\n'));
+ assert.match(pre.slice(0,200),/browser_runtime\n/);
+});
+test('browser-only refuses without approval and never starts or removes Docker resources',()=>{
+ const r=spawnSync('bash',[path.join(__dirname,'acceptance.sh'),'browser-only'],{env:{PATH:process.env.PATH},encoding:'utf8'});
+ assert.equal(r.status,2);assert.match(r.stderr,/approval required/);
+ const s=read('acceptance.sh');const only=s.slice(s.indexOf('if [[ $MODE == browser-only ]]'),s.indexOf('source "$PACKAGE_DIR/images.env"'));
+ assert.match(only,/stack_check\.py/);assert.match(only,/Browser-only PASS is not full E2E/);
+ assert.doesNotMatch(only,/docker compose|COMPOSE\[|docker (?:run|start|stop|rm|restart)|smoke\.sh/);
+ for(const call of read('browser/stack_check.py').match(/(?<!def )docker\([^)]*\)/g))assert.match(call,/^docker\('(?:ps|container|image|port)'/,call);
+});
+test('browser evidence directory and loopback proxy bypass are passed to the runner',()=>{
+ const smoke=read('smoke.sh');
+ assert.match(smoke,/BROWSER_EVIDENCE_DIR="\$\{EVIDENCE_DIR:\+\$EVIDENCE_DIR\/browser\}"/);
+ assert.match(smoke,/NO_PROXY=127\.0\.0\.1,localhost,::1/);
 });

@@ -49,7 +49,9 @@ services:
     <<: *hardening
     environment:
       DATABASE_URL: postgres://tasks_app:${APP_PASSWORD:?}@db:5432/tasks_test
-      PUBLIC_ORIGIN: https://task.mytko.dev
+      # Browser QA runs on this loopback origin; Chromium sends Origin on
+      # same-origin writes, so any other value makes CSRF reject them (403).
+      PUBLIC_ORIGIN: "http://127.0.0.1:${TEST_APP_PORT:-3101}"
       TRUST_PROXY: "false"
       AUTH_USERNAME: owner
       # hash of "test-only-password"

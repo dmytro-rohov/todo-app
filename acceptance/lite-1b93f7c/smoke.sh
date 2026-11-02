@@ -265,6 +265,8 @@ cmp "$WORK/tasks_test.schema" "$WORK/tasks_restore_test.schema"
 pass "independent restore schema/data/ledger match; source unchanged; corrupt archive rejected"
 # Run browser QA while the disposable stack and its per-run credentials are alive.
 E2E_BASE="$BASE" AUTH_PASSWORD="$AUTH_PASSWORD" TASKS_DISPOSABLE_APPROVED=yes \
+  BROWSER_EVIDENCE_DIR="${EVIDENCE_DIR:+$EVIDENCE_DIR/browser}" \
+  NO_PROXY=127.0.0.1,localhost,::1 no_proxy=127.0.0.1,localhost,::1 \
   node "$PACKAGE_DIR/browser/run.cjs"
 pass "browser acceptance completed with per-run credentials"
 if [[ -n "${EVIDENCE_DIR:-}" ]]; then

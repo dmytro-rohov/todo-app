@@ -19,7 +19,8 @@ No instructions here authorize production. Full worktree untouched.
 | PG17, DB roles, migration/backfill/concurrency | BLOCKED | no approved disposable DB |
 | Docker build/runtime/restart/outage | BLOCKED | socket /var/run/docker.sock absent |
 | Real backup/restore | BLOCKED | same runner requirement |
-| Chromium/browser | BLOCKED | Playwright absent, no approved running QA app |
+| Chromium/browser | BLOCKED | runner prepared for central Playwright 1.61.0/Chromium 149; not executed in Session (no runtime, no stack) |
+| Browser runner contracts | PASS | node --test package.test.cjs browser/runtime.test.cjs; python3 browser/stack_check.test.py |
 | TLS/Caddy/security independent review | BLOCKED | no approved environment/reviewer |
 | Trusted Validate | BLOCKED | only historical failed e8deeda metadata; no new result |
 
@@ -45,6 +46,7 @@ with this package at `acceptance/lite-1b93f7c/`, run the exact handoff below.
 
 ```bash
 SOURCE_DIR="$PWD" TASKS_DISPOSABLE_APPROVED=yes \
+MYTKO_PLAYWRIGHT=on MYTKO_PLAYWRIGHT_ROOT=/approved/central/runtime \
 bash acceptance/lite-1b93f7c/acceptance.sh execute
 ```
 
@@ -59,11 +61,59 @@ not by this Session. Inspect logs for each migration/backfill/grant/concurrent-m
 restart/outage/restore assertion. Explicit induced rollback/deadlock acceptance
 remains a manual/integration gap; do not mark it PASS from fake-client tests.
 
-The integrated browser stage requires the package browser dependencies and a
-Chromium executable already available on the isolated runner. It covers desktop /
-mobile category/task/keyboard/mouse/reload/409 behavior with the same stack
-credentials; manually exercise 401/403/500, network timeout, focus, form
-validation, touch and CSRF. Missing automation is not accepted evidence.
+### Browser QA — central Workflow Playwright (MW-PLAYWRIGHT-01)
+
+Playwright is resolved only from the central Mytko Workflow runtime declared in
+`browser/runtime-contract.json`: exactly Playwright 1.61.0 (+ playwright-core
+1.61.0) and Chromium major 149. No per-project install; `browser/package.json`
+keeps the historical 1.56.1 pin for reference only and is never resolved.
+Changing the version is a reviewed edit of the contract file. Env names below are
+the package-side declaration; confirm them against the Workflow definition.
+
+| Variable | Meaning |
+|---|---|
+| `MYTKO_PLAYWRIGHT=on` | Workflow policy switch. OFF/unset/other => exit 3 BLOCKED, never skipped |
+| `MYTKO_PLAYWRIGHT_ROOT` | absolute central root containing `node_modules/playwright`; must be outside the checkout and package, owned by root/runner user, not group/world-writable, no symlinks |
+
+`preflight` and `execute` launch Chromium (`--no-proxy-server`, headless) and
+check its major version before any build or stack start; `execute` writes
+`browser-runtime.json`. Full `execute` fails unless `browser/summary.json`
+reports every mandatory scenario PASS. Report status is PASS, FAIL or BLOCKED.
+
+Mandatory scenarios (desktop 1440x900 and mobile 390x844): anonymous and wrong
+password get 401 for shell and API; valid login renders the board; stylesheet and
+ES modules load with correct MIME and applied rules; create + rename category and
+create task; edit task; keyboard move between columns; reload persistence; API
+errors (409 move without retry, 500 and network failure on refresh keep the board,
+400 on save stays in the dialog, recovery clears the message) and mouse drag to
+done; cleanup of QA data; no page errors and no console errors beyond the
+injected failures. Evidence in `$EVIDENCE_DIR/browser/`: numbered screenshots
+per scenario (FAIL screenshots on failure), `trace-desktop.zip`,
+`trace-mobile.zip`, `summary.json` (versions, Chromium executable, per-scenario
+status). Traces contain the per-run Basic credential: keep the evidence private
+(mode 700/600) until that stack is removed.
+
+The disposable stack sets `PUBLIC_ORIGIN` to the loopback browser origin.
+Chromium sends `Origin` on same-origin writes, so the previous
+`https://task.mytko.dev` value made CSRF reject every browser write (403). Stacks
+started before this change cannot be used for browser QA.
+
+Browser-only (not full E2E) on a stack already started by this package:
+
+```bash
+SOURCE_DIR="$PWD" TASKS_DISPOSABLE_APPROVED=yes MYTKO_PLAYWRIGHT=on \
+MYTKO_PLAYWRIGHT_ROOT=/approved/central/runtime \
+BROWSER_STACK_PROJECT=tasks-validation-... ACCEPTANCE_RUN_ID=tasks-lite-... \
+AUTH_PASSWORD_FILE=/private/path/mode-600 \
+bash acceptance/lite-1b93f7c/acceptance.sh browser-only
+```
+
+It first runs read-only `browser/stack_check.py`: ownership labels of every
+resource, exactly one running app on the exact candidate image, published only on
+`127.0.0.1:<port>`, no other publisher of that port, `PUBLIC_ORIGIN` equal to the
+browser origin, then `/readyz` 200 and `/` 401. It never starts, stops or removes
+Docker resources. Still manual: touch hardware, focus order review, CSRF from a
+real cross-site page.
 
 ## OVH first publication — separate approval mandatory
 
@@ -104,8 +154,10 @@ Run from the clean candidate checkout after placing this package at
 
 ```bash
 SOURCE_DIR="$PWD" TASKS_DISPOSABLE_APPROVED=yes \
+MYTKO_PLAYWRIGHT=on MYTKO_PLAYWRIGHT_ROOT=/approved/central/runtime \
 bash acceptance/lite-1b93f7c/acceptance.sh preflight
 SOURCE_DIR="$PWD" TASKS_DISPOSABLE_APPROVED=yes \
+MYTKO_PLAYWRIGHT=on MYTKO_PLAYWRIGHT_ROOT=/approved/central/runtime \
 bash acceptance/lite-1b93f7c/acceptance.sh execute
 ```
 
