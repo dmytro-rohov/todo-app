@@ -102,12 +102,12 @@ wait_ready() {
 }
 
 # Both artifacts must already exist; never pull/build implicitly during smoke.
+source "${PACKAGE_DIR:?}/image-validation.sh"
+# The application is a locally built immutable ID, not an official base image.
 docker image inspect "$TEST_IMAGE" >/dev/null
-docker image inspect "$TEST_POSTGRES_IMAGE" >/dev/null
-for image in "$TEST_IMAGE" "$TEST_POSTGRES_IMAGE"; do
-  [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" == linux/amd64 ]] || fail "local image platform $image"
-done
-[[ "$(docker image inspect --format '{{join .RepoDigests " "}}' "$TEST_POSTGRES_IMAGE")" == *"$TEST_POSTGRES_IMAGE"* ]] || fail "local postgres digest"
+[[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$TEST_IMAGE")" == linux/amd64 ]] || fail "application platform"
+check_image "$TEST_POSTGRES_IMAGE"
+
 "${COMPOSE[@]}" up -d --no-build --pull never db
 for attempt in $(seq 1 60); do
   if "${COMPOSE[@]}" exec -T db pg_isready -U postgres >/dev/null 2>&1; then break; fi

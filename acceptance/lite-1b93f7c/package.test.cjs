@@ -6,7 +6,9 @@ test('approval gate blocks before Docker',()=>{const r=spawnSync('bash',[path.jo
 test('all package shell scripts parse',()=>{for(const n of ['smoke.sh','acceptance.sh'])assert.equal(spawnSync('bash',['-n',path.join(__dirname,n)]).status,0);});
 test('RepoDigest normalization accepts only approved official aliases and exact digests',()=>{
  const script=path.join(__dirname,'acceptance.sh');
- const digest='sha256:'+'a'.repeat(64);
+ const nodeDigest='sha256:a43f7fc3e52e87d12a905f46eea0275def84ca8f2981a5b53fed44d7fb398ee0';
+ const pgDigest='sha256:e4cb93687b062cd25a0e8f672d85a7708235009d70d31f8a7698d9370092a9c4';
+ const digest=nodeDigest;
  const check=(image,repoDigest,expected)=>{
   const r=spawnSync('bash',[script,'test-repo-digest',image,repoDigest],{encoding:'utf8'});
   assert.equal(r.status,expected?0:1,`${image} ${repoDigest}`);
@@ -14,9 +16,9 @@ test('RepoDigest normalization accepts only approved official aliases and exact 
  for(const [image,repositories] of [
   ['docker.io/library/node@'+digest,['docker.io/library/node','node']],
   ['node@'+digest,['docker.io/library/node','node']],
-  ['docker.io/library/postgres@'+digest,['docker.io/library/postgres','postgres']],
-  ['postgres@'+digest,['docker.io/library/postgres','postgres']]
- ]) for(const repo of repositories) check(image,repo+'@'+digest,true);
+  ['docker.io/library/postgres@'+pgDigest,['docker.io/library/postgres','postgres']],
+  ['postgres@'+pgDigest,['docker.io/library/postgres','postgres']]
+ ]) for(const repo of repositories) check(image,repo+'@'+image.split('@')[1],true);
  check('docker.io/library/node@'+digest,'docker.io/library/other@'+digest,false);
  check('docker.io/library/node@'+digest,'docker.io/library/node@'+'b'.repeat(64),false);
  check('docker.io/library/node@'+digest,'docker.io/library/node',false);

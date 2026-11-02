@@ -7,7 +7,8 @@ def command(args,**kw):
  if args[0]=='docker':args=[args[0],'--host','unix:///var/run/docker.sock',*args[1:]]
  return subprocess.run(args,check=True,timeout=kw.pop('timeout',120),capture_output=True,**kw)
 def validate_image(image):
- if image.get('Os')!='linux' or image.get('Architecture')!='amd64' or not any(x.endswith('@'+IMAGE.split('@')[1]) for x in image.get('RepoDigests',[])):raise ValueError('Image platform/digest mismatch')
+ import runpy
+ runpy.run_path(str(PKG/'image-validation.py'))['validate'](IMAGE,image)
 def validate_binding(container):
  ports=container.get('NetworkSettings',{}).get('Ports',{})
  if ports.get('5432/tcp') != [{'HostIp':'127.0.0.1','HostPort':'55432'}]:raise ValueError('Required loopback PostgreSQL port binding absent or unsafe')
