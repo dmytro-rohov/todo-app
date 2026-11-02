@@ -45,7 +45,9 @@ function loadConfig(env = process.env) {
     throw error;
   }
 
+  const database = require("./database-config").loadDatabaseConfig(env);
   return {
+    database,
     nodeEnv,
     isProduction,
     host: env.HOST || "0.0.0.0",

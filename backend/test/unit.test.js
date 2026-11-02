@@ -31,7 +31,7 @@ describe("configuration", () => {
 
   test("auth can only be disabled outside production", () => {
     assert.throws(() => loadConfig({ ...PROD, AUTH_DISABLED: "true" }), /not allowed/);
-    const dev = loadConfig({ DATABASE_URL: "postgres://x", AUTH_DISABLED: "true" });
+    const dev = loadConfig({ DATABASE_URL: "postgres://x/tasks_test", AUTH_DISABLED: "true" });
     assert.equal(dev.auth.disabled, true);
   });
 

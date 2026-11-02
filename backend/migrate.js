@@ -7,17 +7,7 @@ const { createPool } = require("./db");
 const { runMigrations } = require("./migrations");
 
 async function main() {
-  const connectionString = process.env.MIGRATION_DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("MIGRATION_DATABASE_URL is required");
-  }
-
-  const pool = createPool({
-    connectionString,
-    max: 1,
-    statementTimeoutMs: 0,
-    applicationName: "mytko-tasks-migrate"
-  });
+  const pool = createPool(require("./database-config").loadDatabaseConfig(process.env, { migration: true }));
 
   try {
     await runMigrations(pool, {

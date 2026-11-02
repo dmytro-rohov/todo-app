@@ -5,6 +5,16 @@ const { parseId, validateCategory } = require("../validation");
 module.exports = function createCategoriesRouter(pool) {
   const router = express.Router();
 
+  router.put("/:id", async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Invalid category id" });
+    const { error, value } = validateCategory(req.body);
+    if (error) return res.status(400).json({ message: error });
+    const result = await pool.query("UPDATE categories SET name=$1, color=$2 WHERE id=$3 RETURNING id, name, color", [value.name,value.color,id]);
+    if (!result.rowCount) return res.status(404).json({ message: "Category not found" });
+    res.json(result.rows[0]);
+  });
+
   // get
   router.get("/", async (req, res) => {
     const result = await pool.query(`

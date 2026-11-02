@@ -11,11 +11,7 @@ try {
   process.exit(1);
 }
 
-const pool = createPool({
-  connectionString: config.databaseUrl,
-  max: config.pgPoolMax,
-  statementTimeoutMs: config.pgStatementTimeoutMs
-});
+const pool = createPool(config.database);
 
 const migrationVersions = listMigrations(config.migrationsDir).map(m => m.version);
 const { app, markShuttingDown, stop } = createApp({ config, pool, migrationVersions });
