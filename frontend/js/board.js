@@ -12,14 +12,28 @@ export async function submitTaskForm(form, editing, send = request) {
   payload.categoryId = payload.categoryId ? Number(payload.categoryId) : null;
   payload.dueDate = payload.dueDate || null;
   payload.position = Number(payload.position);
-  if (editing) return send(`/api/tasks/${editing.id}`, { method: 'PATCH', body: payload });
+  if (editing) {
+    const original = {
+      title: editing.title,
+      description: editing.description,
+      status: editing.status,
+      priority: editing.priority,
+      categoryId: editing.categoryId,
+      dueDate: editing.dueDate,
+      position: editing.position
+    };
+    const changed = Object.fromEntries(Object.entries(payload).filter(([key, value]) =>
+      !Object.hasOwn(editing, key) || String(original[key] ?? '') !== String(value ?? '')
+    ));
+    return send(`/api/tasks/${editing.id}`, { method: 'PATCH', body: changed });
+  }
   return send('/api/tasks', { method: 'POST', body: { ...payload, date: new Date().toISOString().slice(0, 10) } });
 }
 
 export async function initBoard() {
   const root = document.querySelector('#kanban');
   let tasks = [], categories = [], busy = false;
-  root.innerHTML = `<header><h1>Mytko Tasks</h1><button id="new-task">Nowe zadanie</button></header><details><summary>Kategorie</summary><form id="category-form"><label>Nazwa <input name="name" required minlength="2" maxlength="50"></label><label>Kolor <input name="color" type="color" value="#4e45e4"></label><button>Zapisz kategorię</button></form><div id="category-list"></div></details><div class="board-tools"><label>Szukaj <input id="search" type="search"></label><label>Status <select id="status-filter"><option value="">Wszystkie</option>${Object.entries(labels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>Priorytet <select id="priority-filter"><option value="">Wszystkie</option>${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Kategoria <select id="category-filter"><option value="">Wszystkie</option></select></label></div><p id="board-message" role="status" aria-live="polite"></p><button id="retry">Odśwież</button><div class="board-columns"></div><dialog id="task-dialog"><form id="task-form"><h2>Zadanie</h2><label>Tytuł <input name="title" required minlength="3" maxlength="100"></label><label>Opis <textarea name="description" maxlength="5000"></textarea></label><label>Status <select name="status">${Object.entries(labels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>Priorytet <select name="priority">${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Kategoria <select name="categoryId"><option value="">Bez kategorii</option></select></label><label>Termin <input type="date" name="dueDate"></label><label>Kolejność <input type="number" min="0" step="1" name="position" required></label><p id="form-error" role="alert"></p><button type="submit">Zapisz</button><button type="button" id="remove-task">Usuń</button><button type="button" id="cancel-task">Anuluj</button></form></dialog>`;
+  root.innerHTML = `<header><h1>Mytko Tasks</h1><button id="new-task">Nowe zadanie</button></header><details><summary>Kategorie</summary><form id="category-form"><label>Nazwa <input name="name" required minlength="2" maxlength="50"></label><label>Kolor <input name="color" type="color" value="#4e45e4"></label><button>Zapisz kategorię</button></form><div id="category-list"></div></details><div class="board-tools"><label>Szukaj <input id="search" type="search"></label><label>Status <select id="status-filter"><option value="">Wszystkie</option>${Object.entries(labels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>Priorytet <select id="priority-filter"><option value="">Wszystkie</option>${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Kategoria <select id="category-filter"><option value="">Wszystkie</option></select></label></div><p id="board-message" role="status" aria-live="polite"></p><button id="retry">Odśwież</button><div class="board-columns"></div><dialog id="task-dialog"><form id="task-form"><h2>Zadanie</h2><label>Tytuł <input name="title" required minlength="3" maxlength="255"></label><label>Opis <textarea name="description" maxlength="5000"></textarea></label><label>Status <select name="status">${Object.entries(labels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>Priorytet <select name="priority">${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Kategoria <select name="categoryId"><option value="">Bez kategorii</option></select></label><label>Termin <input type="date" name="dueDate"></label><label>Kolejność <input type="number" min="0" step="1" name="position" required></label><p id="form-error" role="alert"></p><button type="submit">Zapisz</button><button type="button" id="remove-task">Usuń</button><button type="button" id="cancel-task">Anuluj</button></form></dialog>`;
   const $ = selector => root.querySelector(selector);
   const form = $('#task-form'), dialog = $('#task-dialog'); let editing = null;
   function render() {
@@ -54,7 +68,6 @@ export async function initBoard() {
   $('.board-columns').onclick=e=>{ const button=e.target.closest('[data-edit]'); if(button) open(tasks.find(t=>t.id===Number(button.dataset.edit))); };
   form.onsubmit=async e=>{
     e.preventDefault(); if(busy) return; busy=true; form.querySelector('[type=submit]').disabled=true;
-    const payload=Object.fromEntries(new FormData(form).entries()); payload.categoryId=payload.categoryId?Number(payload.categoryId):null; payload.dueDate=payload.dueDate||null; payload.position=Number(payload.position);
     try {
       await submitTaskForm(form, editing);
       dialog.close(); await load();

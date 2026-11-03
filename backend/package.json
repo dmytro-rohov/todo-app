@@ -5,8 +5,8 @@
   "description": "Mytko Tasks API and static frontend server",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js",
     "migrate": "node --env-file-if-exists=.env migrate.js",
     "hash-password": "node scripts/hash-password.js",
     "test": "node --test \"test/*.test.js\""

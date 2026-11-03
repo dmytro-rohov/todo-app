@@ -24,4 +24,9 @@ test('task form callback sends the active PATCH contract', async () => {
   await submitTaskForm(form, { id: 7 }, send);
   assert.equal(calls[0][0], '/api/tasks/7');
   assert.deepEqual(calls[0][1].body, { ...fields, categoryId: 4, dueDate: null, position: 2 });
+
+  const historical = { title: 'x'.repeat(255), description: '', status: 'todo', priority: 'P2', categoryId: null, dueDate: null, position: 2 };
+  globalThis.FormData = class { entries() { return Object.entries({ title: historical.title, description: '', status: 'done', priority: 'P2', categoryId: '', dueDate: '', position: '2' }); } [Symbol.iterator]() { return this.entries(); } };
+  await submitTaskForm(form, historical, send);
+  assert.deepEqual(calls[1][1].body, { status: 'done' });
 });

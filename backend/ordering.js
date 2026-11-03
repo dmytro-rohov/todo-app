@@ -1,10 +1,12 @@
+const crypto = require('node:crypto');
 const { parseId } = require('./validation');
 const statuses = ['todo', 'in_progress', 'done'];
 function validateMove(body) {
   return body && parseId(body.id) !== null && statuses.includes(body.status) &&
     (body.beforeId === null || parseId(body.beforeId) !== null) &&
-    Array.isArray(body.expected) && body.expected.every(t => t && parseId(t.id) !== null && statuses.includes(t.status) && Number.isSafeInteger(t.position)) &&
-    new Set(body.expected.map(t => Number(t.id))).size === body.expected.length;
+    ((typeof body.expected === 'string' && /^[a-f0-9]{64}$/.test(body.expected)) ||
+      (Array.isArray(body.expected) && body.expected.every(t => t && parseId(t.id) !== null && statuses.includes(t.status) && Number.isSafeInteger(t.position)) &&
+       new Set(body.expected.map(t => Number(t.id))).size === body.expected.length));
 }
 async function moveTask(pool, body) {
   if (!validateMove(body)) return { status: 400, message: 'Invalid move' };
@@ -15,7 +17,11 @@ async function moveTask(pool, body) {
     await client.query('LOCK TABLE tasks IN SHARE ROW EXCLUSIVE MODE');
     const { rows } = await client.query('SELECT id, status, position FROM tasks WHERE archived_at IS NULL ORDER BY position, id');
     const canonical = list => JSON.stringify(list.map(t => [Number(t.id), t.status, Number(t.position)]).sort((a,b)=>a[0]-b[0]));
-    if (canonical(rows) !== canonical(body.expected)) { await client.query('ROLLBACK'); return { status: 409, message: 'Board changed; refresh and retry' }; }
+    const expected = typeof body.expected === 'string'
+      ? crypto.createHash('sha256').update(canonical(rows)).digest('hex')
+      : canonical(body.expected);
+    const currentToken = crypto.createHash('sha256').update(canonical(rows)).digest('hex');
+    if (typeof body.expected === 'string' ? body.expected !== currentToken : expected !== canonical(rows)) { await client.query('ROLLBACK'); return { status: 409, message: 'Board changed; refresh and retry' }; }
     const task = rows.find(t=>t.id===Number(body.id));
     if (!task || Number(body.beforeId)===task.id) { await client.query('ROLLBACK'); return { status: 400, message: 'Invalid move target' }; }
     const target = rows.filter(t=>t.status===body.status && t.id!==task.id);

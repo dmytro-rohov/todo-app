@@ -22,6 +22,7 @@ async function scenario(tasks, id, key) {
   globalThis.fetch = async (url, init) => { calls.push(JSON.parse(init.body)); return Response.json({ message: "ok" }); };
   bindOrdering(root, () => tasks, async () => {}, () => {});
   await root.key(handle(id), key);
+  await new Promise(resolve => setTimeout(resolve, 0));
   return calls;
 }
 
@@ -59,4 +60,12 @@ test('successful move followed by failed reload does not announce refreshed succ
  assert.ok(messages.some(message=>message.includes('odczyt tablicy')));
  assert.ok(!messages.includes('Zmieniono położenie zadania.'));
  assert.equal(root.attributes['aria-busy'],'false');
+});
+
+test('large boards use a bounded snapshot token instead of a growing payload', async () => {
+  const tasks = Array.from({ length: 250 }, (_, index) => ({ id: index + 1, status: 'todo', position: index }));
+  const calls = await scenario(tasks, 1, 'ArrowRight');
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].expected, /^[a-f0-9]{64}$/);
+  assert.ok(JSON.stringify(calls[0]).length < 10240);
 });

@@ -1,26 +1,35 @@
 import { request } from './api/http.js';
+
+async function snapshotToken(tasks) {
+  const snapshot = tasks
+    .map(({ id, status, position }) => [Number(id), status, Number(position)])
+    .sort((a, b) => a[0] - b[0]);
+  const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
 export function bindOrdering(root, getTasks, reload, announce) {
   let saving=false, drag=null;
   async function move(id,status,beforeId) {
     if(saving) return;
     saving=true; root.setAttribute('aria-busy','true'); announce('Zapisywanie kolejności…');
     try {
-      await request('/api/tasks/move',{method:'POST',body:{id,status,beforeId,expected:getTasks().map(({id,status,position})=>({id,status,position:Number(position)}))}});
+      await request('/api/tasks/move',{method:'POST',body:{id,status,beforeId,expected:await snapshotToken(getTasks())}});
       if (await reload() === false) { announce('Zapisano zmianę, ale odczyt tablicy nie powiódł się. Odśwież dane.'); return; } announce('Zmieniono położenie zadania.');
       root.querySelector(`[data-move="${id}"]`)?.focus();
     } catch(error) { announce(error.message); } // Pessimistic UI: never mutate local order before success.
     finally { saving=false; root.setAttribute('aria-busy','false'); }
   }
-  root.addEventListener('keydown', e=>{
+  root.addEventListener('keydown', async e=>{
     const handle=e.target.closest('[data-move]'); if(!handle || saving) return;
     const id=Number(handle.dataset.move), task=getTasks().find(t=>t.id===id);
     if(!task) return;
     const statuses=['todo','in_progress','done'];
     const column=getTasks().filter(t=>t.status===task.status).sort((a,b)=>a.position-b.position||a.id-b.id);
     const index=column.findIndex(t=>t.id===id);
-    if(e.key==='ArrowUp' && index>0) { e.preventDefault(); move(id,task.status,column[index-1].id); }
-    if(e.key==='ArrowDown' && index<column.length-1) { e.preventDefault(); move(id,task.status,column[index+2]?.id??null); }
-    if(['ArrowLeft','ArrowRight'].includes(e.key)) { const target=statuses[statuses.indexOf(task.status)+(e.key==='ArrowLeft'?-1:1)]; if(target) { e.preventDefault(); move(id,target,null); } }
+    if(e.key==='ArrowUp' && index>0) { e.preventDefault(); await move(id,task.status,column[index-1].id); }
+    if(e.key==='ArrowDown' && index<column.length-1) { e.preventDefault(); await move(id,task.status,column[index+2]?.id??null); }
+    if(['ArrowLeft','ArrowRight'].includes(e.key)) { const target=statuses[statuses.indexOf(task.status)+(e.key==='ArrowLeft'?-1:1)]; if(target) { e.preventDefault(); await move(id,target,null); } }
   });
   root.addEventListener('pointerdown',e=>{
     const handle=e.target.closest('[data-move]'); if(!handle || saving || e.button!==0) return;

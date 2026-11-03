@@ -6,7 +6,8 @@ checkpoint remains PARTIAL, despite task prompt describing implementation comple
 Status/position contracts are present, so ordering implementation could proceed.
 
 POST /api/tasks/move body:
-{id, status, beforeId: null|id, expected: [{id,status,position}, ...all active tasks]}.
+{id, status, beforeId: null|id, expected: SHA-256 token of the canonical active-task snapshot}.
+The backend also accepts the former full snapshot array for compatibility with older clients.
 Null target appends (also works in empty columns). IDs/statuses/snapshot uniqueness
 validated. Server compares full active-board snapshot under SHARE ROW EXCLUSIVE
 transaction lock, conflicting with ordinary writers too. Stale snapshot -> 409,

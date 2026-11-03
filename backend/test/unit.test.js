@@ -16,6 +16,14 @@ const PROD = {
   PUBLIC_ORIGIN: "https://task.mytko.dev"
 };
 
+describe("local startup contract", () => {
+  test("start and dev load backend/.env", () => {
+    const scripts = require("../package.json").scripts;
+    assert.match(scripts.start, /--env-file-if-exists=\.env/);
+    assert.match(scripts.dev, /--env-file-if-exists=\.env/);
+  });
+});
+
 describe("configuration", () => {
   test("valid production config loads", () => {
     const config = loadConfig(PROD);
