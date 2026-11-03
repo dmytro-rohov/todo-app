@@ -302,7 +302,7 @@ describe("input handling", () => {
   test("normalizes a valid task (trimmed title, completed defaults to false)", async () => {
     const res = await post("/api/tasks", { title: "  Kupić mleko  ", date: "2026-10-30", categoryId: 2 });
     assert.equal(res.status, 201);
-    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null]);
+    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null, null, null]);
   });
 
   test("unknown category -> 400 instead of 500", async () => {

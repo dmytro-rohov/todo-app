@@ -69,3 +69,35 @@ test('large boards use a bounded snapshot token instead of a growing payload', a
   assert.match(calls[0].expected, /^[a-f0-9]{64}$/);
   assert.ok(JSON.stringify(calls[0]).length < 10240);
 });
+
+test('keyboard navigation visits review between in-progress and done',async()=>{
+ const tasks=[{id:1,status:'in_progress',position:0},{id:2,status:'needs_review',position:0},{id:3,status:'done',position:0}];
+ assert.equal((await scenario(tasks,1,'ArrowRight'))[0].status,'needs_review');
+ assert.equal((await scenario(tasks,2,'ArrowRight'))[0].status,'done');
+ assert.equal((await scenario(tasks,3,'ArrowLeft'))[0].status,'needs_review');
+});
+
+test('pointer drag scrolls at the viewport edge, persists the drop, and stops scrolling',async()=>{
+ const saved={document:globalThis.document,window:globalThis.window,requestAnimationFrame:globalThis.requestAnimationFrame,cancelAnimationFrame:globalThis.cancelAnimationFrame,fetch:globalThis.fetch};
+ const root=new Root();root.contains=()=>true;
+ const target={dataset:{column:'needs_review'},classList:{add(){},remove(){}}};
+ const element={closest:selector=>selector==='[data-column]'?target:null};
+ const h=handle(1);h.setPointerCapture=()=>{};h.classList={add(){},remove(){}};
+ const calls=[],scrolls=[],cancelled=[];let frame;
+ globalThis.document={elementFromPoint:()=>element};
+ globalThis.window={innerHeight:800,scrollBy:(x,y)=>scrolls.push(y)};
+ globalThis.requestAnimationFrame=callback=>{frame=callback;return 7;};
+ globalThis.cancelAnimationFrame=id=>cancelled.push(id);
+ globalThis.fetch=async(url,init)=>{calls.push(JSON.parse(init.body));return Response.json({message:'ok'});};
+ bindOrdering(root,()=>[{id:1,status:'todo',position:0}],async()=>true,()=>{});
+ try{
+  for(const fn of root.listeners.pointerdown)fn({target:h,button:0,pointerId:1,clientX:100,clientY:400,preventDefault(){}});
+  for(const fn of root.listeners.pointermove)fn({clientX:100,clientY:790});
+  frame();assert.deepEqual(scrolls,[12]);
+  for(const fn of root.listeners.pointerup)fn();
+  await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(calls.length,1);assert.equal(calls[0].status,'needs_review');assert.equal(calls[0].beforeId,null);
+  assert.deepEqual(cancelled,[7]);
+  const previous=scrolls.length;frame();assert.equal(scrolls.length,previous);
+ }finally{Object.assign(globalThis,saved);}
+});

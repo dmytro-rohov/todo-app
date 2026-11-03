@@ -10,3 +10,10 @@ test('same-column move precedes target',async()=>{const pool=fake();assert.equal
 test('duplicate snapshot ids rejected before connecting',async()=>{assert.equal((await moveTask({}, {id:1,status:'todo',beforeId:null,expected:[rows[0],rows[0]]})).status,400);});
 
 test('bounded snapshot token accepts a board larger than the JSON body limit',async()=>{const pool=fake();const snapshot=rows;const canonical=JSON.stringify(snapshot.map(t=>[t.id,t.status,t.position]).sort((a,b)=>a[0]-b[0]));const expected=crypto.createHash('sha256').update(canonical).digest('hex');assert.equal((await moveTask(pool,{id:1,status:'done',beforeId:null,expected})).status,200);});
+
+test('move into Needs review participates in the same conflict/dense-order transaction', async()=>{
+ const pool=fake();
+ const result=await moveTask(pool,{id:1,status:'needs_review',beforeId:null,expected:rows});
+ assert.equal(result.status,200);
+ assert.ok(pool.calls.some(([sql,p])=>sql.startsWith('UPDATE')&&p[0]==='needs_review'&&p[2]===1));
+});

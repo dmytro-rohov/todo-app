@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 const { parseId } = require('./validation');
-const statuses = ['todo', 'in_progress', 'done'];
+const { STATUSES: statuses } = require('./task-domain');
 function validateMove(body) {
   return body && parseId(body.id) !== null && statuses.includes(body.status) &&
     (body.beforeId === null || parseId(body.beforeId) !== null) &&

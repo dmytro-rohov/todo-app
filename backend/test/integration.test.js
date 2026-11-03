@@ -49,11 +49,48 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query("DROP TABLE IF EXISTS public.tasks, public.categories, public.schema_migrations CASCADE");
+    await owner.query("DROP TABLE IF EXISTS public.task_labels, public.tasks, public.categories, public.projects, public.assignees, public.schema_migrations CASCADE");
   });
 
   const migrate = (options = {}) =>
     runMigrations(owner, { dir: MIGRATIONS_DIR, appRole: APP_ROLE, log: quiet, ...options });
+
+  test("V2 upgrades historical tasks and persists metadata/labels with atomic validation", async () => {
+    // Emulate a legacy install; run the real migration chain and app-role HTTP.
+    await owner.query("CREATE TABLE categories (id serial PRIMARY KEY, name varchar(50) NOT NULL, color varchar(7) NOT NULL)");
+    await owner.query("CREATE TABLE tasks (id serial PRIMARY KEY, title varchar(255) NOT NULL, completed boolean, date date NOT NULL, category_id integer CONSTRAINT fk_category REFERENCES categories(id) ON DELETE SET NULL)");
+    const legacyTitle = 'x'.repeat(255);
+    await owner.query("INSERT INTO categories(name,color) VALUES ('Legacy','#112233'), ('Additional','#aabbcc')");
+    await owner.query("INSERT INTO tasks(title,completed,date,category_id) VALUES ($1,true,'2026-10-30',1)",[legacyTitle]);
+    await migrate();
+    const ctx = await startApp({pool:appPool,migrationVersions:VERSIONS});
+    const call=(method,path,body)=>ctx.request('/api'+path,{method,headers:SAME_ORIGIN_JSON,...(body?{body:JSON.stringify(body)}:{})});
+    try {
+      let task=(await (await call('GET','/tasks')).json())[0];
+      assert.equal(task.title,legacyTitle);assert.equal(task.status,'done');assert.deepEqual(task.labelIds,[1]);
+      assert.equal(task.projectId,null);assert.equal(task.assigneeId,null);
+      const project=await (await call('POST','/projects',{name:'V2 project'})).json();
+      const assignee=await (await call('POST','/assignees',{name:'Test person'})).json();
+      const patch=await call('PATCH','/tasks/1',{status:'needs_review',projectId:project.id,assigneeId:assignee.id,labelIds:[1,2]});
+      assert.equal(patch.status,200);
+      task=await patch.json();assert.equal(task.title,legacyTitle);assert.equal(task.completed,false);assert.equal(task.completedAt,null);assert.deepEqual(task.labelIds,[1,2]);
+      assert.equal((await (await call('GET',`/tasks?projectId=${project.id}&assigneeId=${assignee.id}&categoryId=2&status=needs_review`)).json()).length,1);
+      // The task update and additional-label inserts must roll back together.
+      assert.equal((await call('PATCH','/tasks/1',{status:'done',labelIds:[2,2147483647]})).status,400);
+      task=(await (await call('GET','/tasks')).json())[0];
+      assert.equal(task.status,'needs_review');assert.deepEqual(task.labelIds,[1,2]);assert.equal(task.categoryId,1);
+      assert.equal((await call('PUT','/tasks/1',{title:'Legacy writer',completed:false,date:'2026-10-30',categoryId:2})).status,200);
+      task=(await (await call('GET','/tasks')).json())[0];assert.deepEqual(task.labelIds,[2]);
+      assert.equal((await call('DELETE','/projects/'+project.id)).status,200);
+      assert.equal((await call('DELETE','/assignees/'+assignee.id)).status,200);
+      assert.equal((await call('DELETE','/categories/2')).status,200);
+      task=(await (await call('GET','/tasks')).json())[0];
+      assert.equal(task.projectId,null);assert.equal(task.assigneeId,null);assert.equal(task.categoryId,null);assert.deepEqual(task.labelIds,[]);
+      assert.equal(task.title,'Legacy writer');
+      await assert.rejects(appPool.query('ALTER TABLE projects ADD COLUMN forbidden int'),/owner|permission denied/);
+      await assert.rejects(appPool.query('TRUNCATE task_labels'),/permission denied/);
+    } finally { await ctx.close(); }
+  });
 
   test("readiness fails before migrations and passes after", async () => {
     const ctx = await startApp({ pool: appPool, migrationVersions: VERSIONS });
@@ -137,7 +174,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
     const fks = await owner.query(`
       SELECT conname FROM pg_constraint
       WHERE conrelid = 'public.tasks'::regclass AND contype = 'f'`);
-    assert.deepEqual(fks.rows.map(r => r.conname), ["fk_category"]);
+    assert.deepEqual(fks.rows.map(r => r.conname).sort(), ["fk_category", "tasks_assignee_id_fkey", "tasks_project_id_fkey"]);
     await assert.rejects(
       owner.query("INSERT INTO tasks (title, completed, date) VALUES ('x', NULL, '2026-10-30')"),
       /null value/);
@@ -187,6 +224,9 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
         completed: true,
         date: "2026-10-30",
         categoryId: null,
+        labelIds: [],
+        projectId: null,
+        assigneeId: null,
         description: "",
         status: "done",
         priority: "P2",
@@ -210,7 +250,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
     await owner.query(`CREATE TABLE public.categories (id serial PRIMARY KEY, name varchar(50) NOT NULL, color varchar(7) NOT NULL)`);
     await owner.query(`CREATE TABLE public.tasks (id serial PRIMARY KEY, title varchar(255) NOT NULL, completed boolean, date date NOT NULL, category_id integer REFERENCES public.categories(id) ON DELETE SET NULL)`);
     await owner.query("INSERT INTO tasks (title, completed, date) VALUES ('Open legacy', false, '2026-10-30'), ('Done legacy', true, '2026-10-31')");
-    assert.deepEqual(await migrate(), ["001_baseline", "002_task_integrity", "003_kanban"]);
+    assert.deepEqual(await migrate(), VERSIONS);
     const rows = await owner.query("SELECT id, completed, status, due_date, position, completed_at FROM tasks ORDER BY id");
     assert.equal(rows.rows[0].status, "todo");
     assert.equal(String(rows.rows[0].due_date), "2026-10-30");

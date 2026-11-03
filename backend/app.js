@@ -68,6 +68,10 @@ function createApp({ config, pool, migrationVersions = [] }) {
   });
   api.use(csrfProtection({ publicOrigin: config.publicOrigin }));
   api.use(express.json({ limit: "10kb", inflate: false }));
+  api.get("/me", (req, res) => res.json({ name: config.auth.disabled ? 'Tryb lokalny' : config.auth.username }));
+  const createDirectoryRouter = require('./routes/directories');
+  api.use('/projects', createDirectoryRouter(pool, 'projects'));
+  api.use('/assignees', createDirectoryRouter(pool, 'assignees'));
   api.use("/tasks", createTasksRouter(pool));
   api.use("/categories", createCategoriesRouter(pool));
   api.use((req, res) => {

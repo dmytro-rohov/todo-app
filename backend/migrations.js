@@ -107,7 +107,7 @@ async function grantAppRole(client, role) {
   }
   const name = client.escapeIdentifier(role);
   await client.query(`GRANT USAGE ON SCHEMA public TO ${name}`);
-  await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.tasks, public.categories TO ${name}`);
+  await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.tasks, public.categories, public.projects, public.assignees, public.task_labels TO ${name}`);
   await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${name}`);
   await client.query(`GRANT SELECT ON public.schema_migrations TO ${name}`);
 }
