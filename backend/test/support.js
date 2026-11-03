@@ -1,3 +1,17 @@
+const http = require("node:http");
+
+// Tests only talk to the app on 127.0.0.1. Executors that set
+// NODE_USE_ENV_PROXY + HTTP(S)_PROXY without NO_PROXY would otherwise route
+// those requests through the proxy (403/405). fetch re-reads NO_PROXY per
+// request; node:http's global agent captured the proxy at startup, so replace
+// it with a direct one.
+const LOOPBACK = ["127.0.0.1", "localhost", "::1"];
+for (const key of ["NO_PROXY", "no_proxy"]) {
+  const current = (process.env[key] || "").split(",").map(s => s.trim()).filter(Boolean);
+  process.env[key] = [...new Set([...current, ...LOOPBACK])].join(",");
+}
+http.globalAgent = new http.Agent({ keepAlive: true });
+
 const { loadConfig } = require("../config");
 const { createApp } = require("../app");
 const { hashPassword } = require("../security");
