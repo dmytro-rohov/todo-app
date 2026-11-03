@@ -165,3 +165,29 @@ test('console allowlist only covers failures the runner injects', () => {
     assert.doesNotMatch(text, INJECTED_RESOURCE_ERROR);
   }
 });
+
+// Regression (TASKS-LITE-RELEASE-01): on mobile the Kanban columns stack
+// vertically, so the drop column is off-screen when the drag starts. The
+// verified fix scrolls it into view while the pointer is down, resolves the
+// coordinates afterwards and proves the column is under the pointer before
+// release. Order matters; a stale pre-drag bounding box drops nowhere.
+test('mobile drag scrolls the drop column into view and verifies the target before release', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'run.cjs'), 'utf8');
+  const step = src.slice(src.indexOf("const handleLocator = anyCard(editedTitle).locator('[data-move]')"), src.indexOf("await cardIn('done', editedTitle).waitFor();"));
+  assert.ok(step.length > 0, 'drag step present');
+  const order = [
+    'await handleLocator.scrollIntoViewIfNeeded();',
+    'await page.mouse.down();',
+    "await column('done').evaluate(el =>",
+    "const destination = await column('done').boundingBox();",
+    "document.elementFromPoint(x, y)?.closest('[data-column]')?.dataset.column",
+    "assert.equal(target, 'done', 'drop target is visible under pointer');",
+    'await page.mouse.move(x, y, { steps: 15 });',
+    'await page.mouse.up();'
+  ].map(needle => [needle, step.indexOf(needle)]);
+  for (const [needle, at] of order) assert.ok(at >= 0, `missing: ${needle}`);
+  for (let i = 1; i < order.length; i++) assert.ok(order[i - 1][1] < order[i][1], `order: ${order[i - 1][0]} before ${order[i][0]}`);
+  assert.match(step, /scrollIntoView\(\{ block: 'center'/);
+  assert.doesNotMatch(step, /page\.touchscreen|dispatchEvent|dragTo\(/, 'real mouse Pointer Events, not synthetic drag');
+  assert.equal((src.match(/'mobile', width: 390, height: 844/g) || []).length, 1, 'mobile viewport still exercised');
+});

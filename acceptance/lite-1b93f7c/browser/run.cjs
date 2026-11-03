@@ -200,12 +200,33 @@ async function viewportRun(browser, base, viewport, recorder, dir, httpCredentia
       await page.locator('#retry').click();
       await page.waitForFunction(() => document.querySelector('#board-message').textContent === '');
       // Real mouse Pointer Events, same production handlers as touch pointers.
-      const handle = await anyCard(editedTitle).locator('[data-move]').boundingBox();
-      const destination = await column('done').boundingBox();
-      assert.ok(handle && destination);
+      const handleLocator = anyCard(editedTitle).locator('[data-move]');
+      await handleLocator.scrollIntoViewIfNeeded();
+      const handle = await handleLocator.boundingBox();
+      assert.ok(handle, 'drag handle is visible');
+
       await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
       await page.mouse.down();
-      await page.mouse.move(destination.x + destination.width / 2, destination.y + 10, { steps: 15 });
+
+      // On mobile, columns are stacked vertically. Scroll while dragging,
+      // then resolve the destination coordinates in the current viewport.
+      await column('done').evaluate(el =>
+        el.scrollIntoView({ block: 'center', inline: 'nearest' })
+      );
+
+      const destination = await column('done').boundingBox();
+      assert.ok(destination, 'drop destination is visible');
+
+      const x = destination.x + destination.width / 2;
+      const y = destination.y + destination.height / 2;
+
+      const target = await page.evaluate(([x, y]) =>
+        document.elementFromPoint(x, y)?.closest('[data-column]')?.dataset.column,
+        [x, y]
+      );
+      assert.equal(target, 'done', 'drop target is visible under pointer');
+
+      await page.mouse.move(x, y, { steps: 15 });
       await page.mouse.up();
       await cardIn('done', editedTitle).waitFor();
       await page.reload();
@@ -231,9 +252,6 @@ async function viewportRun(browser, base, viewport, recorder, dir, httpCredentia
       assert.ok(consoleErrors.length <= injected, `console errors (${consoleErrors.length}) exceed injected failures (${injected})`);
     });
   } finally {
-    runtime.writePrivate(path.join(dir, `console-${viewport.name}.json`), JSON.stringify({
-      pageErrors, consoleErrors, failedRequests, injectedFailures: injected
-    }, null, 2) + '\n');
     const trace = path.join(dir, `trace-${viewport.name}.zip`);
     await context.tracing.stop({ path: trace }).then(() => fs.chmodSync(trace, 0o600)).catch(() => {});
     await context.close();
@@ -252,9 +270,7 @@ async function main(env = process.env) {
   try {
     const { playwright, evidence } = await runtime.prepare(env, { forbiddenRoots: [env.SOURCE_DIR, path.resolve(__dirname, '..')] });
     runtimeEvidence = evidence;
-    const browser = await playwright.chromium.launch(runtime.LAUNCH_OPTIONS).catch(error => {
-      throw new runtime.BlockedError(`QA Chromium failed to launch: ${String(error.message).split('\n')[0]}`);
-    });
+    const browser = await playwright.chromium.launch(runtime.LAUNCH_OPTIONS);
     try {
       try { await anonymousDenied(browser, env.E2E_BASE, recorder); }
       catch (error) { failure = failure || error; }
