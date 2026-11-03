@@ -65,7 +65,7 @@ Production compose: review deploy/compose.yaml plus app/migrate env templates;
 separate runtime/migrator credentials, loopback publication, read-only root,
 capabilities dropped, no-new-privileges, CPU/RAM/PID bounds. These are artifacts,
 not applied host configuration. Caddy reference deploy/Caddyfile.example terminates
-TLS for task.mytko.dev and blocks public readiness. Actual TLS/firewall peers and
+TLS for tasks.mytko.dev and blocks public readiness. Actual TLS/firewall peers and
 TRUST_PROXY must be validated. No Fujitsu dependency may remain at runtime.
 
 Current production env templates are deploy/app.env.example and

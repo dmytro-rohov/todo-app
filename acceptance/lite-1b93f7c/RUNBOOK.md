@@ -63,6 +63,12 @@ remains a manual/integration gap; do not mark it PASS from fake-client tests.
 
 ### Browser QA — central Workflow Playwright (MW-PLAYWRIGHT-01)
 
+For TASKS-BROWSER-02 use [BROWSER-02-HANDOFF.md](BROWSER-02-HANDOFF.md), including
+the pending manager-contract approval, separate agent/release authorization and
+`browser-only-preflight` command. The examples below do not authorize changing
+Workflow policy or its port allowlist. Browser QA remains an explicit release
+acceptance action, not a required daily pipeline stage.
+
 Playwright is resolved only from the central Mytko Workflow runtime declared in
 `browser/runtime-contract.json`: exactly Playwright 1.61.0 (+ playwright-core
 1.61.0) and Chromium major 149. No per-project install; `browser/package.json`
@@ -131,7 +137,7 @@ real cross-site page.
    first empty DB still verify current_database/current_user and server17.
 5. Approved migration service runs owner URL, ledger 001–003; inspect grants and
    readiness. App compose starts exact image with CPU/RAM/PIDs, nonroot/read-only,
-   loopback ingress, Caddy HTTPS at task.mytko.dev. Use trusted pipeline, not agent.
+   loopback ingress, Caddy HTTPS at tasks.mytko.dev. Use trusted pipeline, not agent.
 6. Approved post-deploy: internal healthz/readyz; external HTTPS/auth challenge,
    authorized page/API/static CSP, create/read/edit/reopen/delete disposable task,
    ordering/reload, categories and error checks. Verify no readiness public exposure.

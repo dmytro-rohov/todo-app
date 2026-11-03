@@ -2,8 +2,11 @@
 -- with values from the secret store; never commit the filled-in file.
 -- Not executed by the application or by any automation in this repository.
 
-CREATE ROLE tasks_owner LOGIN PASSWORD 'CHANGE_ME_OWNER';
-CREATE ROLE tasks_app LOGIN PASSWORD 'CHANGE_ME_APP';
+-- Dedicated roles for this project only: no superuser, role/database creation,
+-- replication or membership in other projects' roles. Use >= 24 random characters.
+SET password_encryption = 'scram-sha-256';
+CREATE ROLE tasks_owner LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD 'CHANGE_ME_OWNER';
+CREATE ROLE tasks_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 20 PASSWORD 'CHANGE_ME_APP';
 
 CREATE DATABASE tasks OWNER tasks_owner;
 REVOKE ALL ON DATABASE tasks FROM PUBLIC;

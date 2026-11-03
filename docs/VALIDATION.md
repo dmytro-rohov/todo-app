@@ -252,7 +252,7 @@ Attach logs and mark all unexecuted checks SKIP/BLOCKED. Supply:
 | Release reference | registry/repository@sha256:manifest; verify revision label/source association after publication; do not rebuild between acceptance and release |
 | Migrator | same immutable release image; command node backend/migrate.js |
 | Migration env | MIGRATION_DATABASE_URL (tasks_owner), APP_DB_ROLE=tasks_app; never pass owner URL to app |
-| App env | NODE_ENV=production, DATABASE_URL (tasks_app), PUBLIC_ORIGIN=https://task.mytko.dev, AUTH_USERNAME, AUTH_PASSWORD_HASH, HOST=0.0.0.0, PORT=3000 |
+| App env | NODE_ENV=production, DATABASE_URL (tasks_app), PUBLIC_ORIGIN=https://tasks.mytko.dev, AUTH_USERNAME, AUTH_PASSWORD_HASH, HOST=0.0.0.0, PORT=3000 |
 | Operational env | TRUST_PROXY restricted to actual proxy, PG_POOL_MAX=10, PG_STATEMENT_TIMEOUT_MS=10000, SHUTDOWN_TIMEOUT_MS=10000; rate limits as app.env.example |
 | Ports | container 3000; production host 127.0.0.1:3100 only; database private, not publicly published |
 | Health | public GET /healthz; private upstream GET /readyz, unauthenticated, minimal JSON; readiness must not be publicly routed |

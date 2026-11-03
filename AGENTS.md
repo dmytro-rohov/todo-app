@@ -29,7 +29,7 @@ w ramach Mytko Workflow.
 
 ## Produkcja i dane — bezwzględne zakazy
 
-- Żadnych samodzielnych operacji produkcyjnych: deploy na OVH (`task.mytko.dev`),
+- Żadnych samodzielnych operacji produkcyjnych: deploy na OVH (`tasks.mytko.dev`),
   restart usług, zmiany DNS/TLS.
 - Nie łącz się z produkcyjną bazą. Nie uruchamiaj migracji na istniejących danych.
 - Nie usuwaj danych historycznych.

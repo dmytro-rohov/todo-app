@@ -1,7 +1,8 @@
-# Production manifest for task.mytko.dev. Executed only by the operator /
+# Production manifest for tasks.mytko.dev. Executed only by the operator /
 # Mytko release pipeline; nothing here creates the database or touches Caddy.
 #
 #   cp app.env.example app.env && cp migrate.env.example migrate.env   (fill in, chmod 600)
+#   node check-env.cjs app.env migrate.env                             (read-only pre-deploy check)
 #   APP_IMAGE=registry.example/mytko-tasks@sha256:<digest> docker compose up -d
 #
 # `migrate` runs to completion before `app` starts (schema first, code second).
@@ -50,7 +51,7 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
-    # Caddy on the host proxies task.mytko.dev -> 127.0.0.1:${APP_PORT}.
+    # Caddy on the host proxies tasks.mytko.dev -> 127.0.0.1:${APP_PORT}.
     # Never published on a public interface.
     ports:
       - "127.0.0.1:${APP_PORT:-3100}:3000"

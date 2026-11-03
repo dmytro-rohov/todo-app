@@ -1,4 +1,4 @@
-# Mytko Tasks — production runbook (task.mytko.dev)
+# Mytko Tasks — production runbook (tasks.mytko.dev)
 
 This document is the contract between the application and the operator /
 Mytko release pipeline. Nothing in this repository deploys, creates
@@ -12,7 +12,7 @@ strict proxy-peer contract are recorded in [SECURITY-DEPENDENCIES.md](SECURITY-D
 ## 1. Architecture
 
 ```
-browser ──HTTPS──> Caddy (host, TLS for task.mytko.dev)
+browser ──HTTPS──> Caddy (host, TLS for tasks.mytko.dev)
                      │  reverse_proxy 127.0.0.1:3100
                      ▼
             app container (node:24, uid 1000, read-only rootfs)
@@ -52,17 +52,26 @@ backup design.
 1. **Lockfile for the SCSS build.** The reviewed `frontend/package-lock.json` pins Sass 1.89.2. Preserve it and use `npm ci`; do not regenerate during release validation.
 2. **Pin the base image.** Build with `--build-arg NODE_IMAGE=node:24-bookworm-slim@sha256:<digest>` and record the digest.
 3. **Build and publish** the image from the reviewed commit, tagged by its git SHA (`--build-arg GIT_REVISION=<sha>`). Use the digest in `APP_IMAGE`.
-4. **PostgreSQL**, version ≥ 15 recommended:
-   - Create `tasks_owner`, `tasks_app` and the `tasks` database, following `deploy/db-roles.sql.example`. Use passwords from the secret store.
+4. **PostgreSQL 17** (the version used by release acceptance):
+   - Create `tasks_owner`, `tasks_app` and the `tasks` database, following `deploy/db-roles.sql.example`. Use new random passwords (≥ 24 characters, different per role) from the secret store. Never reuse a password of another project or of the `postgres` superuser.
+   - The roles belong to this project only: no superuser/CREATEROLE/CREATEDB, no membership in other projects' roles, and no grants for other roles on `tasks`. Verify with `\du tasks_*` and `\l tasks`.
    - Make the database reachable from the Docker bridge. When PostgreSQL runs on the host, `pg_hba.conf` and `listen_addresses` must allow the bridge subnet.
    - Use `sslmode=require` if traffic leaves the host.
-5. **Secrets and proxy trust.** Set TRUST_PROXY to loopback plus only the actual proxy peer IP (host /32 or /128). Broad private ranges, true and hop counts are rejected in production. Confirm Caddy replaces client-supplied forwarding headers; see SECURITY-DEPENDENCIES.md.
+5. **Secrets and proxy trust.** Create `deploy/app.env` and `deploy/migrate.env` from the `*.example` files on the server only, with `chmod 600`. `PUBLIC_ORIGIN` must be exactly `https://tasks.mytko.dev`: the CSRF check rejects browser writes from any other origin.
 
-   Create `deploy/app.env` and `deploy/migrate.env` from the `*.example` files on the server only, with `chmod 600`.
+   Proxy trust: host Caddy connects to `127.0.0.1:3100`, and Docker forwards that to the container from the bridge gateway of the `mytko-tasks_default` network. The app therefore sees the gateway as its peer. Without trusting exactly that peer, every client shares one rate-limit and login-lockout bucket, so a stranger could lock out the owner. Procedure:
+   ```sh
+   docker compose up --no-start                # creates mytko-tasks_default, starts nothing
+   docker network inspect mytko-tasks_default --format '{{(index .IPAM.Config 0).Gateway}}'
+   # app.env: TRUST_PROXY=loopback,<gateway>/32
+   ```
+   Broad private ranges, `true` and hop counts are rejected in production. Caddy's `reverse_proxy` overwrites client-supplied `X-Forwarded-For` (no `trusted_proxies` configured), so the app sees the real client address; see SECURITY-DEPENDENCIES.md. Acceptance criterion 8 proves the per-client buckets.
    - Generate the hash with `printf '%s' "$PASSWORD" | docker run --rm -i "$APP_IMAGE" node backend/scripts/hash-password.js`. The password must be at least 12 characters.
    - Escape any `$` in DB passwords inside env files as `$$`, or avoid `$` in them.
+   - Run the read-only check; it prints check names only, never values, and must report PASS:
+     `node deploy/check-env.cjs deploy/app.env deploy/migrate.env`
 6. **Backups** are configured and one restore has been tested (section 5) before real data is entered.
-7. **DNS.** `task.mytko.dev` A/AAAA records point to the OVH host.
+7. **DNS.** `tasks.mytko.dev` A/AAAA records point to the OVH host (operator; not part of the pipeline).
 8. **Caddy.** Add a site block equivalent to `deploy/Caddyfile.example` and reload Caddy. Caddy must reach `127.0.0.1:3100`.
 9. **Smoke test.** `TASKS_DISPOSABLE_APPROVED=yes TEST_IMAGE=<immutable-image> TEST_POSTGRES_IMAGE=<approved-postgres-17-digest> deploy/smoke-test.sh` passes on the approved disposable build host (Docker + Compose v2 + curl).
 
@@ -71,13 +80,15 @@ backup design.
 ```sh
 cd deploy
 export APP_IMAGE=<registry>/mytko-tasks@sha256:<digest>
+# 0. read-only configuration check (must print PASS)
+node check-env.cjs app.env migrate.env
 # 1. pre-release backup (skip only for the very first release on an empty DB)
 pg_dump -Fc -d "$OWNER_URL" -f "tasks-$(date -u +%Y%m%dT%H%M%SZ)-pre-$SHA.dump"
 # 2. migrate, then start app (compose orders them; app waits for migrate)
 docker compose up -d
 # 3. verify
 docker compose ps                       # app healthy, migrate exited 0
-curl -fsS https://task.mytko.dev/healthz
+curl -fsS https://tasks.mytko.dev/healthz
 curl -fsS http://127.0.0.1:3100/readyz  # on the host; publicly 404 by design
 ```
 
@@ -132,26 +143,26 @@ Application code and database schema are versioned and rolled back separately.
 
 ## 7. First-release acceptance criteria
 
-All must hold before announcing task.mytko.dev:
+All must hold before announcing tasks.mytko.dev:
 
 1. `TASKS_DISPOSABLE_APPROVED=yes TEST_IMAGE=<immutable-image> TEST_POSTGRES_IMAGE=<approved-postgres-17-digest> deploy/smoke-test.sh` passes against the exact image digest being released.
 2. `docker compose ps`: `migrate` exited 0 and `app` is `healthy`.
 3. `docker inspect` of `app` shows user `1000:1000`, `ReadonlyRootfs=true`, `CapDrop=[ALL]`, memory limit 256 MiB, and no port bound to anything other than `127.0.0.1`.
-4. `curl -sI https://task.mytko.dev/` returns `401` with `WWW-Authenticate: Basic`, a valid TLS certificate, and `Strict-Transport-Security` and `Content-Security-Policy` headers.
-5. `curl -s https://task.mytko.dev/healthz` and, on the host, `curl -s http://127.0.0.1:3100/readyz` both return exactly `{"status":"ok"}`. `curl -s -o /dev/null -w '%{http_code}' https://task.mytko.dev/readyz` returns `404`.
-6. In a browser:
+4. `curl -sI https://tasks.mytko.dev/` returns `401` with `WWW-Authenticate: Basic`, a valid TLS certificate, and `Strict-Transport-Security` and `Content-Security-Policy` headers.
+5. `curl -s https://tasks.mytko.dev/healthz` and, on the host, `curl -s http://127.0.0.1:3100/readyz` both return exactly `{"status":"ok"}`. `curl -s -o /dev/null -w '%{http_code}' https://tasks.mytko.dev/readyz` returns `404`.
+6. In a browser at `https://tasks.mytko.dev` (desktop and phone):
    - Log in with the owner credentials.
-   - Create a category and a task, toggle it, delete it, and use "Wyczyść wszystko".
-   - The browser console shows no CSP violations, and the page is fully styled (`/dist/style.css` returns 200).
-7. A cross-site write is rejected: `curl -u owner:… -H 'Sec-Fetch-Site: cross-site' -H 'Content-Type: application/json' -d '{}' https://task.mytko.dev/api/tasks` returns `403`.
-8. Eleven wrong-password attempts from one IP produce `429`.
+   - Create a category and a task, edit the task, move it between Kanban columns (keyboard and drag), reload, then delete the task and the category.
+   - The browser console shows no CSP violations or errors, and the page is fully styled (`/dist/style.css` returns 200).
+7. A cross-site write is rejected: `curl -u owner:… -H 'Sec-Fetch-Site: cross-site' -H 'Content-Type: application/json' -d '{}' https://tasks.mytko.dev/api/tasks` returns `403`.
+8. Eleven wrong-password attempts from one client IP produce `429`, and a request from a second client IP right afterwards still gets `401`, not `429` (proves `TRUST_PROXY` sees real client addresses).
 9. `docker compose restart app` causes no data loss, and `docker compose stop app` exits with code 0.
 10. In PostgreSQL:
     - `\dt` shows the tables owned by `tasks_owner`.
     - `tasks_app` cannot run `CREATE TABLE` or `DROP TABLE`.
-    - `schema_migrations` lists `001_baseline` and `002_task_integrity`.
+    - `schema_migrations` lists `001_baseline`, `002_task_integrity` and `003_kanban`.
 11. A first backup has been taken and successfully restored into a scratch database.
-12. `app.env` and `migrate.env` are mode 600 on the server and absent from git. `git grep -i password` shows no real credentials.
+12. `app.env` and `migrate.env` are mode 600 on the server and absent from git; `node deploy/check-env.cjs deploy/app.env deploy/migrate.env` reports PASS. `git grep -i password` shows no real credentials.
 
 ## 8. Known limitations / follow-ups
 
@@ -159,9 +170,9 @@ All must hold before announcing task.mytko.dev:
 - Basic auth has no logout or MFA. If more than one user is needed, replace it with real accounts and per-user data (schema change).
 - `cors` remains in `backend/package.json` but is no longer used. Remove it together with a lockfile regeneration (requires npm).
 - Line endings in the repository are mixed (CRLF/LF). Consider adding `.gitattributes`.
-- **Historical credential in Git.** Commit `e1510f2` (`todo-backend/db.js`, an ancestor of `main` and published to `origin`) contains a hardcoded PostgreSQL superuser password for `postgres@localhost`. Treat it as compromised:
-  - rotate it on every PostgreSQL instance where it was ever used;
-  - never reuse it for `tasks_owner` or `tasks_app`;
-  - check that no server exposes PostgreSQL with that login.
+- **Historical credential in Git.** Commit `e1510f2` (`todo-backend/db.js`, an ancestor of `main` and published to `origin`) contains a hardcoded PostgreSQL superuser password for `postgres@localhost`. A full-history scan (all local refs) found no other real credential: remaining matches are library code in the then-committed `node_modules`, per-run random test passwords, disposable test-stack fixtures and `CHANGE_ME` placeholders. Treat the historical password as compromised:
+  - the owner rotates it on every PostgreSQL instance where it was ever used (decision and timing are the owner's; nothing here changes any password);
+  - it must not exist on the OVH PostgreSQL for any role, and `tasks_owner` / `tasks_app` get new random passwords;
+  - check that no server exposes PostgreSQL with that login (`listen_addresses`, firewall, `pg_hba.conf`).
 
   Rewriting history is optional and owner-approved only, because it requires a force push. Rotation is what actually removes the risk.

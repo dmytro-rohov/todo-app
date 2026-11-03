@@ -1,6 +1,6 @@
 # Reference site block for the operator. Not applied automatically.
-# TLS certificates are obtained by Caddy once DNS for task.mytko.dev points here.
-task.mytko.dev {
+# TLS certificates are obtained by Caddy once DNS for tasks.mytko.dev points here.
+tasks.mytko.dev {
 	encode zstd gzip
 
 	request_body {
