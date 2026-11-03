@@ -1,47 +1,107 @@
-// Runtime configuration read only from environment variables.
-// No credentials live in the code; see .env.example for the expected keys.
+const path = require("node:path");
+const { isIP } = require("node:net");
 
-class ConfigError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "ConfigError";
-  }
-}
+const { parsePasswordHash } = require("./security");
 
-function parsePort(value, name) {
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new ConfigError(`${name} must be an integer between 1 and 65535 (got "${value}")`);
-  }
-  return port;
-}
-
+// Reads configuration from the environment. Fails fast in production when
+// anything security-relevant is missing instead of falling back to defaults.
 function loadConfig(env = process.env) {
-  const missing = [];
+  const nodeEnv = env.NODE_ENV || "development";
+  const isProduction = nodeEnv === "production";
+  const errors = [];
 
-  if (!env.DATABASE_URL) {
-    missing.push("DATABASE_URL");
+  const databaseUrl = env.DATABASE_URL;
+  if (!databaseUrl) {
+    errors.push("DATABASE_URL is required");
   }
 
-  if (missing.length > 0) {
-    throw new ConfigError(
-      `Missing required environment variable(s): ${missing.join(", ")}. ` +
-      "Copy backend/.env.example to backend/.env and fill in the values."
-    );
+  const authUsername = env.AUTH_USERNAME || "";
+  const authPasswordHash = env.AUTH_PASSWORD_HASH || "";
+  const authDisabled = env.AUTH_DISABLED === "true";
+
+  if (authDisabled && isProduction) {
+    errors.push("AUTH_DISABLED=true is not allowed when NODE_ENV=production");
+  }
+  if (!authDisabled && (!authUsername || !authPasswordHash)) {
+    errors.push("AUTH_USERNAME and AUTH_PASSWORD_HASH are required (or AUTH_DISABLED=true outside production)");
+  } else if (!authDisabled) {
+    try {
+      parsePasswordHash(authPasswordHash);
+    } catch (error) {
+      errors.push(error.message);
+    }
   }
 
-  try {
-    new URL(env.DATABASE_URL);
-  } catch {
-    throw new ConfigError("DATABASE_URL is not a valid connection URL (postgres://user:password@host:port/database)");
+  const publicOrigin = env.PUBLIC_ORIGIN || (isProduction ? "" : "http://localhost:3000");
+  if (!publicOrigin) {
+    errors.push("PUBLIC_ORIGIN is required in production (e.g. https://task.mytko.dev)");
+  } else if (!/^https?:\/\/[^/]+$/.test(publicOrigin)) {
+    errors.push("PUBLIC_ORIGIN must be an origin without path, e.g. https://task.mytko.dev");
   }
 
+  if (errors.length > 0) {
+    const error = new Error(`Invalid configuration:\n- ${errors.join("\n- ")}`);
+    error.code = "CONFIG_INVALID";
+    throw error;
+  }
+
+  const database = require("./database-config").loadDatabaseConfig(env);
   return {
-    databaseUrl: env.DATABASE_URL,
-    host: env.HOST || "127.0.0.1",
-    port: env.PORT ? parsePort(env.PORT, "PORT") : 3000,
-    corsOrigin: env.CORS_ORIGIN || null
+    database,
+    nodeEnv,
+    isProduction,
+    host: env.HOST || "0.0.0.0",
+    port: toInt(env.PORT, 3000),
+    databaseUrl,
+    pgPoolMax: toInt(env.PG_POOL_MAX, 10),
+    pgStatementTimeoutMs: toInt(env.PG_STATEMENT_TIMEOUT_MS, 10000),
+    publicOrigin,
+    trustProxy: parseTrustProxy(env.TRUST_PROXY, isProduction),
+    auth: {
+      disabled: authDisabled,
+      username: authUsername,
+      passwordHash: authPasswordHash
+    },
+    rateLimit: {
+      windowMs: toInt(env.RATE_LIMIT_WINDOW_MS, 60000),
+      max: toInt(env.RATE_LIMIT_MAX, 300),
+      authFailWindowMs: toInt(env.AUTH_FAIL_WINDOW_MS, 15 * 60000),
+      authFailMax: toInt(env.AUTH_FAIL_MAX, 10)
+    },
+    shutdownTimeoutMs: toInt(env.SHUTDOWN_TIMEOUT_MS, 10000),
+    staticDir: env.STATIC_DIR || path.join(__dirname, "..", "frontend"),
+    migrationsDir: path.join(__dirname, "migrations")
   };
 }
 
-module.exports = { loadConfig, ConfigError };
+function toInt(value, fallback) {
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`Expected a non-negative integer, got "${value}"`);
+  }
+  return parsed;
+}
+
+function parseTrustProxy(value, isProduction) {
+  // Trust only actual proxy peers in production, never every private client
+  // or a hop count (which depends on every route having the same length).
+  if (isProduction && value && value !== "false") {
+    const peers = value.split(",").map(item => item.trim());
+    for (const peer of peers) {
+      const [address, prefix, extra] = peer.split("/");
+      const family = isIP(address);
+      const hostPrefix = family === 4 ? "32" : "128";
+      if (peer !== "loopback" && (!family || extra !== undefined ||
+          (prefix !== undefined && prefix !== hostPrefix))) {
+        throw new Error("Production TRUST_PROXY requires loopback or explicit proxy IPs (/32 or /128)");
+      }
+    }
+  }
+  if (value === undefined || value === "" || value === "false") return false;
+  if (value === "true") return true;
+  if (/^\d+$/.test(value)) return Number(value);
+  return value.split(",").map(item => item.trim()).filter(Boolean);
+}
+
+module.exports = { loadConfig };

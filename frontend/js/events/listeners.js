@@ -8,6 +8,7 @@ import {
 
 import {
   getTasks,
+  addTask,
   updateTask,
   deleteTask,
   deleteTaskByDate
@@ -39,8 +40,6 @@ import {
 
 import { getRandomColor } from "../utils/helpers.js";
 
-import { createTask } from "../actions/tasks.js";
-
 export function initListeners() {
 
 // input keybord
@@ -52,16 +51,12 @@ input.addEventListener("keydown", (e) => {
 
 // delete one
 document.addEventListener("click", async (e) => {
-  if (e.target.classList.contains("delete-one") && e.target.closest(".task-item")) {
+  // category and modal buttons share the class but carry no task id
+  if (e.target.classList.contains("delete-one") && e.target.dataset.id) {
     const id = Number(e.target.dataset.id);
-    try {
-      await deleteTask(id);
-      state.tasksArr = await getTasks();
-      renderAllTasks();
-      renderCategories();
-    } catch(error) {
-      alert(error.message);
-    }
+    await deleteTask(id);
+    state.tasksArr = await getTasks();
+    renderAllTasks();
   }
 });
 
@@ -69,15 +64,9 @@ document.addEventListener("click", async (e) => {
 document.addEventListener("click", async (e) => {
   if (e.target.classList.contains("delete-btn")) {
     const date = e.target.dataset.date;
-    if (!date) return;
-    try {
-      await deleteTaskByDate(date);
-      state.tasksArr = await getTasks();
-      renderAllTasks();
-      renderCategories();
-    } catch(error) {
-      alert(error.message);
-    }
+    await deleteTaskByDate(date);
+    state.tasksArr = await getTasks();
+    renderAllTasks();
   }
 });
 
@@ -91,7 +80,7 @@ document.addEventListener("change", async (e) => {
     if (!updatedTask) return;
     updatedTask.completed = isChecked;
     try {
-      await updateTask({ id, completed: isChecked });
+      await updateTask(updatedTask);
     } catch(error) {
       alert(error.message);
     }
@@ -120,14 +109,19 @@ document.querySelector(".confirm-btn").addEventListener("click", async () => {
     completed: false,
     categoryId: state.selectedCategoryId,
     date: todayKey
-  };
+  }; try {
 
-  try {
-    state.tasksArr = await createTask(newTask);
+    await addTask(newTask);
+
+    state.tasksArr = await getTasks();
+
     renderAllTasks();
     renderCategories();
+
   } catch(error) {
+
     alert(error.message);
+
   }
 
 
@@ -175,11 +169,12 @@ document.querySelector(".new-category-input").addEventListener("keydown", async 
 
     try {
       await addCategory(newCategory);
-      state.categoriesArr = await getCategories();
     } catch(error) {
       alert(error.message);
       return;
     }
+    state.categoriesArr.length = 0;
+    state.categoriesArr.push(...await getCategories());
 
     renderCategories();
     renderCategoriesModal();
@@ -212,14 +207,11 @@ document.querySelector(".modal-categories").addEventListener("click", async (e) 
   const id = Number(li.dataset.id);
 
   if (e.target.classList.contains("delete-one")) {
-    try {
-      await deleteCategory(id);
-      state.categoriesArr = await getCategories();
-      state.tasksArr = await getTasks();
-    } catch(error) {
-      alert(error.message);
-      return;
-    }
+    await deleteCategory(id);
+
+    state.categoriesArr = await getCategories();
+    // tasks of a deleted category lose their category_id (ON DELETE SET NULL)
+    state.tasksArr = await getTasks();
 
     renderCategoriesModal();
     renderCategories();

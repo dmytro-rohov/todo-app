@@ -1,0 +1,281 @@
+
+added 83 packages, and audited 84 packages in 865ms
+
+26 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+added 12 packages, and audited 13 packages in 640ms
+
+5 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn install-scripts   @parcel/watcher@2.6.0 (install: node scripts/build-from-source.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+
+> todo-frontend@1.0.0 build
+> sass --no-source-map styles/style.scss dist/style.css
+
+
+> todo-frontend@1.0.0 test
+> node --test "test/*.test.js"
+
+✔ active request helper returns JSON and preserves fetch options (10.316867ms)
+✔ active request exposes HTTP 400 (2.177169ms)
+✔ active request exposes HTTP 401 (1.674886ms)
+✔ active request exposes HTTP 422 (2.221378ms)
+✔ active request exposes HTTP 500 (1.423534ms)
+✔ active helper handles non-JSON errors and empty success (1.730198ms)
+✔ network rejection propagates without retry (0.572752ms)
+✔ retained http helper exposes ApiError status and network errors (3.174823ms)
+✔ task API contract uses same origin and exactly the requested mutations (3.075093ms)
+✔ HTTP helper aborts a stalled response body without retry (14.954684ms)
+✔ HTTP helper translates response stream failure into ApiError (0.843798ms)
+✔ ApiError preserves HTTP 400 without retry (0.896247ms)
+✔ ApiError preserves HTTP 401 without retry (0.552429ms)
+✔ ApiError preserves HTTP 403 without retry (0.53455ms)
+✔ ApiError preserves HTTP 404 without retry (0.659283ms)
+✔ ApiError preserves HTTP 409 without retry (0.713129ms)
+✔ ApiError preserves HTTP 500 without retry (0.579317ms)
+✔ ApiError preserves HTTP 503 without retry (0.327197ms)
+✔ caller AbortController cancels request without retry (1.026219ms)
+✔ request header wait is bounded by same deadline (10.607608ms)
+✔ index.html links the compiled stylesheet and the ES module entry point (2.603888ms)
+✔ the stylesheet source exists and builds into dist/ (ignored by Git) (0.582599ms)
+✔ SCSS declares the cascade layer order once and avoids deprecated @import (0.628623ms)
+✔ compiled stylesheet exists (run `npm run build` in frontend/) (0.565628ms)
+✔ every module reachable from main.js resolves with matching named exports (2.820599ms)
+✔ no API module hardcodes a localhost URL (0.670457ms)
+✔ category create/update/delete each refresh board once after success (2.851189ms)
+✔ category error 400 does not refresh and allows retry (1.037323ms)
+✔ category error 401 does not refresh and allows retry (0.344448ms)
+✔ category error 403 does not refresh and allows retry (0.345705ms)
+✔ category error 404 does not refresh and allows retry (0.392777ms)
+✔ category error 409 does not refresh and allows retry (0.433144ms)
+✔ concurrent category submit sends only one request (0.393545ms)
+✔ category list escapes XSS and normalizes attribute IDs (0.482519ms)
+✔ real modal confirmation callback sends one POST, refreshes, and no DELETE (21.544648ms)
+✔ modal validation failure alerts without retry or refresh (1.535346ms)
+✔ empty title and missing category never submit (0.711663ms)
+✔ category delete click does not trigger delegated task deletion (4.541997ms)
+✔ modal category renderer escapes hostile text (1.153187ms)
+✔ task renderer escapes task and category text and normalizes attribute ids (30.158136ms)
+✔ escapeHtml safely renders <script> (3.013285ms)
+✔ escapeHtml safely renders "'`& (0.456051ms)
+✔ escapeHtml safely renders null (0.298843ms)
+✔ escapeHtml safely renders undefined (0.333901ms)
+✔ escapeHtml safely renders Żółć 🎉 (0.392218ms)
+✔ escapeHtml safely renders 7 (0.305198ms)
+✔ safeColor accepts current hex contract and rejects CSS injection (0.535597ms)
+✔ Kanban cards escape user text (5.971747ms)
+✔ task form callback sends the active PATCH contract (2.382776ms)
+✔ ArrowDown sends the exact insertion point for three, two, one, and empty columns (8.614465ms)
+✔ ArrowUp, ArrowLeft, ArrowRight and column boundaries issue one or zero requests (2.584542ms)
+✔ successful move followed by failed reload does not announce refreshed success (21.577473ms)
+ℹ tests 52
+ℹ suites 0
+ℹ pass 52
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 238.334635
+
+> todo-backend@1.0.0 test
+> node --test "test/*.test.js"
+
+✔ category HTTP CRUD, duplicate names allowed, normalized values and missing IDs (205.570026ms)
+✔ runtime and migrator use separate explicit credentials (2.760048ms)
+✔ invalid URL and bounds fail without leaking secrets (1.462714ms)
+✔ test targets fail closed without a dedicated local test database (0.74749ms)
+✔ TLS options and filesystem overrides are validated without exposing values (1.724472ms)
+✔ pool and timeout reject non-finite, zero and oversized values (0.705167ms)
+▶ container healthcheck script
+  ✔ probes GET /readyz on loopback without credentials; 200 -> exit 0 (201.900112ms)
+  ✔ 503 -> exit 1 (149.753778ms)
+  ✔ 401 (auth wrongly in front of /readyz) -> exit 1 (107.280672ms)
+  ✔ nothing listening -> exit 1 (102.310909ms)
+✔ container healthcheck script (564.338792ms)
+▶ app wiring
+  ✔ health routes are registered before Basic auth (0.452ms)
+✔ app wiring (0.750004ms)
+▶ Dockerfile
+  ✔ non-root runtime with readiness HEALTHCHECK (0.808111ms)
+  ✔ reproducible installs only; base image overridable for digest pinning (0.452209ms)
+  ✔ build context is an allowlist that excludes env files (0.483637ms)
+✔ Dockerfile (2.363011ms)
+▶ production compose
+  ✔ image must be supplied explicitly (digest per release) (0.480076ms)
+  ✔ hardening and least privilege (0.511502ms)
+  ✔ only loopback port publishing, matching the Caddy upstream (1.865826ms)
+  ✔ app health check uses the same contract as the image (0.216782ms)
+✔ production compose (3.619281ms)
+▶ Caddy reference
+  ✔ active health check uses /readyz but it is not served publicly (0.512899ms)
+✔ Caddy reference (0.735059ms)
+▶ templates contain no secrets
+  ✔ deploy/app.env.example (0.606414ms)
+  ✔ deploy/migrate.env.example (0.245624ms)
+  ✔ backend/.env.example (0.183537ms)
+  ✔ db roles template uses placeholders (0.329083ms)
+✔ templates contain no secrets (1.716929ms)
+▶ disposable acceptance isolation
+  ✔ smoke refuses before Docker or cleanup without explicit approval (8.697295ms)
+  ✔ smoke uses an isolated project and immutable artifact without rebuilding (0.61277ms)
+✔ disposable acceptance isolation (9.596126ms)
+✔ approved smoke rejects missing or mutable artifacts before any Docker action (25.483933ms)
+✔ frontend lockfile matches pinned Sass and trusted integrity-bearing sources (1.522078ms)
+✔ rendered test Compose ignores ambient production URLs and owns its volume/network (168.401283ms)
+✔ smoke fails closed on cleanup and prevents implicit image pull (0.609417ms)
+﹣ PostgreSQL integration (1.224283ms) # TEST_MIGRATION_DATABASE_URL / TEST_DATABASE_URL not set
+✔ move to empty column commits both lists with dense ordering (3.688422ms)
+✔ stale snapshot rolls back without writes (0.672203ms)
+✔ same-column move precedes target (2.175075ms)
+✔ duplicate snapshot ids rejected before connecting (0.657607ms)
+✔ archive boundary 29 (3.014403ms)
+✔ archive boundary 30 (0.339ms)
+✔ archive boundary 31 (0.306943ms)
+✔ delete boundary 59 (0.354993ms)
+✔ delete boundary 60 (0.585463ms)
+✔ delete boundary 61 (0.309807ms)
+✔ protection blocks automatic deletion but not archival (0.550194ms)
+✔ reopened tasks without archive are kept (0.337882ms)
+✔ late archival gets its own full thirty days (1.331765ms)
+✔ invalid timestamps never make a deletion eligible (0.579317ms)
+✔ same input and clock produce same decision (0.33453ms)
+▶ health endpoints
+  ✔ /healthz needs no auth and exposes only status (55.322694ms)
+  ✔ /readyz is ok when every shipped migration is applied (10.140174ms)
+  ✔ health endpoints ignore credentials (wrong ones never yield 401) (13.992019ms)
+  ✔ health paths do not unlock anything else (19.351277ms)
+✔ health endpoints (139.10664ms)
+▶ healthcheck contract under brute force
+  ✔ container/Caddy health checks keep working while the IP is locked out (35.711476ms)
+✔ healthcheck contract under brute force (36.180935ms)
+readiness check failed
+▶ readiness failures do not leak details
+  ✔ database error -> 503 without message (8.258634ms)
+  ✔ pending migration -> 503 (6.032577ms)
+  ✔ shutting down -> 503 (9.02512ms)
+✔ readiness failures do not leak details (24.089802ms)
+▶ authentication
+  ✔ / requires credentials (5.864404ms)
+  ✔ /index.html requires credentials (2.673658ms)
+  ✔ /js/main.js requires credentials (1.340565ms)
+  ✔ /api/tasks requires credentials (1.275266ms)
+  ✔ /api/categories requires credentials (1.333931ms)
+  ✔ wrong password is rejected (5.679539ms)
+  ✔ wrong username is rejected (5.698257ms)
+  ✔ malformed header is rejected (1.900257ms)
+  ✔ correct credentials are accepted (and served from cache afterwards) (13.253958ms)
+✔ authentication (42.377426ms)
+▶ brute-force protection
+  ✔ locks the client out after AUTH_FAIL_MAX failures, even with valid credentials (26.339325ms)
+  ✔ general rate limit returns 429 (15.313309ms)
+✔ brute-force protection (42.038565ms)
+▶ secure headers
+  ✔ HTML responses carry a strict CSP and hardening headers (8.279865ms)
+  ✔ API responses are not cached (2.548435ms)
+  ✔ 401 responses also carry security headers (1.770775ms)
+✔ secure headers (15.141854ms)
+▶ CSRF protection
+  ✔ same-origin JSON request is accepted (20.952691ms)
+  ✔ cross-site fetch metadata is rejected (3.697291ms)
+  ✔ same-site (other subdomain) is rejected (2.444025ms)
+  ✔ foreign Origin without fetch metadata is rejected (2.114245ms)
+  ✔ form-encodable content types are rejected (7.217959ms)
+  ✔ non-browser client without Origin/fetch metadata is allowed (6.094524ms)
+✔ CSRF protection (45.496797ms)
+▶ input handling
+  ✔ rejects category colors that could inject CSS (9.098731ms)
+  ✔ rejects invalid task dates and types (13.377714ms)
+  ✔ normalizes a valid task (trimmed title, completed defaults to false) (3.157643ms)
+  ✔ unknown category -> 400 instead of 500 (3.036403ms)
+  ✔ invalid ids -> 400, missing rows -> 404 (6.348321ms)
+  ✔ PUT validates its body (2.431454ms)
+  ✔ malformed JSON -> 400, oversized body -> 413 (8.095001ms)
+Request failed GET
+  ✔ server errors do not leak database messages (3.748624ms)
+  ✔ static server does not expose files outside the frontend (6.584866ms)
+✔ input handling (59.360662ms)
+▶ proxy and IP rate-limit regressions
+  ✔ direct clients cannot rotate X-Forwarded-For to bypass limits (15.632545ms)
+  ✔ trusted proxy chain uses nearest untrusted hop, not spoofed leftmost IP (18.376739ms)
+  ✔ IPv4 and mapped IPv6 spellings share the rate-limit bucket (15.551112ms)
+  ✔ mapped spellings and spoofed chain cannot bypass auth lockout (18.797311ms)
+  ✔ proxy-addr does not trust IPv4 peers through short IPv6 prefixes (GHSA-jqcg) (1.139149ms)
+✔ proxy and IP rate-limit regressions (70.169128ms)
+▶ body-size and decompression DoS regressions
+  ✔ 10 KiB boundary is enforced before any DB mutation (16.888464ms)
+  ✔ chunked bodies cannot bypass the size limit without Content-Length (12.904692ms)
+  ✔ compressed bodies including trailing garbage are rejected and process survives (25.806381ms)
+  ✔ oversized requests consume rate budget before body parsing (19.70166ms)
+✔ body-size and decompression DoS regressions (76.027386ms)
+▶ TASKS-06 private surface
+  ✔ anonymous POST /api/tasks/move is challenged before routing (6.328276ms)
+  ✔ anonymous PATCH /api/tasks/1 is challenged before routing (2.509675ms)
+  ✔ anonymous GET /api/archive is challenged before routing (1.804996ms)
+  ✔ anonymous GET /api/attachments/1 is challenged before routing (2.328791ms)
+  ✔ anonymous GET /api/export is challenged before routing (2.161385ms)
+  ✔ anonymous GET /dist/style.css is challenged before routing (1.612869ms)
+  ✔ contradictory same-origin metadata cannot override foreign Origin (5.643922ms)
+  ✔ CORS preflight does not grant foreign access (3.115321ms)
+✔ TASKS-06 private surface (29.421961ms)
+▶ PATCH task contract
+  ✔ returns the same camelCase task shape as reads and persists status/order (10.307579ms)
+  ✔ uses the creation title limit for partial updates (8.89473ms)
+✔ PATCH task contract (19.555835ms)
+✔ accepts todo (2.673867ms)
+✔ accepts in_progress (0.194851ms)
+✔ accepts done (0.196248ms)
+✔ accepts P0 (0.223905ms)
+✔ accepts P1 (0.279985ms)
+✔ accepts P2 (0.19115ms)
+✔ accepts P3 (0.244507ms)
+✔ partial status leaves legacy title untouched (0.279287ms)
+✔ title uses the same three-to-one-hundred-character contract as creation (0.540486ms)
+✔ due date can be cleared and rejects impossible dates (7.679527ms)
+✔ rejects invalid enums, ordering and unknown fields (0.637214ms)
+▶ configuration
+  ✔ valid production config loads (2.975922ms)
+  ✔ production refuses to start without credentials (0.778289ms)
+  ✔ auth can only be disabled outside production (0.448996ms)
+  ✔ DATABASE_URL and PUBLIC_ORIGIN are required in production (0.582111ms)
+  ✔ TRUST_PROXY parsing (9.529709ms)
+  ✔ rejects non-numeric limits (0.578059ms)
+✔ configuration (17.336902ms)
+▶ password hashing
+  ✔ round trip (24.61171ms)
+  ✔ salts differ between hashes (12.354358ms)
+  ✔ rejects malformed hashes (0.75203ms)
+✔ password hashing (38.900896ms)
+▶ validation
+  ✔ parseId (0.777172ms)
+  ✔ isValidDate (9.997632ms)
+  ✔ validateTask (0.725071ms)
+  ✔ validateCategory (0.696089ms)
+✔ validation (12.864046ms)
+▶ migrations on disk
+  ✔ are ordered and checksummed (2.41162ms)
+✔ migrations on disk (2.730017ms)
+▶ frontend escaping helpers
+  ✔ escapeHtml neutralizes markup (2.766613ms)
+  ✔ safeColor only passes #rrggbb (1.030688ms)
+✔ frontend escaping helpers (4.250419ms)
+▶ configuration rejects malformed password hashes
+  ✔ plain text password in AUTH_PASSWORD_HASH (0.433422ms)
+✔ configuration rejects malformed password hashes (0.667733ms)
+ℹ tests 128
+ℹ suites 26
+ℹ pass 128
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 972.605027
+found 0 vulnerabilities
+found 0 vulnerabilities

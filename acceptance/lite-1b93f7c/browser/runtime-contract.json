@@ -1,0 +1,28 @@
+{
+  "contract": "MW-PLAYWRIGHT-01",
+  "contractStatus": "package-side declaration; env names and runtime root must be confirmed against the Workflow MW-PLAYWRIGHT-01 definition before use",
+  "policy": {
+    "env": "MYTKO_PLAYWRIGHT",
+    "on": "on",
+    "offOrUnset": "BLOCKED (exit 3); browser QA is never skipped as PASS"
+  },
+  "runtime": {
+    "rootEnv": "MYTKO_PLAYWRIGHT_ROOT",
+    "rootLayout": "<root>/node_modules/playwright",
+    "resolution": "central root only; no project-local node_modules, NODE_PATH or global folders"
+  },
+  "playwright": {
+    "module": "playwright",
+    "version": "1.61.0"
+  },
+  "chromium": {
+    "major": 149,
+    "releaseBuild": "149.0.7827.55"
+  },
+  "node": ">=24 <25",
+  "compatibility": {
+    "previousPin": "1.56.1 (browser/package.json + package-lock.json, kept for history; not resolved by this runner)",
+    "reviewedRange": "1.57.0-1.61.0 release notes: removed Page.accessibility, _react/_vue selectors, :light, launch devtools, Locator.ariaRef, exposeBinding handle, connect logger, videosPath/videoSize; none used by run.cjs",
+    "upgradeRule": "changing version or chromium.major requires a reviewed edit of this file"
+  }
+}

@@ -1,162 +1,116 @@
-# Mytko Tasks (Todo App)
+# Todo App
 
 ## Opis projektu
 
-Prywatny menedżer zadań rozwijany w ramach Mytko Workflow. Obecnie jest to
-aplikacja typu Todo List w pełnym stacku (frontend + backend + baza danych),
-docelowo menedżer Kanban dostępny pod `task.mytko.dev`.
+Aplikacja typu Todo List wykonana w pełnym stacku (frontend + backend + baza danych).
+Umożliwia zarządzanie zadaniami oraz kategoriami z pełną integracją z bazą danych PostgreSQL.
 
-Projekt jest wykonany bez frameworków frontendowych (Vanilla JS, natywne moduły ES),
-aby pokazać zrozumienie komunikacji klient–serwer oraz REST API.
+Projekt został wykonany bez frameworków frontendowych (Vanilla JS), aby pokazać zrozumienie działania komunikacji klient–serwer oraz REST API.
 
 ---
 
 ## Technologie
 
-- **Frontend:** HTML, SCSS (kompilowany do `frontend/dist/style.css`), Vanilla JS (moduły ES), Fetch API
-- **Backend:** Node.js, Express 5, REST API
-- **Baza danych:** PostgreSQL
+### Frontend
+- HTML
+- CSS
+- JavaScript (Vanilla JS)
+- Fetch API
 
-## Wymagania
+### Backend
+- Node.js
+- Express.js
+- REST API
 
-| Narzędzie  | Wersja                              |
-|------------|-------------------------------------|
-| Node.js    | 22 LTS lub nowszy (`.nvmrc`)        |
-| npm        | 10 lub nowszy                       |
-| PostgreSQL | 16 lub nowszy (zrzut z wersji 16)   |
+### Baza danych
+- PostgreSQL
 
 ---
 
 ## Funkcjonalności
 
 ### Zadania (Tasks)
-- Dodawanie, edycja, oznaczanie jako wykonane
-- Usuwanie pojedynczych zadań oraz wszystkich zadań z danej daty
+- Dodawanie nowych zadań
+- Usuwanie pojedynczych zadań
+- Usuwanie wszystkich zadań z danej daty
+- Edycja zadań (update)
+- Oznaczanie zadań jako wykonane
 - Grupowanie zadań według daty
 
 ### Kategorie (Categories)
-- Dodawanie i usuwanie kategorii
+- Dodawanie kategorii
+- Usuwanie kategorii
 - Przypisywanie kategorii do zadań
 - Licznik zadań w kategoriach
 
-### Dodatkowe
+### Dodatkowe funkcjonalności
 - Walidacja danych po stronie backendu
-- Obsługa błędów API po stronie frontendu
-- Bezpieczne renderowanie tekstu (escapowanie HTML)
+- Obsługa błędów API
 - Formatowanie dat (Dzisiaj / Wczoraj / konkretna data)
+- Przechowywanie danych w PostgreSQL (brak localStorage)
 
 ---
 
-## Architektura
+## Architektura aplikacji
 
-- Backend Express serwuje API (`/tasks`, `/categories`, `/health`) oraz frontend
-  (`/`, `/js/*`, `/dist/*`) z jednego originu — frontend używa względnych ścieżek API.
-- Dane przechowywane są w PostgreSQL; relacja `tasks.category_id -> categories.id`
-  (`ON DELETE SET NULL`).
+Aplikacja działa w architekturze klient–serwer:
 
-```
-backend/
-  app.js          fabryka aplikacji Express (bez połączenia z bazą — testowalna)
-  server.js       punkt startowy: konfiguracja, pula pg, nasłuch
-  config.js       odczyt i walidacja zmiennych środowiskowych
-  validation.js   walidacja danych wejściowych
-  routes/         routery /tasks i /categories
-  test/           testy backendu (node:test)
-frontend/
-  index.html
-  js/             moduły ES (bez bundlera)
-  styles/         źródła SCSS
-  dist/           wynik kompilacji SCSS (generowany, ignorowany przez Git)
-  test/           testy frontendu (node:test, bez DOM)
-database.sql      schemat bazy (zrzut pg_dump)
-```
-
-### API
-
-| Metoda | Ścieżka               | Sukces                         | Błędy          |
-|--------|-----------------------|--------------------------------|----------------|
-| GET    | `/tasks`              | 200 `[{id,title,completed,date,categoryId}]` | 500 |
-| POST   | `/tasks`              | 201 `{message}`                | 400, 500       |
-| PUT    | `/tasks/:id`          | 200 zaktualizowany wiersz      | 400, 404, 500  |
-| DELETE | `/tasks/:id`          | 200 `{message}`                | 400, 500       |
-| DELETE | `/tasks/date/:date`   | 200 `{message}`                | 400, 500       |
-| GET    | `/categories`         | 200 `[{id,name,color}]`        | 500            |
-| POST   | `/categories`         | 201 `{id,name,color}`          | 400, 500       |
-| DELETE | `/categories/:id`     | 200 `{message}`                | 400, 500       |
-| GET    | `/health`             | 200 `{status:"ok"}`            | 503            |
-
-Wszystkie błędy zwracają JSON `{ "message": "..." }`.
+- Frontend komunikuje się z backendem poprzez HTTP (Fetch API)
+- Backend udostępnia REST API
+- Dane przechowywane są w bazie PostgreSQL
+- Relacje między tabelami:
+  - tasks.category_id -> categories.id (FOREIGN KEY)
 
 ---
 
-## Konfiguracja
+## Struktura bazy danych
 
-Konfiguracja pochodzi wyłącznie ze zmiennych środowiskowych. Szablon bez sekretów:
-`backend/.env.example`.
+### Tabela: tasks
 
-| Zmienna             | Wymagana | Domyślnie   | Opis |
-|---------------------|----------|-------------|------|
-| `DATABASE_URL`      | tak      | —           | `postgres://user:password@host:5432/todo_app` |
-| `HOST`              | nie      | `127.0.0.1` | adres nasłuchu |
-| `PORT`              | nie      | `3000`      | port HTTP |
-| `CORS_ORIGIN`       | nie      | brak (CORS wyłączony) | origin dopuszczony, gdy UI działa z innego serwera |
-| `TEST_DATABASE_URL` | tylko testy | —        | izolowana baza testowa (nazwa musi zawierać `test`) |
+- id (PRIMARY KEY)
+- title (VARCHAR)
+- completed (BOOLEAN)
+- date (DATE)
+- category_id (FOREIGN KEY)
 
-Lokalnie można utworzyć `backend/.env` (ignorowany przez Git) — `server.js` wczyta go
-przy starcie; zmienne ustawione w środowisku mają pierwszeństwo. Brak `DATABASE_URL`
-kończy start czytelnym błędem i kodem wyjścia 1.
+### Tabela: categories
 
-**Nigdy nie commituj prawdziwych haseł.** Hasła produkcyjne zarządza operator.
+- id (PRIMARY KEY)
+- name (VARCHAR)
+- color (VARCHAR)
 
 ---
 
-## Uruchomienie lokalne
+## Instalacja i uruchomienie projektu (lokalnie)
+
+Wymagania: Node.js 24, PostgreSQL.
 
 ```bash
-# 1. Zależności
-npm --prefix backend ci
-npm --prefix frontend install     # pierwszy raz utworzy frontend/package-lock.json
+# 1. Baza danych: dwie role (właściciel schematu i aplikacja) – patrz deploy/db-roles.sql.example
 
-# 2. Build CSS (frontend/dist/style.css)
-npm --prefix frontend run build
+# 2. Backend
+cd backend
+npm install
+cp .env.example .env        # uzupełnić DATABASE_URL / MIGRATION_DATABASE_URL
+npm run migrate             # tworzy/aktualizuje schemat (migrations/*.sql)
+npm run dev                 # http://localhost:3000 – API + frontend
 
-# 3. Lokalna baza (NIE produkcyjna)
-createdb todo_app
-psql -d todo_app -f database.sql
+# 3. Style (SCSS -> frontend/dist/style.css)
+cd ../frontend
+npm install
+npm run build:css
 
-# 4. Konfiguracja
-cp backend/.env.example backend/.env   # uzupełnij DATABASE_URL
-
-# 5. Start
-npm --prefix backend start            # lub: npm --prefix backend run dev (nodemon)
-# otwórz http://127.0.0.1:3000/
+# 4. Testy
+cd ../backend
+npm test                    # testy integracyjne wymagają TEST_DATABASE_URL, patrz docs/PRODUCTION.md
+../deploy/smoke-test.sh     # pełny test obrazu Docker (wymaga Dockera)
 ```
 
-Podczas pracy nad stylami: `npm --prefix frontend run watch`.
+Schemat bazy jest zarządzany przez migracje w `backend/migrations/` (dawny `database.sql` = `001_baseline.sql`).
 
-## Testy
+## Produkcja
 
-```bash
-npm --prefix frontend test   # escapowanie HTML, klient API, regresja podwójnego dodawania, zasoby
-npm --prefix backend test    # konfiguracja, kontrakt HTTP (fałszywa pula), serwowanie zasobów
-```
-
-Testy integracyjne z prawdziwą bazą uruchamiają się tylko z `TEST_DATABASE_URL`
-wskazującym **osobną, jednorazową** bazę, której nazwa zawiera `test`. Każdy przebieg
-tworzy własny tymczasowy schemat i usuwa go po zakończeniu:
-
-```bash
-createdb todo_app_test
-TEST_DATABASE_URL=postgres://user:password@localhost:5432/todo_app_test npm --prefix backend test
-```
-
-Bez tej zmiennej testy integracyjne są oznaczone jako SKIPPED.
-
----
-
-## Praca w Mytko Workflow
-
-Zasady pracy agentów i ograniczenia środowiska opisuje [AGENTS.md](AGENTS.md).
+Obraz Docker, Compose, zmienne środowiskowe, kopie zapasowe, rollback i kryteria akceptacji: [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
 # Stopka
 

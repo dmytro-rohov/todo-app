@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+import json,os,secrets,socket,subprocess,sys,tempfile,time,signal
+from pathlib import Path
+PKG=Path(__file__).resolve().parent
+IMAGE='docker.io/library/postgres@sha256:e4cb93687b062cd25a0e8f672d85a7708235009d70d31f8a7698d9370092a9c4'
+def command(args,**kw):
+ if args[0]=='docker':args=[args[0],'--host','unix:///var/run/docker.sock',*args[1:]]
+ return subprocess.run(args,check=True,timeout=kw.pop('timeout',120),capture_output=True,**kw)
+def validate_image(image):
+ import runpy
+ runpy.run_path(str(PKG/'image-validation.py'))['validate'](IMAGE,image)
+def validate_binding(container):
+ ports=container.get('NetworkSettings',{}).get('Ports',{})
+ if ports.get('5432/tcp') != [{'HostIp':'127.0.0.1','HostPort':'55432'}]:raise ValueError('Required loopback PostgreSQL port binding absent or unsafe')
+def failure_details(error, stage):
+ code=getattr(error,'returncode',None)
+ if isinstance(error,subprocess.TimeoutExpired):code=124
+ if isinstance(error,KeyboardInterrupt):code=130
+ return {'stage':stage,'exit_code':code,'error_type':type(error).__name__,'message':{'port-binding':'Required loopback binding missing or unsafe','host-connectivity':'Published PostgreSQL endpoint unreachable','sql-bootstrap':'SQL initialization failed','db-tests':'Database acceptance failed; inspect sanitized tests log'}.get(stage,'Acceptance stage failed; raw output withheld')}
+def preflight(source):
+ if any(os.environ.get(key) for key in ['DOCKER_HOST','DOCKER_CONTEXT','NODE_OPTIONS','PGHOST','PGPORT','PGDATABASE','PGUSER','PGPASSWORD','PGSERVICE']):raise ValueError('Ambient target overrides forbidden')
+ command(['python3',str(PKG/'verify.py'),str(source)])
+ image=json.loads(command(['docker','image','inspect',IMAGE]).stdout)[0]
+ validate_image(image)
+ command(['node','-e',"require(require('node:module').createRequire(process.cwd()+'/backend/package.json').resolve('pg'))"],cwd=source)
+ with socket.socket() as sock:sock.bind(('127.0.0.1',55432))
+ return {'image':IMAGE,'port':'127.0.0.1:55432','container':'tasks-db-<random>','volume':'tasks-db-<random>-data','network':'dedicated non-internal bridge; ICC disabled; loopback publication only','databases':['tasks_test','tasks_restore_test'],'cleanup':'NONE: operator reviews retained resource IDs'}
+def execute(source):
+ if os.environ.get('TASKS_DB_APPROVED')!='yes':raise ValueError('TASKS_DB_APPROVED=yes required')
+ os.umask(0o077)
+ scope=preflight(source);run='tasks-db-'+secrets.token_hex(12)
+ evidence=Path(tempfile.mkdtemp(prefix='tasks-db-evidence-'));os.chmod(evidence,0o700)
+ record={'source':'1b93f7c228cacc569915f00a3b1258da68cc0926','run':run,'scope':scope,'status':'FAIL','stage':'preflight-complete'}
+ env=dict(os.environ);env['POSTGRES_PASSWORD']=secrets.token_hex(32)
+ def save(): (evidence/'result.json').write_text(json.dumps(record,indent=2))
+ save()
+ try:
+  record['stage']='network-create';save()
+  network=command(['docker','network','create','--driver','bridge','--opt','com.docker.network.bridge.enable_icc=false','--opt','com.docker.network.bridge.enable_ip_masquerade=false','--label','dev.mytko.acceptance='+run,run+'-net']).stdout.decode().strip();record['network']=network;save()
+  record['stage']='volume-create';save()
+  volume=command(['docker','volume','create','--label','dev.mytko.acceptance='+run,run+'-data']).stdout.decode().strip();record['volume']=volume;save()
+  record['stage']='container-start';save()
+  container=command(['docker','run','-d','--pull=never','--platform=linux/amd64','--name',run,'--label','dev.mytko.acceptance='+run,'--network',network,'-p','127.0.0.1:55432:5432','--mount','type=volume,src='+volume+',dst=/var/lib/postgresql/data','--env','POSTGRES_PASSWORD','--memory','256m','--pids-limit','128',IMAGE],env=env).stdout.decode().strip();record['container']=container;save()
+  record['stage']='port-binding';save()
+  inspected=json.loads(command(['docker','container','inspect',container]).stdout)[0]
+  validate_binding(inspected)
+  record['binding']={'host':'127.0.0.1','port':55432}
+  def sql(text,database='postgres',user='postgres'):
+   return command(['docker','exec','-i',container,'psql','-X','-v','ON_ERROR_STOP=1','-U',user,'-d',database,'-At'],input=text.encode()).stdout
+  for attempt in range(60):
+   try:sql('SELECT 1');break
+   except subprocess.CalledProcessError:time.sleep(1)
+  else:raise ValueError('PostgreSQL readiness deadline')
+  record['stage']='host-connectivity';save()
+  for attempt in range(30):
+   try:
+    with socket.create_connection(('127.0.0.1',55432),timeout=1):break
+   except OSError:time.sleep(1)
+  else:raise ValueError('Host PostgreSQL connection deadline')
+  record['stage']='sql-bootstrap';save()
+  passwords={role:secrets.token_hex(32) for role in ['tasks_owner','tasks_app','tasks_restore_owner']}
+  sql(''.join("CREATE ROLE "+r+" LOGIN PASSWORD '"+pw+"';" for r,pw in passwords.items())+"CREATE DATABASE tasks_test OWNER tasks_owner; CREATE DATABASE tasks_restore_test OWNER tasks_restore_owner;")
+  for db,owner in [('tasks_test','tasks_owner'),('tasks_restore_test','tasks_restore_owner')]:sql('REVOKE ALL ON DATABASE '+db+' FROM PUBLIC; ALTER SCHEMA public OWNER TO '+owner+'; REVOKE CREATE ON SCHEMA public FROM PUBLIC;',db)
+  sql('GRANT CONNECT ON DATABASE tasks_test TO tasks_app;')
+  sql("ALTER DATABASE tasks_test SET tasks.acceptance_run = '"+run+"';")
+  testenv=dict(os.environ,TASKS_DB_RUN=run,SOURCE_DIR=str(source),TEST_MIGRATION_DATABASE_URL='postgres://tasks_owner:'+passwords['tasks_owner']+'@127.0.0.1:55432/tasks_test',TEST_DATABASE_URL='postgres://tasks_app:'+passwords['tasks_app']+'@127.0.0.1:55432/tasks_test')
+  record['stage']='db-tests';save()
+  try:
+   result=command(['node',str(PKG/'db-suite.cjs')],env=testenv,cwd=source,timeout=180)
+   (evidence/'tests.log').write_bytes(result.stdout)
+  except subprocess.CalledProcessError as failed:
+   (evidence/'tests.log').write_bytes(failed.stdout or b'')
+   raise
+  record['stage']='backup-restore';save()
+  snapshot="SELECT jsonb_build_object('tasks',(SELECT jsonb_agg(t ORDER BY id) FROM tasks t),'categories',(SELECT jsonb_agg(c ORDER BY id) FROM categories c),'ledger',(SELECT jsonb_agg(m ORDER BY version) FROM schema_migrations m));"
+  before=sql(snapshot,'tasks_test')
+  dump=command(['docker','exec',container,'pg_dump','-U','tasks_owner','-d','tasks_test','-Fc']).stdout
+  command(['docker','exec','-i',container,'pg_restore','-U','tasks_restore_owner','-d','tasks_restore_test','--no-owner','--no-privileges','--single-transaction'],input=dump)
+  restored=sql(snapshot,'tasks_restore_test');assert before==restored
+  assert sql(snapshot,'tasks_test')==before
+  bad=subprocess.run(['docker','--host','unix:///var/run/docker.sock','exec','-i',container,'pg_restore','-U','tasks_restore_owner','-d','tasks_restore_test','--single-transaction'],input=b'invalid',capture_output=True,timeout=30);assert bad.returncode!=0
+  assert sql(snapshot,'tasks_test')==before and sql(snapshot,'tasks_restore_test')==restored
+  schemas=[]
+  for db in ['tasks_test','tasks_restore_test']:
+   raw=command(['docker','exec',container,'pg_dump','-U','postgres','-d',db,'--schema-only','--no-owner','--no-privileges']).stdout
+   schemas.append(b'\n'.join(line for line in raw.splitlines() if not line.startswith((b'\\restrict ',b'\\unrestrict '))))
+  assert schemas[0]==schemas[1];record['status']='PASS';record['restore']='PASS'
+ except BaseException as error:
+  record['status']='FAIL';record['failure']=failure_details(error,record['stage']);raise
+ finally:save();print('Evidence and retained resource IDs:',evidence)
+if __name__=='__main__':
+ try:
+  signal.signal(signal.SIGTERM,lambda *args: (_ for _ in ()).throw(KeyboardInterrupt()))
+  mode=sys.argv[1];source=Path(os.environ['SOURCE_DIR']).resolve()
+  if mode=='preflight':print(json.dumps(preflight(source),indent=2))
+  elif mode=='execute':execute(source)
+  else:raise ValueError('Use preflight or execute')
+ except Exception as exc:print('BLOCKED/FAIL:',type(exc).__name__,file=sys.stderr);sys.exit(1)

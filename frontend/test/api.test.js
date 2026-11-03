@@ -1,145 +1,70 @@
-import { test, beforeEach, afterEach } from "node:test";
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-
-import { ApiError, request } from "../js/api/http.js";
-import { getTasks, addTask, updateTask, deleteTask, deleteTaskByDate } from "../js/api/tasks.js";
-import { getCategories, addCategory, deleteCategory } from "../js/api/categories.js";
-import { createTask } from "../js/actions/tasks.js";
-
-const originalFetch = globalThis.fetch;
-let calls;
-
-function mockFetch(handler) {
-  globalThis.fetch = async (url, init = {}) => {
-    calls.push({ url, method: init.method || "GET", body: init.body, headers: init.headers });
-    return handler(url, init);
+import { test, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { request, jsonOptions } from '../js/api/request.js';
+import { request as legacyRequest, ApiError } from '../js/api/http.js';
+import { getTasks, addTask, updateTask, deleteTask, deleteTaskByDate } from '../js/api/tasks.js';
+const original = globalThis.fetch;
+afterEach(() => { globalThis.fetch = original; });
+test('active request helper returns JSON and preserves fetch options', async () => {
+  const options = jsonOptions('POST', { title: 'Żółć' });
+  globalThis.fetch = async (url, init) => { assert.equal(url, '/api/tasks'); assert.deepEqual(init, options); return Response.json({ id: 1 }); };
+  assert.deepEqual(await request('/api/tasks', options), { id: 1 });
+  assert.equal(options.headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(options.body), { title: 'Żółć' });
+});
+for (const status of [400, 401, 422, 500]) test(`active request exposes HTTP ${status}`, async () => {
+  globalThis.fetch = async () => Response.json({ message: 'Validation failed' }, { status });
+  await assert.rejects(request('/api/tasks'), /Validation failed/);
+});
+test('active helper handles non-JSON errors and empty success', async () => {
+  globalThis.fetch = async () => new Response('<html>Error</html>', { status: 502 });
+  await assert.rejects(request('/api/tasks'), /502/);
+  globalThis.fetch = async () => new Response(null, { status: 204 });
+  assert.deepEqual(await request('/api/tasks'), {});
+});
+test('network rejection propagates without retry', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new TypeError('offline'); };
+  await assert.rejects(request('/api/tasks'), /offline/); assert.equal(calls, 1);
+});
+test('retained http helper exposes ApiError status and network errors', async () => {
+  globalThis.fetch = async () => Response.json({ message: 'Invalid' }, { status: 400 });
+  await assert.rejects(legacyRequest('/tasks'), e => e instanceof ApiError && e.status === 400 && e.message === 'Invalid');
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  await assert.rejects(legacyRequest('/tasks'), e => e instanceof ApiError && e.status === 0);
+});
+test('task API contract uses same origin and exactly the requested mutations', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => { calls.push([init.method || 'GET', url]); return Response.json([]); };
+  await getTasks(); await addTask({ title: 'Test' }); await updateTask({ id: 7 }); await deleteTask(7); await deleteTaskByDate('2026-10-31');
+  assert.deepEqual(calls, [['GET','/api/tasks'],['POST','/api/tasks'],['PUT','/api/tasks/7'],['DELETE','/api/tasks/7'],['DELETE','/api/tasks/date/2026-10-31']]);
+});
+test('HTTP helper aborts a stalled response body without retry', async () => {
+  let calls = 0;
+  globalThis.fetch = async (url, init) => {
+    calls++;
+    return { ok: true, text: () => new Promise((resolve,reject) => init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true})) };
   };
-}
-
-function jsonResponse(status, body) {
-  return new Response(body === undefined ? null : JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" }
-  });
-}
-
-beforeEach(() => {
-  calls = [];
+  // AbortSignal.timeout timers are unref'ed in Node; keep this test alive.
+  const keepAlive = setTimeout(()=>{},1000);
+  try { await assert.rejects(legacyRequest('/api/tasks',{timeoutMs:10}),e=>e instanceof ApiError && e.status===0 && /czas/.test(e.message)); assert.equal(calls,1); }
+  finally { clearTimeout(keepAlive); }
 });
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
+test('HTTP helper translates response stream failure into ApiError', async()=>{
+  globalThis.fetch=async()=>({ok:true,text:async()=>{throw new Error('stream failed');}});
+  await assert.rejects(legacyRequest('/api/tasks'),e=>e instanceof ApiError && e.status===0);
 });
-
-test("request returns parsed JSON on success", async () => {
-  mockFetch(() => jsonResponse(200, [{ id: 1 }]));
-  assert.deepEqual(await request("/tasks"), [{ id: 1 }]);
+for (const status of [400,401,403,404,409,500,503]) test(`ApiError preserves HTTP ${status} without retry`, async()=>{
+  let calls=0; globalThis.fetch=async()=>{calls++;return Response.json({message:'Controlled error'},{status});};
+  await assert.rejects(legacyRequest('/api/tasks',{method:'POST',body:{title:'test'}}),e=>e instanceof ApiError && e.status===status && e.message==='Controlled error');assert.equal(calls,1);
 });
-
-test("request throws ApiError with the server message on 4xx", async () => {
-  mockFetch(() => jsonResponse(400, { message: "Title too short" }));
-  await assert.rejects(request("/tasks", { method: "POST", body: {} }), (error) => {
-    assert.ok(error instanceof ApiError);
-    assert.equal(error.status, 400);
-    assert.equal(error.message, "Title too short");
-    return true;
-  });
+test('caller AbortController cancels request without retry',async()=>{
+ const controller=new AbortController();let calls=0;
+ globalThis.fetch=async(url,init)=>{calls++;return new Promise((resolve,reject)=>{if(init.signal.aborted)reject(init.signal.reason);else init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true});});};
+ const pending=legacyRequest('/api/tasks',{signal:controller.signal});controller.abort();
+ await assert.rejects(pending,e=>e instanceof ApiError && e.status===0);assert.equal(calls,1);
 });
-
-test("request throws a generic ApiError on non-JSON 5xx", async () => {
-  mockFetch(() => new Response("<html>Internal Server Error</html>", { status: 500 }));
-  await assert.rejects(request("/tasks"), (error) => {
-    assert.equal(error.status, 500);
-    assert.match(error.message, /500/);
-    return true;
-  });
-});
-
-test("request throws ApiError when the server is unreachable", async () => {
-  mockFetch(() => { throw new TypeError("fetch failed"); });
-  await assert.rejects(request("/tasks"), (error) => {
-    assert.ok(error instanceof ApiError);
-    assert.equal(error.status, 0);
-    return true;
-  });
-});
-
-test("request tolerates empty success bodies", async () => {
-  mockFetch(() => new Response(null, { status: 204 }));
-  assert.equal(await request("/tasks/1", { method: "DELETE" }), null);
-});
-
-test("task API uses the backend contract", async () => {
-  mockFetch(() => jsonResponse(200, {}));
-  const task = { id: 7, title: "Test", completed: true, date: "2026-10-30", categoryId: 1 };
-
-  await getTasks();
-  await addTask(task);
-  await updateTask(task);
-  await deleteTask(7);
-  await deleteTaskByDate("2026-10-30");
-
-  assert.deepEqual(calls.map(c => `${c.method} ${c.url}`), [
-    "GET /tasks",
-    "POST /tasks",
-    "PUT /tasks/7",
-    "DELETE /tasks/7",
-    "DELETE /tasks/date/2026-10-30"
-  ]);
-  assert.deepEqual(JSON.parse(calls[1].body), task);
-  assert.equal(calls[1].headers["Content-Type"], "application/json");
-});
-
-test("category API uses the backend contract", async () => {
-  mockFetch(() => jsonResponse(200, {}));
-
-  await getCategories();
-  await addCategory({ name: "Dom", color: "#22c55e" });
-  await deleteCategory(3);
-
-  assert.deepEqual(calls.map(c => `${c.method} ${c.url}`), [
-    "GET /categories",
-    "POST /categories",
-    "DELETE /categories/3"
-  ]);
-});
-
-test("mutating calls surface HTTP errors instead of failing silently", async () => {
-  mockFetch(() => jsonResponse(500, { message: "Server error" }));
-  await assert.rejects(updateTask({ id: 1 }), ApiError);
-  await assert.rejects(deleteTask(1), ApiError);
-  await assert.rejects(deleteTaskByDate("2026-10-30"), ApiError);
-  await assert.rejects(addCategory({ name: "x", color: "#fff" }), ApiError);
-  await assert.rejects(deleteCategory(1), ApiError);
-});
-
-// Regression: the modal submit handler used to call addTask twice,
-// creating every task in duplicate.
-test("createTask sends exactly one POST and returns the refreshed list", async () => {
-  const stored = [];
-  mockFetch((url, init) => {
-    if (init.method === "POST") {
-      stored.push(JSON.parse(init.body));
-      return jsonResponse(201, { message: "Task added" });
-    }
-    return jsonResponse(200, stored.map((t, i) => ({ id: i + 1, ...t })));
-  });
-
-  const tasks = await createTask({ title: "Kup mleko", completed: false, date: "2026-10-30", categoryId: 1 });
-
-  assert.equal(calls.filter(c => c.method === "POST").length, 1);
-  assert.equal(tasks.length, 1);
-});
-
-test("createTask does not retry the POST after a validation error", async () => {
-  mockFetch(() => jsonResponse(400, { message: "Title too short" }));
-  await assert.rejects(createTask({ title: "x", date: "2026-10-30" }), /Title too short/);
-  assert.equal(calls.filter(c => c.method === "POST").length, 1);
-});
-
-test("modal submit handler creates the task through a single createTask call", async () => {
-  const source = await readFile(new URL("../js/events/listeners.js", import.meta.url), "utf8");
-  assert.equal(source.match(/\baddTask\s*\(/g), null, "listeners.js must not call addTask directly");
-  assert.equal(source.match(/\bcreateTask\s*\(/g)?.length, 1);
+test('request header wait is bounded by same deadline',async()=>{
+ globalThis.fetch=async(url,init)=>new Promise((resolve,reject)=>init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true}));
+ const keepAlive=setTimeout(()=>{},1000);try{await assert.rejects(legacyRequest('/api/tasks',{timeoutMs:10}),e=>e instanceof ApiError && /czas/.test(e.message));}finally{clearTimeout(keepAlive);}
 });

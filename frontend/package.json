@@ -2,19 +2,18 @@
   "name": "todo-frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "Mytko Tasks frontend (Vanilla JS ES modules + SCSS)",
-  "type": "module",
+  "description": "Mytko Tasks static frontend (SCSS build only)",
   "scripts": {
     "build": "sass --no-source-map styles/style.scss dist/style.css",
-    "watch": "sass --watch styles/style.scss dist/style.css",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "build:css": "sass --no-source-map styles/style.scss dist/style.css",
+    "watch:css": "sass --watch styles/style.scss dist/style.css"
   },
   "engines": {
-    "node": ">=22",
-    "npm": ">=10"
+    "node": ">=24 <25"
   },
-  "license": "ISC",
   "devDependencies": {
-    "sass": "^1.80.0"
-  }
+    "sass": "1.89.2"
+  },
+  "type": "module"
 }

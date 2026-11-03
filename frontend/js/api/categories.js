@@ -1,20 +1,15 @@
-import { request } from "./http.js";
+import { request, jsonOptions } from "./request.js";
 
-const CATEGORIES_PATH = "/categories";
+const API_URL = "/api/categories";
 
 export async function getCategories() {
-  return request(CATEGORIES_PATH);
+  return request(API_URL);
 }
 
 export async function addCategory(category) {
-  return request(CATEGORIES_PATH, {
-    method: "POST",
-    body: category
-  });
+  return request(API_URL, jsonOptions("POST", category));
 }
 
 export async function deleteCategory(id) {
-  return request(`${CATEGORIES_PATH}/${encodeURIComponent(id)}`, {
-    method: "DELETE"
-  });
+  return request(`${API_URL}/${id}`, { method: "DELETE" });
 }
