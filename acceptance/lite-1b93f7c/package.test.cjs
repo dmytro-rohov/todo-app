@@ -97,7 +97,7 @@ test('preflight launches Chromium through the central runtime',()=>{
 test('browser-only refuses without approval and never starts or removes Docker resources',()=>{
  const r=spawnSync('bash',[path.join(__dirname,'acceptance.sh'),'browser-only'],{env:{PATH:process.env.PATH},encoding:'utf8'});
  assert.equal(r.status,2);assert.match(r.stderr,/approval required/);
- const s=read('acceptance.sh');const only=s.slice(s.indexOf('if [[ $MODE == browser-only ]]'),s.indexOf('source "$PACKAGE_DIR/images.env"'));
+ const s=read('acceptance.sh');const only=s.slice(s.indexOf('if [[ $MODE == browser-only ||'),s.indexOf('source "$PACKAGE_DIR/images.env"'));
  assert.match(only,/stack_check\.py/);assert.match(only,/Browser-only PASS is not full E2E/);
  assert.doesNotMatch(only,/docker compose|COMPOSE\[|docker (?:run|start|stop|rm|restart)|smoke\.sh/);
  for(const call of read('browser/stack_check.py').match(/(?<!def )docker\([^)]*\)/g))assert.match(call,/^docker\('(?:ps|container|image|port)'/,call);
@@ -106,4 +106,19 @@ test('browser evidence directory and loopback proxy bypass are passed to the run
  const smoke=read('smoke.sh');
  assert.match(smoke,/BROWSER_EVIDENCE_DIR="\$\{EVIDENCE_DIR:\+\$EVIDENCE_DIR\/browser\}"/);
  assert.match(smoke,/NO_PROXY=127\.0\.0\.1,localhost,::1/);
+});
+
+test('browser-only preflight requires approval and exits before QA credentials or mutations',()=>{
+ const r=spawnSync('bash',[path.join(__dirname,'acceptance.sh'),'browser-only-preflight'],{env:{PATH:process.env.PATH},encoding:'utf8'});
+ assert.equal(r.status,2);assert.match(r.stderr,/approval required/);
+ const s=read('acceptance.sh');
+ const only=s.slice(s.indexOf('if [[ $MODE == browser-only ||'),s.indexOf('source "$PACKAGE_DIR/images.env"'));
+ const gate=only.indexOf('if [[ $MODE == browser-only-preflight ]]; then');
+ for(const check of ['browser_runtime "$EVIDENCE_DIR"','stack_check.py','/readyz']) {
+  assert.ok(only.indexOf(check)>=0 && only.indexOf(check)<gate,check);
+ }
+ assert.ok(gate<only.indexOf('AUTH_PASSWORD=$(<'));
+ assert.match(only.slice(gate,only.indexOf('phase=browser\n')),/exit 0/);
+ assert.match(only,/--connect-timeout 3 --max-time 10/);
+ assert.match(only,/QA scenarios have not run/);
 });

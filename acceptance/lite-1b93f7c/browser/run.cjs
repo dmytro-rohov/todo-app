@@ -231,6 +231,9 @@ async function viewportRun(browser, base, viewport, recorder, dir, httpCredentia
       assert.ok(consoleErrors.length <= injected, `console errors (${consoleErrors.length}) exceed injected failures (${injected})`);
     });
   } finally {
+    runtime.writePrivate(path.join(dir, `console-${viewport.name}.json`), JSON.stringify({
+      pageErrors, consoleErrors, failedRequests, injectedFailures: injected
+    }, null, 2) + '\n');
     const trace = path.join(dir, `trace-${viewport.name}.zip`);
     await context.tracing.stop({ path: trace }).then(() => fs.chmodSync(trace, 0o600)).catch(() => {});
     await context.close();
@@ -249,7 +252,9 @@ async function main(env = process.env) {
   try {
     const { playwright, evidence } = await runtime.prepare(env, { forbiddenRoots: [env.SOURCE_DIR, path.resolve(__dirname, '..')] });
     runtimeEvidence = evidence;
-    const browser = await playwright.chromium.launch(runtime.LAUNCH_OPTIONS);
+    const browser = await playwright.chromium.launch(runtime.LAUNCH_OPTIONS).catch(error => {
+      throw new runtime.BlockedError(`QA Chromium failed to launch: ${String(error.message).split('\n')[0]}`);
+    });
     try {
       try { await anonymousDenied(browser, env.E2E_BASE, recorder); }
       catch (error) { failure = failure || error; }

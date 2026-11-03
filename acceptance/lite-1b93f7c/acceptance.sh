@@ -41,7 +41,7 @@ print(f"browser summary {summary['status']} {summary['passed']}/{summary['total'
 sys.exit(0 if summary['status'] == 'PASS' and summary['passed'] == summary['total'] else 1)
 PY
 }
-if [[ $MODE == browser-only ]]; then
+if [[ $MODE == browser-only || $MODE == browser-only-preflight ]]; then
   # Browser QA only, on a stack started earlier by this package. NOT full E2E.
   phase=browser-only-preflight
   : "${BROWSER_STACK_PROJECT:?compose project of the approved running stack}" "${ACCEPTANCE_RUN_ID:?run id of that stack}"
@@ -49,11 +49,16 @@ if [[ $MODE == browser-only ]]; then
   E2E_BASE="http://127.0.0.1:${TEST_APP_PORT:-3101}"
   [[ -f $AUTH_PASSWORD_FILE && ! -L $AUTH_PASSWORD_FILE && -O $AUTH_PASSWORD_FILE && $(stat -c %a "$AUTH_PASSWORD_FILE") == 600 ]] \
     || { echo "BLOCKED phase=$phase error=auth_password_file_permissions" >&2; exit 3; }
-  python3 "$PACKAGE_DIR/browser/stack_check.py" "$BROWSER_STACK_PROJECT" "$ACCEPTANCE_RUN_ID" "$E2E_BASE"
-  [[ $(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' "$E2E_BASE/readyz") == 200 ]] || { echo "BLOCKED phase=$phase error=stack_not_ready" >&2; exit 3; }
-  [[ $(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' "$E2E_BASE/") == 401 ]] || { echo "BLOCKED phase=$phase error=stack_not_protected" >&2; exit 3; }
   start_evidence tasks-browser-only-evidence
+  printf 'Preserve evidence: %s\n' "$EVIDENCE_DIR"
   browser_runtime "$EVIDENCE_DIR"
+  python3 "$PACKAGE_DIR/browser/stack_check.py" "$BROWSER_STACK_PROJECT" "$ACCEPTANCE_RUN_ID" "$E2E_BASE"
+  [[ $(curl --noproxy '*' --connect-timeout 3 --max-time 10 -s -o /dev/null -w '%{http_code}' "$E2E_BASE/readyz") == 200 ]] || { echo "BLOCKED phase=$phase error=stack_not_ready" >&2; exit 3; }
+  [[ $(curl --noproxy '*' --connect-timeout 3 --max-time 10 -s -o /dev/null -w '%{http_code}' "$E2E_BASE/") == 401 ]] || { echo "BLOCKED phase=$phase error=stack_not_protected" >&2; exit 3; }
+  if [[ $MODE == browser-only-preflight ]]; then
+    echo "PASS browser-only preflight; QA scenarios have not run"
+    exit 0
+  fi
   phase=browser
   AUTH_PASSWORD=$(<"$AUTH_PASSWORD_FILE")
   E2E_BASE="$E2E_BASE" AUTH_PASSWORD="$AUTH_PASSWORD" TASKS_DISPOSABLE_APPROVED=yes BROWSER_EVIDENCE_DIR="$EVIDENCE_DIR/browser" \
