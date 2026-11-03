@@ -193,6 +193,7 @@ async function viewportRun(browser, base, viewport, recorder, dir, httpCredentia
         return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'QA validation' }) });
       }, { times: 1 });
       await anyCard(editedTitle).getByRole('button', { name: 'Edytuj' }).click();
+      await page.locator('#task-form [name=description]').fill('QA rejected description change');
       await page.getByRole('button', { name: 'Zapisz', exact: true }).click();
       await page.locator('#form-error').filter({ hasText: 'QA validation' }).waitFor();
       await page.locator('#cancel-task').click();
@@ -252,6 +253,9 @@ async function viewportRun(browser, base, viewport, recorder, dir, httpCredentia
       assert.ok(consoleErrors.length <= injected, `console errors (${consoleErrors.length}) exceed injected failures (${injected})`);
     });
   } finally {
+    runtime.writePrivate(path.join(dir, `console-${viewport.name}.json`), JSON.stringify({
+      pageErrors, consoleErrors, failedRequests, injectedFailures: injected
+    }, null, 2) + '\n');
     const trace = path.join(dir, `trace-${viewport.name}.zip`);
     await context.tracing.stop({ path: trace }).then(() => fs.chmodSync(trace, 0o600)).catch(() => {});
     await context.close();

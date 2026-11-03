@@ -7,6 +7,15 @@ export function card(task, categories) {
   const category = categories.find(c => c.id === task.categoryId);
   return `<article class="board-card" data-task="${Number(task.id)}"><button class="move-handle" data-move="${Number(task.id)}" aria-label="Przenieś zadanie: strzałki góra/dół zmieniają kolejność, lewo/prawo kolumnę">↕ Przenieś</button><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.description)}</p><p>${escapeHtml(task.priority)} · <span data-category="${Number(category?.id)}">${escapeHtml(category?.name || 'Bez kategorii')}</span></p><p>${task.dueDate ? `Termin: ${escapeHtml(task.dueDate)}` : 'Bez terminu'}</p><button data-edit="${Number(task.id)}">Edytuj</button></article>`;
 }
+function titleError(title) {
+  return title.trim().length < 3 || title.length > 100 ? 'Tytuł musi mieć od 3 do 100 znaków.' : '';
+}
+export function validateTitleInput(input, originalTitle = null) {
+  // Permit the unchanged legacy value, but validate every replacement as a new title.
+  input.minLength = originalTitle === null ? 3 : Math.min(3, originalTitle.length);
+  input.maxLength = Math.max(100, originalTitle?.length || 0);
+  input.setCustomValidity(input.value === originalTitle ? '' : titleError(input.value));
+}
 export async function submitTaskForm(form, editing, send = request) {
   const payload = Object.fromEntries(new FormData(form).entries());
   payload.categoryId = payload.categoryId ? Number(payload.categoryId) : null;
@@ -25,15 +34,18 @@ export async function submitTaskForm(form, editing, send = request) {
     const changed = Object.fromEntries(Object.entries(payload).filter(([key, value]) =>
       !Object.hasOwn(editing, key) || String(original[key] ?? '') !== String(value ?? '')
     ));
+    if (!Object.keys(changed).length) return editing;
+    if ('title' in changed && titleError(changed.title)) throw new Error(titleError(changed.title));
     return send(`/api/tasks/${editing.id}`, { method: 'PATCH', body: changed });
   }
+  if (titleError(payload.title)) throw new Error(titleError(payload.title));
   return send('/api/tasks', { method: 'POST', body: { ...payload, date: new Date().toISOString().slice(0, 10) } });
 }
 
 export async function initBoard() {
   const root = document.querySelector('#kanban');
   let tasks = [], categories = [], busy = false;
-  root.innerHTML = `<header><h1>Mytko Tasks</h1><button id="new-task">Nowe zadanie</button></header><details><summary>Kategorie</summary><form id="category-form"><label>Nazwa <input name="name" required minlength="2" maxlength="50"></label><label>Kolor <input name="color" type="color" value="#4e45e4"></label><button>Zapisz kategorię</button></form><div id="category-list"></div></details><div class="board-tools"><label>Szukaj <input id="search" type="search"></label><label>Status <select id="status-filter"><option value="">Wszystkie</option>${Object.entries(labels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>Priorytet <select id="priority-filter"><option value="">Wszystkie</option>${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Kategoria <select id="category-filter"><option value="">Wszystkie</option></select></label></div><p id="board-message" role="status" aria-live="polite"></p><button id="retry">Odśwież</button><div class="board-columns"></div><dialog id="task-dialog"><form id="task-form"><h2>Zadanie</h2><label>Tytuł <input name="title" required minlength="3" maxlength="255"></label><label>Opis <textarea name="description" maxlength="5000"></textarea></label><label>Status <select name="status">${Object.entries(labels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>Priorytet <select name="priority">${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Kategoria <select name="categoryId"><option value="">Bez kategorii</option></select></label><label>Termin <input type="date" name="dueDate"></label><label>Kolejność <input type="number" min="0" step="1" name="position" required></label><p id="form-error" role="alert"></p><button type="submit">Zapisz</button><button type="button" id="remove-task">Usuń</button><button type="button" id="cancel-task">Anuluj</button></form></dialog>`;
+  root.innerHTML = `<header><h1>Mytko Tasks</h1><button id="new-task">Nowe zadanie</button></header><details><summary>Kategorie</summary><form id="category-form"><label>Nazwa <input name="name" required minlength="2" maxlength="50"></label><label>Kolor <input name="color" type="color" value="#4e45e4"></label><button>Zapisz kategorię</button></form><div id="category-list"></div></details><div class="board-tools"><label>Szukaj <input id="search" type="search"></label><label>Status <select id="status-filter"><option value="">Wszystkie</option>${Object.entries(labels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>Priorytet <select id="priority-filter"><option value="">Wszystkie</option>${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Kategoria <select id="category-filter"><option value="">Wszystkie</option></select></label></div><p id="board-message" role="status" aria-live="polite"></p><button id="retry">Odśwież</button><div class="board-columns"></div><dialog id="task-dialog"><form id="task-form"><h2>Zadanie</h2><label>Tytuł <input name="title" required minlength="3" maxlength="100"></label><label>Opis <textarea name="description" maxlength="5000"></textarea></label><label>Status <select name="status">${Object.entries(labels).map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label><label>Priorytet <select name="priority">${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Kategoria <select name="categoryId"><option value="">Bez kategorii</option></select></label><label>Termin <input type="date" name="dueDate"></label><label>Kolejność <input type="number" min="0" step="1" name="position" required></label><p id="form-error" role="alert"></p><button type="submit">Zapisz</button><button type="button" id="remove-task">Usuń</button><button type="button" id="cancel-task">Anuluj</button></form></dialog>`;
   const $ = selector => root.querySelector(selector);
   const form = $('#task-form'), dialog = $('#task-dialog'); let editing = null;
   function render() {
@@ -61,8 +73,10 @@ export async function initBoard() {
     editing=task; form.reset(); $('#form-error').textContent='';
     const values=task || { title:'', description:'', status:'todo', priority:'P2', categoryId:'', dueDate:'', position:Math.max(0,...tasks.map(t=>t.position))+1 };
     for(const key of ['title','description','status','priority','categoryId','dueDate','position']) form.elements[key].value=values[key] ?? '';
+    validateTitleInput(form.elements.title, task?.title ?? null);
     $('#remove-task').hidden=!task; dialog.showModal(); form.elements.title.focus();
   }
+  form.elements.title.oninput=()=>validateTitleInput(form.elements.title, editing?.title ?? null);
   $('#new-task').onclick=()=>open(); $('#cancel-task').onclick=()=>dialog.close(); $('#retry').onclick=load;
   for(const selector of ['#search','#status-filter','#priority-filter','#category-filter']) $(selector).addEventListener('input',render);
   $('.board-columns').onclick=e=>{ const button=e.target.closest('[data-edit]'); if(button) open(tasks.find(t=>t.id===Number(button.dataset.edit))); };
