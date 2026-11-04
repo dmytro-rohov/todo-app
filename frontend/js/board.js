@@ -5,7 +5,24 @@ import { escapeHtml, safeColor } from './utils/helpers.js';
 export const statuses = { todo: 'ToDo', in_progress: 'W realizacji', needs_review: 'Needs review', done: 'Zakończone' };
 const statusIcons = { todo: 'circle', in_progress: 'play', needs_review: 'warning', done: 'done' };
 const esc = escapeHtml;
+export const SPACES = { work: 'Praca', private: 'Prywatne' };
+export const spaceLabel = space => SPACES[space] || SPACES.private;
+export function formatEstimate(minutes) {
+  if (!Number.isInteger(minutes) || minutes < 1) return '';
+  const hours = Math.floor(minutes / 60), rest = minutes % 60;
+  return hours ? `${hours} h${rest ? ` ${rest} min` : ''}` : `${rest} min`;
+}
+// "Today" is the user's calendar day in Warsaw (the product's time zone), as YYYY-MM-DD.
+export const todayInWarsaw = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+export const isOverdue = (task, today = todayInWarsaw()) => Boolean(task.dueDate) && task.dueDate < today && task.status !== 'done';
 const options = items => items.map(item => `<option value="${Number(item.id)}">${esc(item.name)}</option>`).join('');
+// Counters are computed from the real tasks. "overdue" and "today" are views over due dates, not statuses.
+export function statCount(tasks, key, today = todayInWarsaw()) {
+  if (key === 'all') return tasks.length;
+  if (key === 'overdue') return tasks.filter(t => isOverdue(t, today)).length;
+  if (key === 'today') return tasks.filter(t => t.dueDate === today && t.status !== 'done').length;
+  return tasks.filter(t => t.status === key).length;
+}
 export function card(task, categories, projects = [], assignees = []) {
   const taskCategories = categories.filter(c => (task.labelIds || [task.categoryId]).includes(c.id));
   const project = projects.find(p => p.id === task.projectId);
@@ -15,13 +32,13 @@ export function card(task, categories, projects = [], assignees = []) {
   return `<article class="board-card" data-task="${Number(task.id)}" data-state="${esc(task.status)}">
     <div class="card-top"><span class="priority" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><button class="card-edit" data-edit="${Number(task.id)}" aria-label="Edytuj zadanie ${esc(task.title)}">Edytuj</button></div>
     <h3>${esc(task.title)}</h3>${task.description ? `<p class="card-description">${esc(task.description)}</p>` : ''}
-    <div class="card-tags">${project ? `<span class="chip project-chip">${icon('folder')}${esc(project.name)}</span>` : ''}${taskCategories.map(category=>`<span class="chip" data-category="${Number(category.id)}"><i></i>${esc(category.name)}</span>`).join('')}</div>
-    <footer class="card-footer"><span class="avatar" title="${esc(assignee?.name || 'Nieprzypisane')}">${initials ? esc(initials) : icon('person')}</span><span class="card-date">${icon('calendar')}${esc(date)}</span><button class="move-handle" data-move="${Number(task.id)}" aria-label="Przenieś zadanie: strzałki góra/dół zmieniają kolejność, lewo/prawo kolumnę">${icon(statusIcons[task.status])}</button></footer>
+    <div class="card-tags"><span class="chip space-chip" data-space="${esc(task.space || 'private')}">${esc(spaceLabel(task.space))}</span>${project ? `<span class="chip project-chip">${icon('folder')}${esc(project.name)}</span>` : ''}${taskCategories.map(category=>`<span class="chip" data-category="${Number(category.id)}"><i></i>${esc(category.name)}</span>`).join('')}</div>
+    <footer class="card-footer"><span class="avatar" title="${esc(assignee?.name || 'Nieprzypisane')}">${initials ? esc(initials) : icon('person')}</span><span class="card-date${isOverdue(task) ? ' is-overdue' : ''}">${icon('calendar')}${esc(date)}</span>${task.subtaskTotal ? `<span class="card-subtasks" title="Podzadania" data-subtasks="${Number(task.subtaskDone)}/${Number(task.subtaskTotal)}">${icon('check')}${Number(task.subtaskDone)}/${Number(task.subtaskTotal)}</span>` : ''}${formatEstimate(task.estimateMinutes) ? `<span class="card-estimate" title="Planowany czas">${esc(formatEstimate(task.estimateMinutes))}</span>` : ''}<button class="move-handle" data-move="${Number(task.id)}" aria-label="Przenieś zadanie: strzałki góra/dół zmieniają kolejność, lewo/prawo kolumnę">${icon(statusIcons[task.status])}</button></footer>
   </article>`;
 }
 export function filterTasks(tasks, filters, categories = [], projects = [], assignees = []) {
   const query = (filters.search || '').toLocaleLowerCase();
-  return tasks.filter(task => (!filters.status || task.status === filters.status) &&
+  return tasks.filter(task => (!filters.status || task.status === filters.status) && (!filters.space || (task.space || 'private') === filters.space) &&
     (!filters.priority || task.priority === filters.priority) && (!filters.categoryId || (task.labelIds || [task.categoryId]).includes(Number(filters.categoryId))) &&
     (!filters.projectId || task.projectId === Number(filters.projectId)) && (!filters.assigneeId || task.assigneeId === Number(filters.assigneeId)) &&
     (filters.showDone !== false || task.status !== 'done') &&
@@ -46,6 +63,9 @@ export async function submitTaskForm(form, editing, send = request) {
     payload.categoryId = payload.labelIds[0] ?? null;
   }
   payload.dueDate = payload.dueDate || null;
+  if ('startDate' in payload) payload.startDate = payload.startDate || null;
+  if ('estimateMinutes' in payload) payload.estimateMinutes = payload.estimateMinutes ? Number(payload.estimateMinutes) : null;
+  if ('space' in payload && !['work', 'private'].includes(payload.space)) payload.space = 'private';
   payload.position = Number(payload.position);
   if (editing) {
     const original = {
@@ -58,6 +78,9 @@ export async function submitTaskForm(form, editing, send = request) {
       priority: editing.priority,
       categoryId: editing.categoryId,
       dueDate: editing.dueDate,
+      space: editing.space,
+      startDate: editing.startDate,
+      estimateMinutes: editing.estimateMinutes,
       position: editing.position
     };
     const changed = Object.fromEntries(Object.entries(payload).filter(([key, value]) =>
@@ -84,6 +107,8 @@ export async function initBoard() {
       <a class="brand" href="#board"><span class="brand-mark">M</span><span>Mytko<small>TASKS</small></span></a>
       <nav><button class="nav-primary active" data-nav="board">${icon('check')}Tasks</button>
       <button data-nav="list">${icon('list')}Lista zadań</button>
+      <div class="nav-caption">PRZESTRZEŃ</div>
+      <div id="space-switch" class="space-switch" role="group" aria-label="Przestrzeń zadań"><button type="button" data-space="" class="active" aria-pressed="true">Wszystko</button><button type="button" data-space="work" aria-pressed="false">Praca</button><button type="button" data-space="private" aria-pressed="false">Prywatne</button></div>
       <div class="nav-caption">ORGANIZACJA</div>
       <button data-manage="projects">${icon('folder')}Projekty</button><button data-manage="assignees">${icon('person')}Wykonawcy</button><button data-manage="categories">${icon('tag')}Etykiety</button></nav>
       <div class="sidebar-bottom"><label>Projekt<select id="sidebar-project"><option value="">Wszystkie projekty</option></select></label>
@@ -96,18 +121,18 @@ export async function initBoard() {
     <div class="board-tools"><select id="status-filter" aria-label="Status"><option value="">Wszystkie zadania</option>${Object.entries(statuses).map(([s,n])=>`<option value="${s}">${n}</option>`).join('')}</select><select id="project-filter" aria-label="Projekt"><option value="">Wszystkie projekty</option></select><select id="category-filter" aria-label="Etykieta"><option value="">Wszystkie etykiety</option></select><select id="assignee-filter" aria-label="Wykonawca"><option value="">Wszyscy wykonawcy</option></select><select id="priority-filter" aria-label="Priorytet"><option value="">Priorytet</option>${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select><label class="toggle"><input id="show-done" type="checkbox" checked><span></span>Pokaż zakończone</label></div>
     <div class="feedback"><p id="board-message" role="status" aria-live="polite"></p><button id="retry" aria-label="Odśwież zadania">${icon('refresh')}</button></div>
     <div id="task-view" role="tabpanel" aria-labelledby="board-tab"><div class="board-columns"></div></div></div>
-    <dialog id="task-dialog" aria-labelledby="task-dialog-title"><form id="task-form"><div class="dialog-heading"><h2 id="task-dialog-title">Nowe zadanie</h2><button type="button" id="cancel-task" aria-label="Zamknij">${icon('close')}</button></div><label>Tytuł<input name="title" required minlength="3" maxlength="100" placeholder="Co jest do zrobienia?"></label><label>Opis<textarea name="description" maxlength="5000" rows="3" placeholder="Szczegóły zadania"></textarea></label><div class="form-grid"><label>Status<select name="status">${Object.entries(statuses).map(([s,n])=>`<option value="${s}">${n}</option>`).join('')}</select></label><label>Priorytet<select name="priority">${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Projekt<select name="projectId"></select></label><label>Wykonawca<select name="assigneeId"></select></label><label>Etykieta główna<select name="categoryId"></select></label><label>Dodatkowe etykiety<select name="labelIds" multiple size="3" aria-describedby="labels-help"></select><small id="labels-help">Ctrl / ⌘ pozwala wybrać kilka etykiet.</small></label><label>Termin<input name="dueDate" type="date"></label><label>Kolejność<input name="position" type="number" min="0" step="1" required></label></div><p id="form-error" role="alert"></p><div class="dialog-actions"><button type="button" id="remove-task" class="danger">Usuń</button><button type="submit" class="primary">Zapisz</button></div></form></dialog>
+    <dialog id="task-dialog" aria-labelledby="task-dialog-title"><form id="task-form"><div class="dialog-heading"><h2 id="task-dialog-title">Nowe zadanie</h2><button type="button" id="cancel-task" aria-label="Zamknij">${icon('close')}</button></div><label>Tytuł<input name="title" required minlength="3" maxlength="100" placeholder="Co jest do zrobienia?"></label><label>Opis<textarea name="description" maxlength="5000" rows="3" placeholder="Szczegóły zadania"></textarea></label><div class="form-grid"><label>Status<select name="status">${Object.entries(statuses).map(([s,n])=>`<option value="${s}">${n}</option>`).join('')}</select></label><label>Priorytet<select name="priority">${['P0','P1','P2','P3'].map(p=>`<option>${p}</option>`).join('')}</select></label><label>Projekt<select name="projectId"></select></label><label>Wykonawca<select name="assigneeId"></select></label><label>Etykieta główna<select name="categoryId"></select></label><label>Dodatkowe etykiety<select name="labelIds" multiple size="3" aria-describedby="labels-help"></select><small id="labels-help">Ctrl / ⌘ pozwala wybrać kilka etykiet.</small></label><label>Przestrzeń<select name="space"><option value="private">Prywatne</option><option value="work">Praca</option></select></label><label>Start<input name="startDate" type="date"></label><label>Termin<input name="dueDate" type="date"></label><label>Planowany czas (min)<input name="estimateMinutes" type="number" min="1" max="10080" step="1" placeholder="np. 90"></label><label>Kolejność<input name="position" type="number" min="0" step="1" required></label></div><p id="form-error" role="alert"></p><div class="dialog-actions"><button type="button" id="remove-task" class="danger">Usuń</button><button type="submit" class="primary">Zapisz</button></div></form></dialog>
     <dialog id="directory-dialog" aria-labelledby="directory-title"><div class="dialog-heading"><h2 id="directory-title"></h2><button id="close-directory" aria-label="Zamknij">${icon('close')}</button></div><p class="muted" id="directory-hint"></p><form id="directory-form"><label>Nazwa<input name="name" required minlength="2" maxlength="80"></label><label id="directory-color">Kolor<input type="color" name="color" value="#a9e936"></label><div class="dialog-actions"><button type="button" id="cancel-directory-edit" hidden>Anuluj edycję</button><button class="primary">Dodaj</button></div></form><p id="directory-error" role="alert"></p><div id="directory-list"></div></dialog>`;
   const $ = selector => root.querySelector(selector);
   const form = $('#task-form'), dialog = $('#task-dialog');
   function filters() {
-    return { search: $('#search').value, status: $('#status-filter').value, priority: $('#priority-filter').value, categoryId: $('#category-filter').value, projectId: $('#project-filter').value, assigneeId: $('#assignee-filter').value, showDone: $('#show-done').checked };
+    return { search: $('#search').value, status: $('#status-filter').value, priority: $('#priority-filter').value, categoryId: $('#category-filter').value, projectId: $('#project-filter').value, assigneeId: $('#assignee-filter').value, showDone: $('#show-done').checked, space: $('#space-switch .active')?.dataset.space || '' };
   }
   function render() {
     const filtered = filterTasks(tasks, filters(), categories, projects, assignees);
     // Counters share search/project/label/person scope, independently of status visibility.
     const scope = filterTasks(tasks, { ...filters(), status: '', showDone: true }, categories, projects, assignees);
-    $('#task-stats').innerHTML = [['all','Wszystkie','calendar'],['needs_review','Needs review','warning'],['in_progress','W realizacji','play'],['done','Zakończone','done']].map(([s,n,i])=>`<button class="stat" data-stat="${s}" aria-pressed="${$('#status-filter').value === (s === 'all' ? '' : s)}">${icon(i)}<span><strong>${s==='all'?scope.length:scope.filter(t=>t.status===s).length}</strong><small>${n}</small></span></button>`).join('');
+    $('#task-stats').innerHTML = [['all','Wszystkie','calendar'],['todo','Do zrobienia','circle'],['in_progress','W realizacji','play'],['needs_review','Needs review','warning'],['done','Zakończone','done'],['overdue','Zaległe','warning'],['today','Na dziś','calendar']].map(([s,n,i])=>`<button class="stat" data-stat="${s}" aria-pressed="${$('#status-filter').value === (s === 'all' ? '' : s)}">${icon(i)}<span><strong>${statCount(scope,s)}</strong><small>${n}</small></span></button>`).join('');
     $('.board-columns').classList.toggle('list-view', view === 'list');
     $('.board-columns').innerHTML = Object.entries(statuses).map(([status,name])=>{
       const column=filtered.filter(t=>t.status===status).sort((a,b)=>a.position-b.position||a.id-b.id);
@@ -141,8 +166,8 @@ export async function initBoard() {
   }
   function open(task=null, status='todo') {
     editing=task; form.reset(); $('#form-error').textContent='';
-    const values=task || { title:'',description:'',status,priority:'P2',categoryId:$('#category-filter').value,projectId:$('#project-filter').value,assigneeId:$('#assignee-filter').value,dueDate:'',position:Math.max(0,...tasks.map(t=>Number(t.position)))+1 };
-    for(const key of ['title','description','status','priority','categoryId','projectId','assigneeId','dueDate','position']) form.elements[key].value=values[key]??'';
+    const values=task || { title:'',description:'',status,priority:'P2',categoryId:$('#category-filter').value,projectId:$('#project-filter').value,assigneeId:$('#assignee-filter').value,dueDate:'',startDate:'',estimateMinutes:'',space:$('#space-switch .active')?.dataset.space||'private',position:Math.max(0,...tasks.map(t=>Number(t.position)))+1 };
+    for(const key of ['title','description','status','priority','categoryId','projectId','assigneeId','dueDate','startDate','estimateMinutes','space','position']) form.elements[key].value=values[key]??'';
     for(const option of form.elements.labelIds.options) option.selected=(task?.labelIds || []).includes(Number(option.value)) && Number(option.value)!==task?.categoryId;
     validateTitleInput(form.elements.title,task?.title??null);
     $('#task-dialog-title').textContent=task?'Edytuj zadanie':'Nowe zadanie'; $('#remove-task').hidden=!task;
@@ -165,7 +190,7 @@ export async function initBoard() {
   });
   $('#sidebar-project').onchange=()=>{ $('#project-filter').value=$('#sidebar-project').value; render(); };
   root.querySelectorAll('[data-view],[data-nav]').forEach(b=>b.onclick=()=>{changeView(b.dataset.view||b.dataset.nav);root.classList.remove('menu-open');$('#menu-toggle').setAttribute('aria-expanded','false');syncMenu();});
-  $('#task-stats').onclick=e=>{const b=e.target.closest('[data-stat]');if(b){$('#status-filter').value=b.dataset.stat==='all'?'':b.dataset.stat; if(b.dataset.stat==='done')$('#show-done').checked=true;render();}};
+  $('#task-stats').onclick=e=>{const b=e.target.closest('[data-stat]');if(b&&!['overdue','today'].includes(b.dataset.stat)){$('#status-filter').value=b.dataset.stat==='all'?'':b.dataset.stat; if(b.dataset.stat==='done')$('#show-done').checked=true;render();}};
   $('.board-columns').onclick=e=>{const edit=e.target.closest('[data-edit]'),add=e.target.closest('[data-add]');if(edit)open(tasks.find(t=>t.id===Number(edit.dataset.edit)));if(add)open(null,add.dataset.add);};
   root.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#search').focus();}
