@@ -107,7 +107,18 @@ async function grantAppRole(client, role) {
   }
   const name = client.escapeIdentifier(role);
   await client.query(`GRANT USAGE ON SCHEMA public TO ${name}`);
-  await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.tasks, public.categories, public.projects, public.assignees, public.task_labels TO ${name}`);
+  // Grant only on tables that exist: a database at an older schema (staged rollout, restore, an older
+  // release's migration set) must not fail here, and a table is never granted before its migration ran.
+  const grant = async (privileges, tables) => {
+    const present = [];
+    for (const table of tables) {
+      if ((await client.query("SELECT to_regclass($1) AS oid", [table])).rows[0].oid) present.push(table);
+    }
+    if (present.length) await client.query(`GRANT ${privileges} ON ${present.join(", ")} TO ${name}`);
+  };
+  await grant("SELECT, INSERT, UPDATE, DELETE", ["public.tasks", "public.categories", "public.projects", "public.assignees", "public.task_labels", "public.task_subtasks"]);
+  // History is written only by the trigger: the application can read it but never alter it.
+  await grant("SELECT", ["public.task_history"]);
   await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${name}`);
   await client.query(`GRANT SELECT ON public.schema_migrations TO ${name}`);
 }

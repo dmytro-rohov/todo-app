@@ -72,6 +72,10 @@ function createApp({ config, pool, migrationVersions = [] }) {
   const createDirectoryRouter = require('./routes/directories');
   api.use('/projects', createDirectoryRouter(pool, 'projects'));
   api.use('/assignees', createDirectoryRouter(pool, 'assignees'));
+  const { createSubtasksRouters } = require("./routes/subtasks");
+  const subtasks = createSubtasksRouters(pool);
+  api.use("/tasks/:taskId/subtasks", subtasks.collection);
+  api.use("/subtasks", subtasks.item);
   api.use("/tasks", createTasksRouter(pool));
   api.use("/categories", createCategoriesRouter(pool));
   api.use((req, res) => {

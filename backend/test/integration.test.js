@@ -49,7 +49,8 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query("DROP TABLE IF EXISTS public.task_labels, public.tasks, public.categories, public.projects, public.assignees, public.schema_migrations CASCADE");
+    await owner.query("DROP TABLE IF EXISTS public.task_history, public.task_subtasks, public.task_labels, public.tasks, public.categories, public.projects, public.assignees, public.schema_migrations CASCADE");
+    await owner.query("DROP FUNCTION IF EXISTS public.record_task_history() CASCADE");
   });
 
   const migrate = (options = {}) =>
@@ -176,8 +177,9 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
       WHERE conrelid = 'public.tasks'::regclass AND contype = 'f'`);
     assert.deepEqual(fks.rows.map(r => r.conname).sort(), ["fk_category", "tasks_assignee_id_fkey", "tasks_project_id_fkey"]);
     await assert.rejects(
-      owner.query("INSERT INTO tasks (title, completed, date) VALUES ('x', NULL, '2026-10-30')"),
+      owner.query("INSERT INTO tasks (title, completed, date) VALUES (NULL, false, '2026-10-30')"),
       /null value/);
+    // Migration 003 deliberately made "completed" nullable (legacy writers); the status column is the truth.
   });
 
   test("CRUD over HTTP persists across an application restart", async () => {
@@ -230,12 +232,18 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
         description: "",
         status: "done",
         priority: "P2",
-        position: taskId,
-        dueDate: "2026-10-30",
+        position: String(taskId), // bigint column: node-pg returns it as a string (existing API behaviour)
+        dueDate: null, // "date" is the legacy field; the due date is set explicitly in V2
         createdAt: tasks[0].createdAt,
         updatedAt: tasks[0].updatedAt,
         completedAt: tasks[0].completedAt,
-        archivedAt: null
+        archivedAt: null,
+        // 1.0 core: existing/new rows are PRIVATE by default (fail closed), no estimate, no subtasks
+        space: "private",
+        startDate: null,
+        estimateMinutes: null,
+        subtaskTotal: 0,
+        subtaskDone: 0
       });
 
       assert.equal((await ctx.request("/api/tasks/date/2026-10-30", { method: "DELETE", headers: SAME_ORIGIN_JSON })).status, 200);
@@ -251,7 +259,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
     await owner.query(`CREATE TABLE public.tasks (id serial PRIMARY KEY, title varchar(255) NOT NULL, completed boolean, date date NOT NULL, category_id integer REFERENCES public.categories(id) ON DELETE SET NULL)`);
     await owner.query("INSERT INTO tasks (title, completed, date) VALUES ('Open legacy', false, '2026-10-30'), ('Done legacy', true, '2026-10-31')");
     assert.deepEqual(await migrate(), VERSIONS);
-    const rows = await owner.query("SELECT id, completed, status, due_date, position, completed_at FROM tasks ORDER BY id");
+    const rows = await owner.query("SELECT id, completed, status, due_date::text AS due_date, position, completed_at FROM tasks ORDER BY id");
     assert.equal(rows.rows[0].status, "todo");
     assert.equal(String(rows.rows[0].due_date), "2026-10-30");
     assert.equal(rows.rows[0].completed_at, null);

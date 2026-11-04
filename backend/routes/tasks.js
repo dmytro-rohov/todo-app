@@ -1,6 +1,6 @@
 const express = require("express");
 const { withTaskLabels } = require("../task-labels");
-const { validateTaskPatch, STATUSES, PRIORITIES } = require("../task-domain");
+const { validateTaskPatch, STATUSES, PRIORITIES, SPACES } = require("../task-domain");
 
 const { parseId, isValidDate, validateTask } = require("../validation");
 
@@ -13,6 +13,9 @@ const TASK_COLUMNS = `
     UNION SELECT tasks.category_id WHERE tasks.category_id IS NOT NULL ORDER BY 1) AS "labelIds",
   category_id AS "categoryId", project_id AS "projectId", assignee_id AS "assigneeId", description, status, priority, position,
   TO_CHAR(due_date, 'YYYY-MM-DD') AS "dueDate",
+  space, TO_CHAR(start_date, 'YYYY-MM-DD') AS "startDate", estimate_minutes AS "estimateMinutes",
+  (SELECT count(*)::int FROM public.task_subtasks s WHERE s.task_id=tasks.id) AS "subtaskTotal",
+  (SELECT count(*)::int FROM public.task_subtasks s WHERE s.task_id=tasks.id AND s.done) AS "subtaskDone",
   created_at AS "createdAt", updated_at AS "updatedAt", completed_at AS "completedAt", archived_at AS "archivedAt"
 `;
 
@@ -27,11 +30,25 @@ module.exports = function createTasksRouter(pool) {
     res.status(result.status).json({ message: result.message });
   });
 
+  // History is written by a database trigger and is read-only for the application.
+  router.get("/:id/history", async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Invalid task id" });
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 200);
+    const result = await pool.query(
+      `SELECT id, field, old_value AS "oldValue", new_value AS "newValue", actor, changed_at AS "changedAt"
+       FROM public.task_history WHERE task_id=$1 ORDER BY id DESC LIMIT $2`, [id, limit]);
+    if (!result.rowCount && !(await pool.query("SELECT 1 FROM public.tasks WHERE id=$1", [id])).rowCount) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+    res.json(result.rows);
+  });
+
   // get
   router.get("/", async (req, res) => {
     const conditions = ["archived_at IS NULL"];
     const params = [];
-    for (const [key, column, choices] of [["status", "status", STATUSES], ["priority", "priority", PRIORITIES], ["categoryId", "category_id", null], ["projectId", "project_id", null], ["assigneeId", "assignee_id", null]]) {
+    for (const [key, column, choices] of [["status", "status", STATUSES], ["priority", "priority", PRIORITIES], ["categoryId", "category_id", null], ["projectId", "project_id", null], ["assigneeId", "assignee_id", null], ["space", "space", SPACES]]) {
       if (req.query[key] === undefined) continue;
       if (choices ? !choices.includes(req.query[key]) : parseId(req.query[key]) === null) return res.status(400).json({ message: "Invalid filter" });
       params.push(req.query[key]);
@@ -48,17 +65,17 @@ module.exports = function createTasksRouter(pool) {
       return res.status(400).json({ message: error });
     }
 
-    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position","projectId","assigneeId","labelIds","categoryId"].includes(key)));
+    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position","projectId","assigneeId","labelIds","categoryId","space","startDate","estimateMinutes"].includes(key)));
     const extraValidation = Object.keys(extras).length ? validateTaskPatch(extras) : { value: {} };
     if (extraValidation.error) return res.status(400).json({ message: extraValidation.error });
     const domain = extraValidation.value;
     try {
       const result = await withTaskLabels(pool, domain.labelIds, db => db.query(
         `INSERT INTO tasks
-        (title, completed, date, category_id, description, status, priority, due_date, position, project_id, assignee_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        (title, completed, date, category_id, description, status, priority, due_date, position, project_id, assignee_id, space, start_date, estimate_minutes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING ${TASK_COLUMNS}`,
-        [value.title, value.completed, value.date, domain.labelIds !== undefined ? domain.categoryId : value.categoryId, domain.description || "", domain.status || (value.completed ? "done" : "todo"), domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null, domain.projectId ?? null, domain.assigneeId ?? null]
+        [value.title, value.completed, value.date, domain.labelIds !== undefined ? domain.categoryId : value.categoryId, domain.description || "", domain.status || (value.completed ? "done" : "todo"), domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null, domain.projectId ?? null, domain.assigneeId ?? null, domain.space || "private", domain.startDate ?? null, domain.estimateMinutes ?? null]
       ));
       res.status(201).json(result.rows[0]);
     } catch (dbError) {
@@ -114,7 +131,7 @@ module.exports = function createTasksRouter(pool) {
     if (id === null) return res.status(400).json({ message: "Invalid task id" });
     const { error, value } = validateTaskPatch(req.body);
     if (error) return res.status(400).json({ message: error });
-    const columns = { title: "title", description: "description", status: "status", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", projectId: "project_id", assigneeId: "assignee_id" };
+    const columns = { title: "title", description: "description", status: "status", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", projectId: "project_id", assigneeId: "assignee_id", space: "space", startDate: "start_date", estimateMinutes: "estimate_minutes" };
     const params = [];
     const assignments = Object.entries(value).filter(([key]) => key !== 'labelIds').map(([key, val]) => {
       params.push(val); return `${columns[key]} = $${params.length}`;
