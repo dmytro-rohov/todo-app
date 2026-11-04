@@ -1,0 +1,68 @@
+# Publishes ONE immutable release image of Mytko Tasks and prints its digest.
+# Manual only (workflow_dispatch): nothing builds or pushes on its own, and nothing deploys.
+# NOT EXECUTED YET: it needs the operator's decision to use GHCR (see docs/OVH-DEPLOY-ARCHITECTURE.md).
+name: release-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Full 40-character commit SHA on main to build (never a branch name or tag)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write       # push the image
+  id-token: write       # keyless provenance signing
+  attestations: write
+
+concurrency:
+  group: release-image
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Refuse anything but a full commit SHA
+        run: |
+          [[ "${{ inputs.source_sha }}" =~ ^[0-9a-f]{40}$ ]] || { echo "source_sha must be a full SHA" >&2; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: The checked-out commit is exactly the requested one and is reachable from main
+        run: |
+          [ "$(git rev-parse HEAD)" = "${{ inputs.source_sha }}" ]
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor HEAD origin/main
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          provenance: mode=max
+          sbom: true
+          platforms: linux/amd64
+          build-args: |
+            GIT_REVISION=${{ inputs.source_sha }}
+          # Tag is only a human label; deployment pins the digest, never the tag.
+          tags: ghcr.io/dmytro-rohov/mytko-tasks:${{ inputs.source_sha }}
+      - name: Render the deploy profile for this exact digest
+        run: node scripts/render-deploy-profile.cjs "${{ steps.push.outputs.digest }}" > deploy-profile.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-profile-${{ inputs.source_sha }}
+          path: deploy-profile.json
+      - name: Summary
+        run: |
+          echo "image   ghcr.io/dmytro-rohov/mytko-tasks@${{ steps.push.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "source  ${{ inputs.source_sha }}" >> "$GITHUB_STEP_SUMMARY"

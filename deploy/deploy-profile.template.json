@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "project_id": "todo-mytko-tasks",
+  "environment_id": "production",
+  "host_id": "mary-vps",
+  "lifecycle": "existing",
+  "namespace": "mytko-tasks",
+  "registry": "ghcr.io/dmytro-rohov",
+  "networks": ["mytko-tasks-private"],
+  "volumes": [],
+  "services": [
+    {
+      "name": "mytko-tasks-app",
+      "image": "ghcr.io/dmytro-rohov/mytko-tasks@__IMAGE_DIGEST__",
+      "networks": ["mytko-tasks-private"],
+      "volumes": [],
+      "ports": [{"host_ip": "127.0.0.1", "host_port": 3100, "container_port": 3000}],
+      "limits": {"cpus": 0.5, "memory_bytes": 268435456, "pids": 128},
+      "health": {"path": "/healthz", "port": 3000, "interval_seconds": 15, "timeout_seconds": 5, "retries": 3, "start_period_seconds": 20},
+      "env_refs": ["DATABASE_URL", "PG_POOL_MAX", "PG_STATEMENT_TIMEOUT_MS", "PUBLIC_ORIGIN", "TRUST_PROXY",
+                   "AUTH_USERNAME", "AUTH_PASSWORD_HASH", "RATE_LIMIT_WINDOW_MS", "RATE_LIMIT_MAX",
+                   "AUTH_FAIL_WINDOW_MS", "AUTH_FAIL_MAX", "SHUTDOWN_TIMEOUT_MS"],
+      "user": "1000:1000",
+      "read_only_rootfs": true,
+      "restart": "unless-stopped"
+    }
+  ],
+  "route": {"hostname": "tasks.mytko.dev", "service": "mytko-tasks-app", "port": 3100},
+  "database": {"required": true, "resource": "tasks", "migration": "required"}
+}
