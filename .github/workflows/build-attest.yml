@@ -28,6 +28,7 @@ env:
   NODE_IMAGE: node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
   BUILDER_ID: gha-todo-app
   PREDICATE_TYPE: https://mytko.dev/attestation/runtime-statement/v1
+  INPUTS_PREDICATE_TYPE: https://mytko.dev/attestation/build-inputs/v1
   OIDC_ISSUER: https://token.actions.githubusercontent.com
 
 jobs:
@@ -81,6 +82,23 @@ jobs:
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           image="$repo@$digest"
           cosign sign --yes "$image"
+          # Build inputs measured HERE, on the runner and workflow ref that produced the image, and signed with it:
+          # mode=attest copies them from this attestation instead of measuring its own runner.
+          h() { printf 'sha256:%s' "$(sha256sum | cut -d' ' -f1)"; }
+          python3 - "$image" "$SHA" \
+            "$(h < Dockerfile)" "$(cat backend/package-lock.json frontend/package-lock.json | h)" \
+            "$(printf '%s' "$NODE_IMAGE" | h)" "$(docker buildx version | h)" \
+            "$(printf 'NODE_IMAGE=%s\nGIT_REVISION=%s\n' "$NODE_IMAGE" "$SHA" | h)" \
+            "$(printf 'docker buildx build --platform linux/amd64 --provenance=false --sbom=false --build-arg NODE_IMAGE=%s --build-arg GIT_REVISION=%s .\n' "$NODE_IMAGE" "$SHA" | h)" \
+            > "$GITHUB_WORKSPACE/build-inputs.json" <<'PY'
+          import json, sys
+          image, sha, recipe, deps, base, tool, params, invocation = sys.argv[1:]
+          print(json.dumps({"version": 1, "image": image, "merged_sha": sha, "platform": "linux/amd64",
+                            "inputs": {"recipe": recipe, "dependencies": deps, "base_images": base,
+                                       "toolchain": tool, "parameters": params, "invocation": invocation}},
+                           sort_keys=True))
+          PY
+          cosign attest --yes --type "$INPUTS_PREDICATE_TYPE" --predicate "$GITHUB_WORKSPACE/build-inputs.json" "$image"
           echo "$image" > "$GITHUB_WORKSPACE/image.txt"
           echo "IMAGE=$image" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -160,21 +178,45 @@ jobs:
           set -euo pipefail
           [[ "$PROJECT_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]
           [[ "$RELEASE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]
+          # The build inputs signed by the build run of this same workflow identity (never re-measured here).
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build-attest.yml@refs/heads/main"
+          cosign verify-attestation --type "$INPUTS_PREDICATE_TYPE" --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$OIDC_ISSUER" "$IMAGE" > "$GITHUB_WORKSPACE/inputs.jsonl"
+          eval "$(python3 - "$GITHUB_WORKSPACE/inputs.jsonl" "$IMAGE" "$SHA" <<'PY'
+          import base64, json, re, shlex, sys
+          path, image, sha = sys.argv[1:]
+          found = []
+          for line in open(path):
+              if not line.strip():
+                  continue
+              statement = json.loads(base64.b64decode(json.loads(line)["payload"]))
+              predicate = statement.get("predicate") or {}
+              subject = (statement.get("subject") or [{}])[0]
+              if (predicate.get("version") == 1 and predicate.get("image") == image and predicate.get("merged_sha") == sha
+                      and subject.get("digest", {}).get("sha256") == image.split(":")[-1]):
+                  found.append(predicate["inputs"])
+          if len({json.dumps(f, sort_keys=True) for f in found}) != 1:
+              sys.exit("expected exactly one signed set of build inputs for this image and commit")
+          inputs = found[0]
+          names = ("recipe", "dependencies", "base_images", "toolchain", "parameters", "invocation")
+          if set(inputs) != set(names) or not all(re.fullmatch(r"sha256:[0-9a-f]{64}", inputs[n]) for n in names):
+              sys.exit("malformed build inputs")
+          for name in names:
+              print(f"input_{name}={shlex.quote(inputs[name])}")
+          PY
+          )"
+          # The recipe and dependencies of this commit must still be what the build measured.
           h() { printf 'sha256:%s' "$(sha256sum | cut -d' ' -f1)"; }
-          recipe="$(h < Dockerfile)"
-          deps="$(cat backend/package-lock.json frontend/package-lock.json | h)"
-          base="$(printf '%s' "$NODE_IMAGE" | h)"
-          tool="$(docker buildx version | h)"
-          params="$(printf 'NODE_IMAGE=%s\nGIT_REVISION=%s\n' "$NODE_IMAGE" "$SHA" | h)"
-          # The exact build invocation of mode=build (every parameter; no credential, no mutable tag).
-          invocation="$(printf 'docker buildx build --platform linux/amd64 --provenance=false --sbom=false --build-arg NODE_IMAGE=%s --build-arg GIT_REVISION=%s .\n' "$NODE_IMAGE" "$SHA" | h)"
+          test "$(h < Dockerfile)" = "$input_recipe"
+          test "$(cat backend/package-lock.json frontend/package-lock.json | h)" = "$input_dependencies"
           python3 "$GITHUB_WORKSPACE/ci/scripts/oci/make_statement.py" \
             --project-id "$PROJECT_ID" --release-id "$RELEASE_ID" \
             --merged-sha "$SHA" --source-archive-digest "$ARCHIVE" \
             --profile-digest "$PROFILE" --image "$IMAGE" \
             --builder "$BUILDER_ID" --platform linux/amd64 \
-            --input "recipe=$recipe" --input "dependencies=$deps" --input "base_images=$base" \
-            --input "toolchain=$tool" --input "parameters=$params" --input "invocation=$invocation" \
+            --input "recipe=$input_recipe" --input "dependencies=$input_dependencies" \
+            --input "base_images=$input_base_images" --input "toolchain=$input_toolchain" \
+            --input "parameters=$input_parameters" --input "invocation=$input_invocation" \
             > "$GITHUB_WORKSPACE/statement.json"
           sha256sum "$GITHUB_WORKSPACE/statement.json"
       - name: Attest (keyless)
