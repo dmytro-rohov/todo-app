@@ -305,7 +305,7 @@ describe("input handling", () => {
     const res = await post("/api/tasks", { title: "  Kupić mleko  ", date: "2026-10-30", categoryId: 2 });
     assert.equal(res.status, 201);
     // no space given and no built-in space in the fake database: the task is stored without one (= private)
-    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null, null, null]);
+    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null, null, null, null, false]);
   });
 
   test("unknown category -> 400 instead of 500", async () => {
@@ -499,7 +499,7 @@ describe('TASKS-06 private surface', () => {
 
 describe("PATCH task contract", () => {
   test("returns the same camelCase task shape as reads and persists status/order", async () => {
-    const returned = { id: 7, title: "Updated", completed: true, date: "2026-10-31", categoryId: null, description: "Details", status: "done", priority: "P1", position: 2, dueDate: null, createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T01:00:00.000Z", completedAt: "2026-10-31T01:00:00.000Z", archivedAt: null, spaceId: 2, projectId: null, labelIds: [], subtaskCount: 0, subtaskDoneCount: 0, noteCount: 0 };
+    const returned = { id: 7, title: "Updated", completed: true, date: "2026-10-31", categoryId: null, description: "Details", status: "done", priority: "P1", position: 2, dueDate: null, createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T01:00:00.000Z", completedAt: "2026-10-31T01:00:00.000Z", archivedAt: null, spaceId: 2, projectId: null, assigneeId: null, reviewRequestedAt: null, labelIds: [], subtaskCount: 0, subtaskDoneCount: 0, noteCount: 0, trackedSeconds: 0, timerStartedAt: null };
     const before = { ...returned, status: "todo", completed: false, completedAt: null, position: 0 };
     let params;
     let reads = 0;
@@ -513,7 +513,7 @@ describe("PATCH task contract", () => {
       const res = await ctx.request("/api/tasks/7", { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ status: "done", position: 2 }) });
       assert.equal(res.status, 200);
       assert.deepEqual(await res.json(), returned);
-      assert.deepEqual(params, ["done", 2, true, 7]);
+      assert.deepEqual(params, [2, "done", 7]);
       assert.deepEqual(history, [[7, ["status"], ["todo"], ["done"], "owner"]]); // position is not history
     } finally { await ctx.close(); }
   });

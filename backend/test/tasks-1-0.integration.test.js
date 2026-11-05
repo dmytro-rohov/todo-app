@@ -38,8 +38,8 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query(`DROP TABLE IF EXISTS public.task_history, public.task_subtasks, public.task_notes, public.task_labels,
-      public.tasks, public.projects, public.spaces, public.categories CASCADE`);
+    await owner.query(`DROP TABLE IF EXISTS public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
+      public.task_labels, public.tasks, public.projects, public.spaces, public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
     await runMigrations(owner, { dir: MIGRATIONS_DIR, appRole: APP_ROLE, log: () => {} });
     if (ctx) await ctx.close();
@@ -191,8 +191,58 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
     assert.equal((await call("/api/tasks")).body[0].title, "Nowy tytuł");
   });
 
+  test("needs review is a fourth board status that keeps completion consistent", async () => {
+    const task = await newTask({ status: "needs_review" });
+    assert.deepEqual([task.status, task.completed, Boolean(task.reviewRequestedAt)], ["needs_review", false, true]);
+    assert.deepEqual((await call("/api/tasks?status=needs_review")).body.map(t => t.id), [task.id]);
+    assert.deepEqual((await call("/api/tasks?status=in_progress")).body, []);
+    const done = (await call(`/api/tasks/${task.id}`, "PATCH", { status: "done" })).body;
+    assert.deepEqual([done.status, done.completed, done.reviewRequestedAt], ["done", true, null]);
+    const board = (await call("/api/tasks")).body.map(({ id, status, position }) => ({ id, status, position: Number(position) }));
+    assert.equal((await call("/api/tasks/move", "POST", { id: task.id, status: "needs_review", beforeId: null, expected: board })).status, 200);
+    const moved = (await call("/api/tasks")).body[0];
+    assert.deepEqual([moved.status, moved.completed, moved.completedAt], ["needs_review", false, null]);
+    const row = (await owner.query("SELECT status FROM tasks WHERE id = $1", [task.id])).rows[0];
+    assert.equal(row.status, "in_progress"); // stored inside the original CHECK
+    assert.equal((await call(`/api/tasks/${task.id}`, "PATCH", { status: "review" })).status, 400);
+  });
+
+  test("assignees: filter, history and unassignment on delete", async () => {
+    const person = await call("/api/assignees", "POST", { name: "Dima Rohov", color: "#B7E34D" });
+    assert.deepEqual([person.status, person.body.color], [201, "#b7e34d"]);
+    const task = await newTask({ assigneeId: person.body.id });
+    assert.equal(task.assigneeId, person.body.id);
+    assert.deepEqual((await call(`/api/tasks?assigneeId=${person.body.id}`)).body.map(t => t.id), [task.id]);
+    assert.equal((await call("/api/tasks", "POST", { title: "Zadanie", date: "2026-11-05", assigneeId: 999999 })).status, 400);
+    assert.equal((await call(`/api/assignees/${person.body.id}`, "PATCH", { name: "Dima R." })).body.name, "Dima R.");
+    assert.equal((await call(`/api/assignees/${person.body.id}`, "DELETE")).status, 200);
+    assert.equal((await call("/api/tasks")).body[0].assigneeId, null);
+    const history = (await call(`/api/tasks/${task.id}/history`)).body;
+    assert.deepEqual([history[0].field, history[0].newValue], ["assignee_id", null]);
+  });
+
+  test("timer: start moves to do into progress, one timer runs at a time, leaving progress stops it", async () => {
+    const first = await newTask();
+    const second = await newTask();
+    const started = (await call(`/api/tasks/${first.id}/timer/start`, "POST")).body;
+    assert.equal(started.status, "in_progress");
+    assert.ok(started.timerStartedAt);
+    assert.equal((await call(`/api/tasks/${first.id}/timer/start`, "POST")).status, 200); // idempotent
+    await owner.query("UPDATE task_time_entries SET started_at = started_at - interval '90 minutes'");
+    await call(`/api/tasks/${second.id}/timer/start`, "POST");
+    const [a, b] = (await call("/api/tasks")).body;
+    assert.equal(a.timerStartedAt, null); // stopped by the other start
+    assert.ok(a.trackedSeconds >= 5400);
+    assert.ok(b.timerStartedAt);
+    assert.equal((await call(`/api/tasks/${second.id}`, "PATCH", { status: "needs_review" })).body.timerStartedAt, null);
+    assert.equal((await call(`/api/tasks/${second.id}/timer/start`, "POST")).status, 409);
+    await call(`/api/tasks/${first.id}/timer/start`, "POST");
+    assert.equal((await call(`/api/tasks/${first.id}/timer/stop`, "POST")).body.timerStartedAt, null);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM task_time_entries WHERE ended_at IS NULL")).rows[0].n, 0);
+  });
+
   test("the application role reads and writes the new tables but cannot change their structure", async () => {
-    for (const table of ["spaces", "projects", "task_labels", "task_notes", "task_subtasks", "task_history"]) {
+    for (const table of ["spaces", "projects", "assignees", "task_labels", "task_notes", "task_subtasks", "task_time_entries", "task_history"]) {
       await appPool.query(`SELECT 1 FROM ${table} LIMIT 1`);
       await assert.rejects(appPool.query(`ALTER TABLE ${table} ADD COLUMN x int`), /must be owner|permission denied/);
     }

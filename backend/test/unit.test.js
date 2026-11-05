@@ -121,7 +121,7 @@ describe("validation", () => {
 describe("migrations on disk", () => {
   test("are ordered and checksummed", () => {
     const migrations = listMigrations(path.join(__dirname, "..", "drizzle"));
-    assert.deepEqual(migrations.map(m => m.version), ["0000_initial", "0001_spaces_projects_labels_notes"]);
+    assert.deepEqual(migrations.map(m => m.version), ["0000_initial", "0001_tasks_1_0"]);
     for (const m of migrations) assert.match(m.hash, /^[0-9a-f]{64}$/);
     assert.deepEqual(migrations.map(m => m.when).slice().sort((a, b) => a - b), migrations.map(m => m.when));
   });

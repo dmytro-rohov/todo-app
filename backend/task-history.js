@@ -11,6 +11,7 @@ const TRACKED = {
   labelIds: "labels",
   spaceId: "space_id",
   projectId: "project_id",
+  assigneeId: "assignee_id",
   archivedAt: "archived_at"
 };
 const MAX_VALUE = 200;

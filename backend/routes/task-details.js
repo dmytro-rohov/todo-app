@@ -1,6 +1,10 @@
 // Per-task collections: notes (dated log), subtasks (checklist) and the read-only change history.
 const express = require("express");
 const { parseId, validateText } = require("../validation");
+const { withTransaction } = require("../db");
+const { taskChanges, recordTaskChanges } = require("../task-history");
+const { statusAssignmentsSql } = require("../task-status");
+const { loadTask } = require("./tasks");
 
 const NOTE_COLUMNS = `id, task_id AS "taskId", body, created_at AS "createdAt", updated_at AS "updatedAt"`;
 const SUBTASK_COLUMNS = `id, task_id AS "taskId", title, done, position, created_at AS "createdAt", completed_at AS "completedAt"`;
@@ -38,6 +42,31 @@ module.exports = function createTaskDetailsRouter(pool) {
       `SELECT id, field, old_value AS "oldValue", new_value AS "newValue", actor, changed_at AS "changedAt"
        FROM task_history WHERE task_id = $1 ORDER BY id DESC LIMIT ${HISTORY_LIMIT}`, [req.taskId]);
     res.json(result.rows);
+  });
+
+  // Timer. Starting one stops any other running timer (one task is worked on at a time) and moves a "to do"
+  // task to "in progress". Both return the task.
+  router.post("/:id/timer/start", async (req, res) => {
+    const task = await withTransaction(pool, async client => {
+      const before = await loadTask(client, req.taskId, { lock: true });
+      if (before.status === "done" || before.status === "needs_review") return { conflict: true };
+      await client.query("UPDATE task_time_entries SET ended_at = now() WHERE ended_at IS NULL AND task_id <> $1", [req.taskId]);
+      await client.query(
+        "INSERT INTO task_time_entries (task_id) VALUES ($1) ON CONFLICT (task_id) WHERE ended_at IS NULL DO NOTHING", [req.taskId]);
+      if (before.status === "todo") {
+        await client.query(`UPDATE tasks SET ${statusAssignmentsSql("$1").join(", ")}, updated_at = now() WHERE id = $2`, ["in_progress", req.taskId]);
+      }
+      const after = await loadTask(client, req.taskId);
+      await recordTaskChanges(client, req.taskId, taskChanges(before, after));
+      return after;
+    });
+    if (task.conflict) return res.status(409).json({ message: "Only open tasks can be timed" });
+    res.json(task);
+  });
+
+  router.post("/:id/timer/stop", async (req, res) => {
+    await pool.query("UPDATE task_time_entries SET ended_at = now() WHERE task_id = $1 AND ended_at IS NULL", [req.taskId]);
+    res.json(await loadTask(pool, req.taskId));
   });
 
   // notes

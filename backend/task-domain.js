@@ -1,9 +1,9 @@
 const { isValidDate, parseId } = require('./validation');
-const STATUSES = ['todo', 'in_progress', 'done'];
+const { STATUSES } = require('./task-status');
 const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
 function validateTaskPatch(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Invalid request body' };
-  const allowed = ['title','description','status','priority','categoryId','dueDate','position','spaceId','projectId','labelIds'];
+  const allowed = ['title','description','status','priority','categoryId','dueDate','position','spaceId','projectId','labelIds','assigneeId'];
   if (!Object.keys(body).length || Object.keys(body).some(k => !allowed.includes(k))) return { error: 'Unknown or empty task fields' };
   if ('title' in body && (typeof body.title !== 'string' || !body.title.trim() || body.title.trim().length < 3 || body.title.length > 100)) return { error: 'Invalid title' };
   if ('description' in body && (typeof body.description !== 'string' || body.description.length > 5000)) return { error: 'Invalid description' };
@@ -14,9 +14,10 @@ function validateTaskPatch(body) {
   if ('position' in body && (!Number.isSafeInteger(body.position) || body.position < 0)) return { error: 'Invalid position' };
   if ('spaceId' in body && body.spaceId !== null && parseId(body.spaceId) === null) return { error: 'Invalid space' };
   if ('projectId' in body && body.projectId !== null && parseId(body.projectId) === null) return { error: 'Invalid project' };
+  if ('assigneeId' in body && body.assigneeId !== null && parseId(body.assigneeId) === null) return { error: 'Invalid assignee' };
   if ('labelIds' in body && !isLabelList(body.labelIds)) return { error: 'Invalid labels' };
   const value = { ...body, ...('title' in body ? { title: body.title.trim() } : {}) };
-  for (const key of ['categoryId', 'spaceId', 'projectId']) if (value[key] != null) value[key] = Number(value[key]);
+  for (const key of ['categoryId', 'spaceId', 'projectId', 'assigneeId']) if (value[key] != null) value[key] = Number(value[key]);
   if (value.labelIds) value.labelIds = value.labelIds.map(Number);
   return { value };
 }

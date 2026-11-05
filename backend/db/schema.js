@@ -48,6 +48,14 @@ const projects = pgTable("projects", {
   index("projects_space").on(table.spaceId),
 ]);
 
+// People a task can be assigned to (records, not login accounts; a future agent can be one too).
+const assignees = pgTable("assignees", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 80 }).notNull(),
+  color: varchar("color", { length: 7 }).notNull(),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+});
+
 const tasks = pgTable("tasks", {
   id: serial("id").primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
@@ -67,6 +75,10 @@ const tasks = pgTable("tasks", {
   // NULL means the built-in private space: a task is never exposed by accident.
   spaceId: integer("space_id").references(() => spaces.id, { onDelete: "set null" }),
   projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+  assigneeId: integer("assignee_id").references(() => assignees.id, { onDelete: "set null" }),
+  // "Needs review" is status in_progress with this timestamp set: the status CHECK of 0000 cannot be widened inside
+  // Mytko's additive grammar, so the application maps the four board statuses onto it (see task-status.js).
+  reviewRequestedAt: timestamptz("review_requested_at"),
 }, (table) => [
   check("tasks_status_check", sql`${table.status} IN ('todo', 'in_progress', 'done')`),
   check("tasks_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2', 'P3')`),
@@ -74,6 +86,7 @@ const tasks = pgTable("tasks", {
   index("tasks_board_order").using("btree", table.status, table.position, table.id).where(sql`${table.archivedAt} IS NULL`),
   index("tasks_space").on(table.spaceId),
   index("tasks_project").on(table.projectId),
+  index("tasks_assignee").on(table.assigneeId),
 ]);
 
 const taskLabels = pgTable("task_labels", {
@@ -109,6 +122,17 @@ const taskSubtasks = pgTable("task_subtasks", {
   index("task_subtasks_task").on(table.taskId),
 ]);
 
+// Time tracking: one row per work interval; at most one running interval (ended_at NULL) per task.
+const taskTimeEntries = pgTable("task_time_entries", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  startedAt: timestamptz("started_at").defaultNow().notNull(),
+  endedAt: timestamptz("ended_at"),
+}, (table) => [
+  index("task_time_entries_task").on(table.taskId),
+  uniqueIndex("task_time_entries_running").on(table.taskId).where(sql`${table.endedAt} IS NULL`),
+]);
+
 // Change log written by the application in the same transaction as the change it records.
 const taskHistory = pgTable("task_history", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
@@ -122,4 +146,6 @@ const taskHistory = pgTable("task_history", {
   index("task_history_task").on(table.taskId),
 ]);
 
-module.exports = { categories, spaces, projects, tasks, taskLabels, taskNotes, taskSubtasks, taskHistory };
+module.exports = {
+  categories, spaces, projects, assignees, tasks, taskLabels, taskNotes, taskSubtasks, taskTimeEntries, taskHistory
+};

@@ -122,10 +122,15 @@ function validateProject(data, { partial = false } = {}) {
   return result;
 }
 
+function validateAssignee(data, { partial = false } = {}) {
+  if (isBody(data) && "position" in data) return { error: "Unknown or empty fields" };
+  return validateNamed(data, { partial, maxName: 80 });
+}
+
 function validateText(value, { min = 1, max }) {
   return typeof value === "string" && value.trim().length >= min && value.length <= max;
 }
 
 module.exports = {
-  parseId, isValidDate, validateTask, validateCategory, validateSpace, validateProject, validateText
+  parseId, isValidDate, validateTask, validateCategory, validateSpace, validateProject, validateAssignee, validateText
 };

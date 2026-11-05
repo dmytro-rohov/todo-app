@@ -3,6 +3,7 @@ const { withTransaction } = require("../db");
 const { defaultSpaces } = require("../spaces");
 const { validateTaskPatch } = require("../task-domain");
 const { taskChanges, recordTaskChanges } = require("../task-history");
+const { STATUSES, statusSql, statusFilterSql, statusAssignmentsSql } = require("../task-status");
 
 const { parseId, isValidDate, validateTask } = require("../validation");
 
@@ -12,17 +13,27 @@ const TASK_COLUMNS = `
   title,
   completed,
   TO_CHAR(date, 'YYYY-MM-DD') AS date,
-  category_id AS "categoryId", description, status, priority, position,
+  category_id AS "categoryId", description, ${statusSql()} AS status, priority, position,
   TO_CHAR(due_date, 'YYYY-MM-DD') AS "dueDate",
   created_at AS "createdAt", updated_at AS "updatedAt", completed_at AS "completedAt", archived_at AS "archivedAt",
-  space_id AS "spaceId", project_id AS "projectId",
+  space_id AS "spaceId", project_id AS "projectId", assignee_id AS "assigneeId", review_requested_at AS "reviewRequestedAt",
   ARRAY_REMOVE(ARRAY[category_id] || ARRAY(
     SELECT l.category_id FROM task_labels l
     WHERE l.task_id = tasks.id AND l.category_id IS DISTINCT FROM tasks.category_id ORDER BY l.id), NULL) AS "labelIds",
   (SELECT count(*)::int FROM task_subtasks s WHERE s.task_id = tasks.id) AS "subtaskCount",
   (SELECT count(*)::int FROM task_subtasks s WHERE s.task_id = tasks.id AND s.done) AS "subtaskDoneCount",
-  (SELECT count(*)::int FROM task_notes n WHERE n.task_id = tasks.id) AS "noteCount"
+  (SELECT count(*)::int FROM task_notes n WHERE n.task_id = tasks.id) AS "noteCount",
+  (SELECT COALESCE(SUM(EXTRACT(EPOCH FROM COALESCE(e.ended_at, now()) - e.started_at)), 0)::int
+    FROM task_time_entries e WHERE e.task_id = tasks.id) AS "trackedSeconds",
+  (SELECT e.started_at FROM task_time_entries e WHERE e.task_id = tasks.id AND e.ended_at IS NULL) AS "timerStartedAt"
 `;
+
+// Work stops being timed when a task leaves "in progress".
+async function stopTimerUnlessInProgress(db, taskId, status) {
+  if (status !== "in_progress") {
+    await db.query("UPDATE task_time_entries SET ended_at = now() WHERE task_id = $1 AND ended_at IS NULL", [taskId]);
+  }
+}
 
 // PostgreSQL foreign_key_violation: category_id points to a missing category.
 const FOREIGN_KEY_VIOLATION = "23503";
@@ -89,10 +100,14 @@ module.exports = function createTasksRouter(pool) {
   router.get("/", async (req, res) => {
     const conditions = ["archived_at IS NULL"];
     const params = [];
-    for (const [key, column, choices] of [["status", "status", ["todo", "in_progress", "done"]], ["priority", "priority", ["P0", "P1", "P2", "P3"]], ["projectId", "project_id", null]]) {
+    for (const [key, column, choices] of [["priority", "priority", ["P0", "P1", "P2", "P3"]], ["projectId", "project_id", null], ["assigneeId", "assignee_id", null]]) {
       if (req.query[key] === undefined) continue;
       if (choices ? !choices.includes(req.query[key]) : parseId(req.query[key]) === null) return res.status(400).json({ message: "Invalid filter" });
       params.push(req.query[key]); conditions.push(`${column} = $${params.length}`);
+    }
+    if (req.query.status !== undefined) {
+      if (!STATUSES.includes(req.query.status)) return res.status(400).json({ message: "Invalid filter" });
+      params.push(req.query.status); conditions.push(statusFilterSql(`$${params.length}`));
     }
     if (req.query.categoryId !== undefined) {
       const id = parseId(req.query.categoryId);
@@ -119,7 +134,7 @@ module.exports = function createTasksRouter(pool) {
       return res.status(400).json({ message: error });
     }
 
-    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position","spaceId","projectId","labelIds"].includes(key)));
+    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position","spaceId","projectId","labelIds","assigneeId"].includes(key)));
     const extraValidation = Object.keys(extras).length ? validateTaskPatch(extras) : { value: {} };
     if (extraValidation.error) return res.status(400).json({ message: extraValidation.error });
     const domain = extraValidation.value;
@@ -136,12 +151,16 @@ module.exports = function createTasksRouter(pool) {
         const inserted = await client.query(
           `WITH next AS (SELECT nextval(pg_get_serial_sequence('tasks', 'id')) AS id)
           INSERT INTO tasks
-          (id, title, completed, date, category_id, description, status, priority, due_date, position, completed_at, space_id, project_id)
+          (id, title, completed, date, category_id, description, status, priority, due_date, position, completed_at, space_id, project_id,
+           assignee_id, review_requested_at)
           SELECT next.id, $1::varchar, $2::boolean, $3::date, $4::integer, $5::text, $6::text, $7::text, $8::date,
-            COALESCE($9::bigint, next.id), CASE WHEN $2::boolean THEN now() ELSE NULL END, $10::integer, $11::integer
+            COALESCE($9::bigint, next.id), CASE WHEN $2::boolean THEN now() ELSE NULL END, $10::integer, $11::integer,
+            $12::integer, CASE WHEN $13::boolean THEN now() ELSE NULL END
           FROM next
           RETURNING id`,
-          [value.title, status === "done", value.date, labelIds ? labelIds[0] ?? null : value.categoryId, domain.description || "", status, domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null, placement.spaceId ?? null, placement.projectId ?? null]
+          [value.title, status === "done", value.date, labelIds ? labelIds[0] ?? null : value.categoryId, domain.description || "",
+            status === "needs_review" ? "in_progress" : status, domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null,
+            placement.spaceId ?? null, placement.projectId ?? null, domain.assigneeId ?? null, status === "needs_review"]
         );
         const id = inserted.rows[0].id;
         if (labelIds && labelIds.length > 1) await setLabels(client, id, labelIds);
@@ -208,15 +227,15 @@ module.exports = function createTasksRouter(pool) {
         if ("spaceId" in value || "projectId" in value) {
           Object.assign(fields, await resolvePlacement(client, before, value, await defaultSpaces(client)));
         }
-        const columns = { title: "title", description: "description", status: "status", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", spaceId: "space_id", projectId: "project_id" };
+        const { status, ...plain } = fields;
+        const columns = { title: "title", description: "description", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", spaceId: "space_id", projectId: "project_id", assigneeId: "assignee_id" };
         const params = [];
-        const assignments = Object.entries(fields).map(([key, val]) => {
+        const assignments = Object.entries(plain).map(([key, val]) => {
           params.push(val); return `${columns[key]} = $${params.length}`;
         });
-        if (value.status !== undefined) {
-          params.push(value.status === "done");
-          assignments.push(`completed = $${params.length}`);
-          assignments.push(value.status === "done" ? "completed_at = COALESCE(completed_at, now())" : "completed_at = NULL");
+        if (status !== undefined) {
+          params.push(status);
+          assignments.push(...statusAssignmentsSql(`$${params.length}`));
         }
         params.push(id);
         await client.query(`UPDATE tasks SET ${[...assignments, "updated_at = now()"].join(", ")} WHERE id = $${params.length}`, params);
@@ -226,6 +245,7 @@ module.exports = function createTasksRouter(pool) {
           // The new primary label is no longer an additional one.
           await client.query("DELETE FROM task_labels WHERE task_id = $1 AND category_id = $2", [id, value.categoryId]);
         }
+        if (status !== undefined) await stopTimerUnlessInProgress(client, id, status);
         const after = await loadTask(client, id);
         await recordTaskChanges(client, id, taskChanges(before, after));
         return after;
@@ -263,6 +283,7 @@ module.exports = function createTasksRouter(pool) {
             status = s.next_status,
             completed = (s.next_status = 'done'),
             completed_at = CASE WHEN s.next_status = 'done' THEN COALESCE(tasks.completed_at, now()) ELSE NULL END,
+            review_requested_at = CASE WHEN s.next_status = tasks.status THEN tasks.review_requested_at ELSE NULL END,
             updated_at = now()
           FROM (
             SELECT CASE WHEN $2::boolean IS DISTINCT FROM completed
@@ -278,6 +299,7 @@ module.exports = function createTasksRouter(pool) {
           await client.query("DELETE FROM task_labels WHERE task_id = $1 AND category_id = $2", [id, value.categoryId]);
         }
         const after = await loadTask(client, id);
+        await stopTimerUnlessInProgress(client, id, after.status);
         await recordTaskChanges(client, id, taskChanges(before, after));
         return after;
       });
@@ -295,3 +317,4 @@ module.exports = function createTasksRouter(pool) {
 
 module.exports.TASK_COLUMNS = TASK_COLUMNS;
 module.exports.loadTask = loadTask;
+module.exports.stopTimerUnlessInProgress = stopTimerUnlessInProgress;

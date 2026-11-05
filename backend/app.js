@@ -4,6 +4,7 @@ const createTasksRouter = require("./routes/tasks");
 const createCategoriesRouter = require("./routes/categories");
 const createSpacesRouter = require("./routes/spaces");
 const createProjectsRouter = require("./routes/projects");
+const createAssigneesRouter = require("./routes/assignees");
 const createTaskDetailsRouter = require("./routes/task-details");
 const { checkSchema } = require("./migrations");
 const {
@@ -76,6 +77,7 @@ function createApp({ config, pool, migrationVersions = [] }) {
   api.use("/categories", createCategoriesRouter(pool));
   api.use("/spaces", createSpacesRouter(pool));
   api.use("/projects", createProjectsRouter(pool));
+  api.use("/assignees", createAssigneesRouter(pool));
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });
