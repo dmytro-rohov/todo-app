@@ -1,5 +1,5 @@
 @use "sass:meta";
-@layer reset, base, components, main, utilities;
+@layer reset, base, components, main, utilities, auth;
 
 @layer reset {
     @include meta.load-css("reset");
@@ -856,4 +856,8 @@ header, footer {
 #kanban .drop-indicator { border-top: 4px solid #5543c4; }
 #kanban .board-card { transition: border-color .15s; }
 @media (prefers-reduced-motion: reduce) { #kanban * { transition: none !important; animation: none !important; } }
+}
+
+@layer auth {
+    @include meta.load-css("auth");
 }

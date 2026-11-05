@@ -6,9 +6,12 @@ const createSpacesRouter = require("./routes/spaces");
 const createProjectsRouter = require("./routes/projects");
 const createAssigneesRouter = require("./routes/assignees");
 const createTaskDetailsRouter = require("./routes/task-details");
+const { createAuthRouter } = require("./routes/auth");
+const { createSessionStore, cookieSettings } = require("./sessions");
 const { checkSchema } = require("./migrations");
 const {
-  basicAuth,
+  ownerAuth,
+  ownerCredentials,
   csrfProtection,
   rateLimit,
   securityHeaders
@@ -54,24 +57,29 @@ function createApp({ config, pool, migrationVersions = [] }) {
     }
   });
 
-  if (!config.auth.disabled) {
-    const auth = basicAuth({
-      username: config.auth.username,
-      passwordHash: config.auth.passwordHash,
-      failWindowMs: config.rateLimit.authFailWindowMs,
-      failMax: config.rateLimit.authFailMax
-    });
-    stoppables.push(auth);
-    app.use(auth);
-  }
+  const sessions = createSessionStore(pool, { ttlMs: config.auth.sessionTtlMs });
+  const cookie = cookieSettings(config.publicOrigin);
+  const credentials = config.auth.disabled ? null : ownerCredentials({
+    username: config.auth.username,
+    passwordHash: config.auth.passwordHash,
+    failWindowMs: config.rateLimit.authFailWindowMs,
+    failMax: config.rateLimit.authFailMax
+  });
+  if (credentials) stoppables.push(credentials);
 
   const api = express.Router();
   api.use((req, res, next) => {
     res.set("Cache-Control", "no-store");
     next();
   });
-  api.use(csrfProtection({ publicOrigin: config.publicOrigin }));
-  api.use(express.json({ limit: "10kb", inflate: false }));
+  const csrf = csrfProtection({ publicOrigin: config.publicOrigin });
+  const json = express.json({ limit: "10kb", inflate: false });
+  // The login screen's API is reachable without a session; everything after it is not, and anonymous requests are
+  // refused before any other processing.
+  api.use("/auth", csrf, json, createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled }));
+  if (credentials) api.use(ownerAuth({ credentials, sessions, cookieName: cookie.name }));
+  api.use(csrf);
+  api.use(json);
   api.use("/tasks", createTasksRouter(pool));
   api.use("/tasks", createTaskDetailsRouter(pool));
   api.use("/categories", createCategoriesRouter(pool));
@@ -83,6 +91,7 @@ function createApp({ config, pool, migrationVersions = [] }) {
   });
   app.use("/api", api);
 
+  // The app shell and assets hold no data and render the login screen, so they are public.
   app.use(express.static(config.staticDir, { index: "index.html", dotfiles: "ignore" }));
 
   app.use((req, res) => {

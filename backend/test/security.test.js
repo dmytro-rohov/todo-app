@@ -103,11 +103,18 @@ describe("authentication", () => {
   before(async () => { ctx = await startApp({ pool: fakePool() }); });
   after(() => ctx.close());
 
-  for (const path of ["/", "/index.html", "/js/main.js", "/api/tasks", "/api/categories"]) {
-    test(`${path} requires credentials`, async () => {
+  for (const path of ["/api/tasks", "/api/categories", "/api/spaces", "/api/tasks/1/history"]) {
+    test(`${path} requires a session or credentials`, async () => {
       const res = await ctx.request(path, { auth: null });
       assert.equal(res.status, 401);
-      assert.match(res.headers.get("www-authenticate"), /^Basic realm="Mytko Tasks"/);
+      // no Basic challenge: the browser must show the app's login screen, not its own dialog
+      assert.equal(res.headers.get("www-authenticate"), null);
+    });
+  }
+
+  for (const path of ["/", "/index.html", "/js/main.js"]) {
+    test(`${path} (app shell, no data) is public`, async () => {
+      assert.equal((await ctx.request(path, { auth: null })).status, 200);
     });
   }
 
@@ -191,7 +198,7 @@ describe("secure headers", () => {
   });
 
   test("401 responses also carry security headers", async () => {
-    const res = await ctx.request("/", { auth: null });
+    const res = await ctx.request("/api/tasks", { auth: null });
     assert.ok(res.headers.get("content-security-policy"));
   });
 });
@@ -478,10 +485,10 @@ describe('TASKS-06 private surface', () => {
   let ctx;
   before(async()=>{ctx=await startApp({pool:fakePool()});});
   after(()=>ctx.close());
-  for(const [method,path] of [['POST','/api/tasks/move'],['PATCH','/api/tasks/1'],['GET','/api/archive'],['GET','/api/attachments/1'],['GET','/api/export'],['GET','/dist/style.css']]) {
+  for(const [method,path] of [['POST','/api/tasks/move'],['PATCH','/api/tasks/1'],['GET','/api/archive'],['GET','/api/attachments/1'],['GET','/api/export']]) {
     test(`anonymous ${method} ${path} is challenged before routing`,async()=>{
       const res=await ctx.request(path,{method,auth:null});
-      assert.equal(res.status,401); assert.match(res.headers.get('www-authenticate'),/^Basic /);
+      assert.equal(res.status,401); assert.equal(res.headers.get('www-authenticate'),null);
       assert.equal(res.headers.get('cache-control'),'no-store');
       assert.equal(res.headers.get('set-cookie'),null);
     });
@@ -524,5 +531,45 @@ describe("PATCH task contract", () => {
       const res = await ctx.request("/api/tasks/7", { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ title: "x".repeat(101) }) });
       assert.equal(res.status, 400);
     } finally { await ctx.close(); }
+  });
+});
+
+describe("login screen API", () => {
+  let ctx;
+  before(async () => { ctx = await startApp({ pool: fakePool(), env: { AUTH_FAIL_MAX: "3" } }); });
+  after(() => ctx.close());
+  const login = (body, headers = SAME_ORIGIN_JSON) =>
+    ctx.request("/api/auth/login", { method: "POST", auth: null, headers, body: JSON.stringify(body) });
+
+  test("session state is readable anonymously and reveals nothing", async () => {
+    const res = await ctx.request("/api/auth/session", { auth: null });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { authenticated: false, login: null, method: null, expiresAt: null, ttlSeconds: 604800, mytkoLogin: false });
+  });
+
+  test("a correct login sets a host-only, HttpOnly, Secure, SameSite=Strict session cookie", async () => {
+    const res = await login({ login: USERNAME, password: "correct horse battery staple" });
+    assert.equal(res.status, 200);
+    assert.deepEqual((({ authenticated, login: name, method }) => ({ authenticated, name, method }))(await res.json()),
+      { authenticated: true, name: USERNAME, method: "password" });
+    const cookie = res.headers.get("set-cookie");
+    assert.match(cookie, /^__Host-mytko-tasks-session=[A-Za-z0-9_-]{43};/);
+    for (const attribute of [/; Path=\//, /; HttpOnly/, /; Secure/, /; SameSite=Strict/, /; Expires=/]) assert.match(cookie, attribute);
+    assert.doesNotMatch(cookie, /Domain=/i);
+  });
+
+  test("bad input, cross-site requests and wrong passwords are refused; failures lock the client out", async () => {
+    assert.equal((await login({ login: USERNAME })).status, 400);
+    assert.equal((await login({ login: USERNAME, password: "x" }, { ...SAME_ORIGIN_JSON, "sec-fetch-site": "cross-site" })).status, 403);
+    for (let i = 0; i < 3; i++) assert.equal((await login({ login: USERNAME, password: `guess-${i}` })).status, 401);
+    const locked = await login({ login: USERNAME, password: "correct horse battery staple" });
+    assert.equal(locked.status, 429);
+    assert.ok(Number(locked.headers.get("retry-after")) > 0);
+  });
+
+  test("logout clears the cookie", async () => {
+    const res = await ctx.request("/api/auth/logout", { method: "POST", auth: null, headers: SAME_ORIGIN_JSON, body: "{}" });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("set-cookie"), /^__Host-mytko-tasks-session=;.*Expires=Thu, 01 Jan 1970/);
   });
 });

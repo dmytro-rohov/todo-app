@@ -12,6 +12,8 @@ export async function request(path, options = {}) {
     const response = await fetch(API_BASE + path, init);
     const text = await response.text(); let data = null;
     if (text) { try { data = JSON.parse(text); } catch {} }
+    // Any API call answered "not signed in" (session ended, expired or logged out elsewhere) returns to the login screen.
+    if (response.status === 401 && !path.startsWith("/api/auth/")) globalThis.dispatchEvent?.(new Event("mytko:session-ended"));
     if (!response.ok) throw new ApiError(data && typeof data.message === "string" ? data.message : "Błąd serwera (" + response.status + ")", response.status);
     return data;
   } catch (error) {

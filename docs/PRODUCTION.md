@@ -34,9 +34,9 @@ backup design.
 
 | Concern | Implementation |
 |---|---|
-| Authentication | HTTP Basic auth for the single owner (`AUTH_USERNAME`, scrypt `AUTH_PASSWORD_HASH`). Covers the app shell, static assets and API. Production refuses to start without it. |
+| Authentication | One owner account (`AUTH_USERNAME`, scrypt `AUTH_PASSWORD_HASH`), signed in on the app's login screen (same design as Mytko Workflow). Every `/api` route except `/api/auth/*` requires a session; HTTP Basic is still accepted for scripts and the smoke test but never requested (no `WWW-Authenticate`). The app shell and static assets hold no data and are public. Production refuses to start without credentials. |
 | Authorization | Single-tenant: there is no user model, so all data belongs to the one authenticated owner. Multi-user support would need a schema change (`owner_id`) and is out of scope. |
-| Sessions | Stateless: the browser re-sends Basic credentials. No cookies, so there is no session fixation and no cookie theft. To log out, close the browser. Credentials are cached in memory only as an HMAC digest for 10 minutes, to avoid running scrypt on every request. |
+| Sessions | Server-side, in `auth_sessions` (migration `0002`): the cookie `__Host-mytko-tasks-session` is a random 256-bit token, `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`; only its SHA-256 is stored. Sessions last `SESSION_TTL_HOURS` (default 168) from login, are never extended, survive restarts and releases, and end on logout. A new login replaces the browser's previous session; at most 32 are kept. After changing the password run `npm run revoke-sessions` (app role) to end all of them. Basic credentials are cached in memory only as an HMAC digest for 10 minutes. |
 | CSRF | Unsafe methods require `Sec-Fetch-Site: same-origin`. When fetch metadata is absent, a present `Origin` must equal `PUBLIC_ORIGIN`. Bodies must be `application/json`. There is no CORS. |
 | XSS | Frontend escapes all user data inserted with `innerHTML`. Colours must be `#rrggbb` both server-side and client-side. A strict CSP is set (`script-src 'self'; style-src 'self'`, no inline). |
 | Rate limits | 300 req/min per IP. After 10 failed logins, an IP is locked out for 15 minutes; the lockout is checked before scrypt runs. Limits are in memory, so they are valid for one replica only. |
@@ -148,7 +148,7 @@ All must hold before announcing tasks.mytko.dev:
 1. `TASKS_DISPOSABLE_APPROVED=yes TEST_IMAGE=<immutable-image> TEST_POSTGRES_IMAGE=<approved-postgres-17-digest> deploy/smoke-test.sh` passes against the exact image digest being released.
 2. `docker compose ps`: `migrate` exited 0 and `app` is `healthy`.
 3. `docker inspect` of `app` shows user `1000:1000`, `ReadonlyRootfs=true`, `CapDrop=[ALL]`, memory limit 256 MiB, and no port bound to anything other than `127.0.0.1`.
-4. `curl -sI https://tasks.mytko.dev/` returns `401` with `WWW-Authenticate: Basic`, a valid TLS certificate, and `Strict-Transport-Security` and `Content-Security-Policy` headers.
+4. `curl -sI https://tasks.mytko.dev/` returns `200` (login screen) and `curl -s -o /dev/null -w '%{http_code}' https://tasks.mytko.dev/api/tasks` returns `401` without `WWW-Authenticate`, with a valid TLS certificate, and `Strict-Transport-Security` and `Content-Security-Policy` headers.
 5. `curl -s https://tasks.mytko.dev/healthz` and, on the host, `curl -s http://127.0.0.1:3100/readyz` both return exactly `{"status":"ok"}`. `curl -s -o /dev/null -w '%{http_code}' https://tasks.mytko.dev/readyz` returns `404`.
 6. In a browser at `https://tasks.mytko.dev` (desktop and phone):
    - Log in with the owner credentials.
@@ -167,7 +167,7 @@ All must hold before announcing tasks.mytko.dev:
 ## 8. Known limitations / follow-ups
 
 - Rate limits and the auth cache are per process, so run exactly one `app` replica.
-- Basic auth has no logout or MFA. If more than one user is needed, replace it with real accounts and per-user data (schema change).
+- The owner login has no MFA. If more than one user is needed, replace it with real accounts and per-user data (schema change).
 - `cors` remains in `backend/package.json` but is no longer used. Remove it together with a lockfile regeneration (requires npm).
 - Line endings in the repository are mixed (CRLF/LF). Consider adding `.gitattributes`.
 - **Historical credential in Git.** Commit `e1510f2` (`todo-backend/db.js`, an ancestor of `main` and published to `origin`) contains a hardcoded PostgreSQL superuser password for `postgres@localhost`. A full-history scan (all local refs) found no other real credential: remaining matches are library code in the then-committed `node_modules`, per-run random test passwords, disposable test-stack fixtures and `CHANGE_ME` placeholders. Treat the historical password as compromised:

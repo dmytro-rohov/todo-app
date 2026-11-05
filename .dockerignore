@@ -10,4 +10,5 @@
 !frontend/package-lock.json
 !frontend/index.html
 !frontend/js/
+!frontend/icons/
 !frontend/styles/*.scss

@@ -66,9 +66,9 @@ describe("container healthcheck script", () => {
 });
 
 describe("app wiring", () => {
-  test("health routes are registered before Basic auth", () => {
+  test("health routes are registered before authentication", () => {
     const app = read("backend/app.js");
-    const auth = app.indexOf("app.use(auth)");
+    const auth = app.indexOf("api.use(ownerAuth(");
     assert.ok(auth > 0);
     assert.ok(app.indexOf('app.get("/healthz"') < auth);
     assert.ok(app.indexOf('app.get("/readyz"') < auth);
