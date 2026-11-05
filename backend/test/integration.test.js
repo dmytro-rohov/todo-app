@@ -18,8 +18,10 @@ const { startApp, AUTH, SAME_ORIGIN_JSON, USERNAME, passwordHashPromise } = requ
 const OWNER_URL = process.env.TEST_MIGRATION_DATABASE_URL;
 const APP_URL = process.env.TEST_DATABASE_URL;
 const APP_ROLE = process.env.TEST_APP_DB_ROLE || "tasks_app";
-const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
-const VERSIONS = listMigrations(MIGRATIONS_DIR).map(m => m.version);
+const MIGRATIONS_DIR = path.join(__dirname, "..", "drizzle");
+const SHIPPED = listMigrations(MIGRATIONS_DIR);
+const VERSIONS = SHIPPED.map(m => m.hash);
+const TAGS = SHIPPED.map(m => m.version);
 
 function assertDisposable(url) {
   const parsed = new URL(url);
@@ -49,7 +51,8 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query("DROP TABLE IF EXISTS public.tasks, public.categories, public.schema_migrations CASCADE");
+    await owner.query("DROP TABLE IF EXISTS public.tasks, public.categories CASCADE");
+    await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
   });
 
   const migrate = (options = {}) =>
@@ -67,10 +70,10 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
   });
 
   test("migrations are idempotent", async () => {
-    assert.deepEqual(await migrate(), VERSIONS);
+    assert.deepEqual(await migrate(), TAGS);
     assert.deepEqual(await migrate(), []);
-    const ledger = await owner.query("SELECT version FROM public.schema_migrations ORDER BY version");
-    assert.deepEqual(ledger.rows.map(r => r.version), VERSIONS);
+    const ledger = await owner.query("SELECT hash FROM drizzle.__drizzle_migrations ORDER BY created_at");
+    assert.deepEqual(ledger.rows.map(r => r.hash), VERSIONS);
   });
 
   test("concurrent migrators serialize on the advisory lock", async () => {
@@ -79,7 +82,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
       const results = await Promise.all(pools.map(pool =>
         runMigrations(pool, { dir: MIGRATIONS_DIR, appRole: APP_ROLE, log: quiet })));
       // exactly one run applied everything; the others found nothing pending
-      assert.deepEqual(results.map(r => r.length).sort(), [0, 0, VERSIONS.length]);
+      assert.deepEqual(results.map(r => r.length).sort(), [0, 0, TAGS.length]);
     } finally {
       await Promise.all(pools.map(pool => pool.end()));
     }
@@ -87,28 +90,31 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
 
   test("a modified, already-applied migration is refused", async () => {
     await migrate();
-    await owner.query("UPDATE public.schema_migrations SET checksum = 'tampered' WHERE version = $1", [VERSIONS[0]]);
+    await owner.query("UPDATE drizzle.__drizzle_migrations SET hash = 'tampered' WHERE hash = $1", [VERSIONS[0]]);
     await assert.rejects(migrate(), /was modified after it was applied/);
   });
 
   test("a failing migration rolls back completely and can be retried", async () => {
+    await migrate();
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "migrations-"));
     try {
-      for (const file of fs.readdirSync(MIGRATIONS_DIR)) {
-        fs.copyFileSync(path.join(MIGRATIONS_DIR, file), path.join(dir, file));
-      }
-      fs.writeFileSync(path.join(dir, "999_broken.sql"),
-        "ALTER TABLE public.tasks ADD COLUMN broken_marker int;\nSELECT * FROM no_such_table;\n");
+      fs.cpSync(MIGRATIONS_DIR, dir, { recursive: true });
+      const journalPath = path.join(dir, "meta", "_journal.json");
+      const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
+      const last = journal.entries[journal.entries.length - 1];
+      journal.entries.push({ idx: journal.entries.length, version: "7", when: last.when + 1000, tag: "9999_broken", breakpoints: true });
+      fs.writeFileSync(journalPath, JSON.stringify(journal));
+      fs.writeFileSync(path.join(dir, "9999_broken.sql"),
+        'ALTER TABLE "tasks" ADD COLUMN "broken_marker" integer;--> statement-breakpoint\nSELECT * FROM no_such_table;');
 
-      await assert.rejects(migrate({ dir }), /999_broken failed/);
-      const ledger = await owner.query("SELECT version FROM public.schema_migrations");
-      assert.equal(ledger.rows.some(r => r.version === "999_broken"), false);
+      await assert.rejects(migrate({ dir }), /no_such_table/);
+      const ledger = await owner.query("SELECT hash FROM drizzle.__drizzle_migrations");
+      assert.equal(ledger.rowCount, VERSIONS.length); // the shipped migrations stay, the broken one left no trace
       const column = await owner.query(
         "SELECT 1 FROM information_schema.columns WHERE table_name = 'tasks' AND column_name = 'broken_marker'");
       assert.equal(column.rowCount, 0);
 
-      fs.unlinkSync(path.join(dir, "999_broken.sql"));
-      assert.deepEqual(await migrate({ dir }), []);
+      assert.deepEqual(await migrate(), []); // the shipped release still migrates cleanly
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -116,10 +122,10 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
 
   test("an older release tolerates newer migrations in the database (app rollback)", async () => {
     await migrate();
-    await owner.query("INSERT INTO public.schema_migrations (version, checksum) VALUES ('900_future', 'x')");
+    await owner.query("INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('future-hash', 99999999999999)");
     const messages = [];
     await runMigrations(owner, { dir: MIGRATIONS_DIR, appRole: APP_ROLE, log: m => messages.push(m) });
-    assert.ok(messages.some(m => m.includes("900_future")));
+    assert.ok(messages.some(m => m.includes("future-hash")));
   });
 
   test("the application role has data access only", async () => {
@@ -129,7 +135,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
     await assert.rejects(appPool.query("DROP TABLE public.tasks"), /must be owner|permission denied/);
     await assert.rejects(appPool.query("ALTER TABLE public.tasks ADD COLUMN x int"), /must be owner|permission denied/);
     await assert.rejects(appPool.query("TRUNCATE public.tasks"), /permission denied/);
-    await assert.rejects(appPool.query("DELETE FROM public.schema_migrations"), /permission denied/);
+    await assert.rejects(appPool.query("DELETE FROM drizzle.__drizzle_migrations"), /permission denied/);
   });
 
   test("schema enforces integrity", async () => {
@@ -137,7 +143,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
     const fks = await owner.query(`
       SELECT conname FROM pg_constraint
       WHERE conrelid = 'public.tasks'::regclass AND contype = 'f'`);
-    assert.deepEqual(fks.rows.map(r => r.conname), ["fk_category"]);
+    assert.deepEqual(fks.rows.map(r => r.conname), ["tasks_category_id_categories_id_fk"]);
     await assert.rejects(
       owner.query("INSERT INTO tasks (title, completed, date) VALUES ('x', NULL, '2026-10-30')"),
       /null value/);
@@ -190,8 +196,8 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
         description: "",
         status: "done",
         priority: "P2",
-        position: taskId,
-        dueDate: "2026-10-30",
+        position: String(taskId), // bigint arrives as a string from pg
+        dueDate: null, // a new task has no due date unless one is given
         createdAt: tasks[0].createdAt,
         updatedAt: tasks[0].updatedAt,
         completedAt: tasks[0].completedAt,
@@ -206,23 +212,38 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
     }
   });
 
-  test("migration 003 preserves legacy rows, maps dates, and keeps legacy completion writes compatible", async () => {
-    await owner.query(`CREATE TABLE public.categories (id serial PRIMARY KEY, name varchar(50) NOT NULL, color varchar(7) NOT NULL)`);
-    await owner.query(`CREATE TABLE public.tasks (id serial PRIMARY KEY, title varchar(255) NOT NULL, completed boolean, date date NOT NULL, category_id integer REFERENCES public.categories(id) ON DELETE SET NULL)`);
-    await owner.query("INSERT INTO tasks (title, completed, date) VALUES ('Open legacy', false, '2026-10-30'), ('Done legacy', true, '2026-10-31')");
-    assert.deepEqual(await migrate(), ["001_baseline", "002_task_integrity", "003_kanban"]);
-    const rows = await owner.query("SELECT id, completed, status, due_date, position, completed_at FROM tasks ORDER BY id");
-    assert.equal(rows.rows[0].status, "todo");
-    assert.equal(String(rows.rows[0].due_date), "2026-10-30");
-    assert.equal(rows.rows[0].completed_at, null);
-    assert.equal(rows.rows[1].status, "done");
-    assert.equal(String(rows.rows[1].due_date), "2026-10-31");
-    assert.ok(rows.rows[1].completed_at);
-    assert.deepEqual(rows.rows.map(row => String(row.position)), rows.rows.map(row => String(row.id)));
-    await owner.query("UPDATE tasks SET completed = false WHERE id = $1", [rows.rows[1].id]);
-    const reopened = await owner.query("SELECT completed, status, completed_at FROM tasks WHERE id = $1", [rows.rows[1].id]);
-    assert.deepEqual(reopened.rows[0], { completed: false, status: "todo", completed_at: null });
-    assert.deepEqual(await migrate(), []);
+  test("application rules replace the former trigger: completion, position, timestamps", async () => {
+    await migrate();
+    const ctx = await startApp({ pool: appPool, migrationVersions: VERSIONS });
+    try {
+      const send = (url, method, body) => ctx.request(url, { method, headers: SAME_ORIGIN_JSON, body: JSON.stringify(body) });
+      const open = await (await send("/api/tasks", "POST", { title: "Open task", date: "2026-10-30" })).json();
+      assert.deepEqual([open.status, open.completed, open.completedAt, String(open.position)], ["todo", false, null, String(open.id)]);
+      const done = await (await send("/api/tasks", "POST", { title: "Done task", date: "2026-10-31", completed: true })).json();
+      assert.deepEqual([done.status, done.completed, String(done.position)], ["done", true, String(done.id)]);
+      assert.ok(done.completedAt);
+
+      // PUT completed:false reopens a done task; PUT completed:true completes an open one
+      const reopened = await (await send(`/api/tasks/${done.id}`, "PUT", { title: "Done task", date: "2026-10-31", completed: false })).json();
+      assert.deepEqual([reopened.status, reopened.completed, reopened.completedAt], ["todo", false, null]);
+      const closed = await (await send(`/api/tasks/${open.id}`, "PUT", { title: "Open task", date: "2026-10-30", completed: true })).json();
+      assert.deepEqual([closed.status, closed.completed], ["done", true]);
+      assert.ok(closed.completedAt);
+      assert.ok(new Date(closed.updatedAt) >= new Date(open.updatedAt));
+
+      // a PUT that leaves completion unchanged keeps a custom status
+      const progress = await (await send(`/api/tasks/${reopened.id}`, "PATCH", { status: "in_progress" })).json();
+      assert.deepEqual([progress.status, progress.completed], ["in_progress", false]);
+      const kept = await (await send(`/api/tasks/${reopened.id}`, "PUT", { title: "Done task", date: "2026-10-31", completed: false })).json();
+      assert.equal(kept.status, "in_progress");
+
+      // moving between columns keeps completed / completed_at consistent
+      const snapshot = (await (await ctx.request("/api/tasks")).json()).map(({ id, status, position }) => ({ id, status, position: Number(position) }));
+      assert.equal((await send("/api/tasks/move", "POST", { id: reopened.id, status: "done", beforeId: null, expected: snapshot })).status, 200);
+      const rows = await owner.query("SELECT id, completed, status, completed_at FROM tasks ORDER BY id");
+      for (const row of rows.rows) assert.equal(row.completed, row.status === "done");
+      assert.ok(rows.rows.find(row => row.id === reopened.id).completed_at);
+    } finally { await ctx.close(); }
   });
 
   test("concurrent moves serialize snapshots and preserve every task exactly once", async () => {

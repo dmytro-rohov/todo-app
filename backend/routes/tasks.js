@@ -49,12 +49,18 @@ module.exports = function createTasksRouter(pool) {
     if (extraValidation.error) return res.status(400).json({ message: extraValidation.error });
     const domain = extraValidation.value;
     try {
+      // Domain rules formerly enforced by a database trigger: status wins over completed, completed mirrors
+      // status, completed_at follows it, and a task without an explicit position gets its own id.
+      const status = value.completed ? "done" : (domain.status || "todo");
       const result = await pool.query(
-        `INSERT INTO tasks
-        (title, completed, date, category_id, description, status, priority, due_date, position)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `WITH next AS (SELECT nextval(pg_get_serial_sequence('tasks', 'id')) AS id)
+        INSERT INTO tasks
+        (id, title, completed, date, category_id, description, status, priority, due_date, position, completed_at)
+        SELECT next.id, $1::varchar, $2::boolean, $3::date, $4::integer, $5::text, $6::text, $7::text, $8::date,
+          COALESCE($9::bigint, next.id), CASE WHEN $2::boolean THEN now() ELSE NULL END
+        FROM next
         RETURNING ${TASK_COLUMNS}`,
-        [value.title, value.completed, value.date, value.categoryId, domain.description || "", domain.status || (value.completed ? "done" : "todo"), domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null]
+        [value.title, status === "done", value.date, value.categoryId, domain.description || "", status, domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null]
       );
       res.status(201).json(result.rows[0]);
     } catch (dbError) {
@@ -149,10 +155,19 @@ module.exports = function createTasksRouter(pool) {
         UPDATE tasks
         SET
           title = $1,
-          completed = $2,
           date = $3,
-          category_id = $4
-        WHERE id = $5
+          category_id = $4,
+          status = s.next_status,
+          completed = (s.next_status = 'done'),
+          completed_at = CASE WHEN s.next_status = 'done' THEN COALESCE(tasks.completed_at, now()) ELSE NULL END,
+          updated_at = now()
+        FROM (
+          SELECT CASE WHEN $2::boolean IS DISTINCT FROM completed
+                      THEN CASE WHEN $2::boolean THEN 'done' ELSE 'todo' END
+                      ELSE status END AS next_status
+          FROM tasks WHERE id = $5
+        ) s
+        WHERE tasks.id = $5
         RETURNING ${TASK_COLUMNS}
         `,
         [value.title, value.completed, value.date, value.categoryId, id]

@@ -70,7 +70,7 @@ function loadConfig(env = process.env) {
     },
     shutdownTimeoutMs: toInt(env.SHUTDOWN_TIMEOUT_MS, 10000),
     staticDir: env.STATIC_DIR || path.join(__dirname, "..", "frontend"),
-    migrationsDir: path.join(__dirname, "migrations")
+    migrationsDir: path.join(__dirname, "drizzle")
   };
 }
 

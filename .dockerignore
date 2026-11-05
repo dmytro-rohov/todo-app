@@ -4,7 +4,7 @@
 !backend/package-lock.json
 !backend/*.js
 !backend/routes/
-!backend/migrations/
+!backend/drizzle/
 !backend/scripts/
 !frontend/package.json
 !frontend/package-lock.json

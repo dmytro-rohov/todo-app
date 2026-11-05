@@ -45,7 +45,7 @@ backup design.
 | Errors | A central handler returns only generic messages. Database errors are logged by code only. |
 | Health | `/healthz` (liveness) and `/readyz` (DB reachable + all shipped migrations applied) return only `{"status":"ok"|"unavailable"}`. Both are deliberately exempt from Basic auth (and from the auth lockout) so the container HEALTHCHECK and Caddy's active health check work without credentials; they serve nothing else. `/healthz` is also exempt from the rate limit. Caddy does not expose `/readyz` publicly (it triggers a DB query); Caddy's `health_uri` and the HEALTHCHECK reach it on the upstream directly. |
 | Container | Non-root uid 1000. The app tree is root-owned and read-only. Read-only rootfs, `/tmp` tmpfs (noexec), `cap_drop: ALL`, `no-new-privileges`, no npm/yarn at runtime. Limits: 0.5 CPU / 256 MB / 128 pids. |
-| DB privileges | The app role has SELECT/INSERT/UPDATE/DELETE on `tasks` and `categories`, sequence usage, and SELECT on `schema_migrations`. It has no DDL, TRUNCATE or ownership. |
+| DB privileges | The app role has SELECT/INSERT/UPDATE/DELETE on `tasks` and `categories`, sequence usage, and SELECT on the Drizzle migration history (`drizzle.__drizzle_migrations`). It has no DDL, TRUNCATE or ownership. |
 
 ## 3. Operator prerequisites (before first release)
 
@@ -116,7 +116,7 @@ docker compose run --rm migrate      # re-applies grants, verifies migration led
 docker compose start app
 ```
 
-The dump contains `schema_migrations`, so the ledger always matches the
+The dump contains the Drizzle history (`drizzle.__drizzle_migrations`), so it always matches the
 restored schema.
 
 ## 6. Rollback
@@ -160,7 +160,7 @@ All must hold before announcing tasks.mytko.dev:
 10. In PostgreSQL:
     - `\dt` shows the tables owned by `tasks_owner`.
     - `tasks_app` cannot run `CREATE TABLE` or `DROP TABLE`.
-    - `schema_migrations` lists `001_baseline`, `002_task_integrity` and `003_kanban`.
+    - `drizzle.__drizzle_migrations` holds one row per shipped migration (`0000_initial`); the hashes match `backend/drizzle/*.sql`.
 11. A first backup has been taken and successfully restored into a scratch database.
 12. `app.env` and `migrate.env` are mode 600 on the server and absent from git; `node deploy/check-env.cjs deploy/app.env deploy/migrate.env` reports PASS. `git grep -i password` shows no real credentials.
 

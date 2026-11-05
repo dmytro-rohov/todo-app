@@ -54,7 +54,7 @@ describe("production templates target tasks.mytko.dev", () => {
   test("runbook covers the release checks for the new domain", () => {
     const doc = read("docs/PRODUCTION.md");
     for (const needle of ["node deploy/check-env.cjs deploy/app.env deploy/migrate.env", "TRUST_PROXY=loopback,<gateway>/32",
-      "003_kanban", "PostgreSQL 17", "curl -sI https://tasks.mytko.dev/"]) {
+      "0000_initial", "PostgreSQL 17", "curl -sI https://tasks.mytko.dev/"]) {
       assert.ok(doc.includes(needle), needle);
     }
   });
