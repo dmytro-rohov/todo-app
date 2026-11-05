@@ -7,6 +7,8 @@
 # CI recomputes what it can (commit on main, source archive digest, image signature and revision label) and fails
 # closed on any mismatch.
 name: build-attest
+# Mytko finds its run by the request id at the end of the name (never by time alone).
+run-name: build-attest ${{ inputs.mode }} ${{ inputs.request_id }}
 on:
   workflow_dispatch:
     inputs:
@@ -17,6 +19,7 @@ on:
       source_archive_digest: {description: "sha256 of `git archive --format=tar <sha>` recorded by the ledger (attest)", required: false, default: ""}
       profile_digest: {description: "Mytko deploy profile digest (attest)", required: false, default: ""}
       image: {description: "ghcr.io/<repo>@sha256:<digest> built by mode=build (attest)", required: false, default: ""}
+      request_id: {description: "Mytko dispatch nonce (16 hex)", required: false, default: ""}
 
 permissions: {}
 
@@ -36,6 +39,16 @@ jobs:
       packages: write
       id-token: write   # keyless signing identity
     steps:
+      - name: Validate the inputs before anything uses them
+        env:
+          MODE: ${{ inputs.mode }}
+          SHA: ${{ inputs.merged_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ -z "$REQUEST_ID" || "$REQUEST_ID" =~ ^[0-9a-f]{16}$ ]]
+          [[ "$MODE" = "build" || "$MODE" = "attest" ]]
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.merged_sha }}
@@ -83,6 +96,16 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Validate the inputs before anything uses them
+        env:
+          MODE: ${{ inputs.mode }}
+          SHA: ${{ inputs.merged_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ -z "$REQUEST_ID" || "$REQUEST_ID" =~ ^[0-9a-f]{16}$ ]]
+          [[ "$MODE" = "build" || "$MODE" = "attest" ]]
       # Trusted CI tooling comes from the workflow's own ref; the code being attested (src/) can never alter it.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
