@@ -1,0 +1,25 @@
+# Mytko Tasks — production release through Mytko
+
+How a change reaches `tasks.mytko.dev` on `mary-vps`. Nothing in this repository deploys; the steps below run in
+Mytko Workflow and on the operator's phone.
+
+1. **Session** — the change is made in a Mytko Session of this project and goes through Validate, Push, Review and
+   Merge to `main`.
+2. **Prepare** — in the Session's "Wydanie produkcyjne" panel the operator starts the release:
+   - `build-attest.yml` (mode `build`) builds the merged commit into `ghcr.io/dmytro-rohov/todo-app@sha256:…` and
+     signs it, together with the build inputs it measured;
+   - Mytko pins that image in the deploy profile and records the release;
+   - `build-attest.yml` (mode `attest`) signs the release statement (commit, source archive, profile, image, build
+     inputs);
+   - Mytko verifies the signature against the pinned CI identity.
+3. **Approve** — the operator approves the release.
+4. **Deploy** — the operator previews the exact commit, image and target, then types the 6-digit code from the
+   authenticator. The deploy peer on Fujitsu checks the code and the image signature itself, then the target helper
+   on `mary-vps` replaces only the `app` container (`docker compose up -d --no-deps app`), waits for `/readyz` and
+   checks that the new image serves.
+5. **Recover** — if the outcome is uncertain, the operator can restore the previous image with a fresh code.
+
+What a release never does: run `migrate`, touch the database, its volume or backups, Caddy, DNS, or other
+applications. Schema changes go through the approved Drizzle migration path (see [PRODUCTION.md](PRODUCTION.md)).
+
+The workflow takes no secret as an input; the image is public on GHCR and verification needs no registry credential.
