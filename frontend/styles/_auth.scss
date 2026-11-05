@@ -90,8 +90,6 @@
 .auth-hero,.auth-panel{min-width:0}
 
 .auth-offline{margin:40vh auto 0;max-width:420px;color:#c6d0c9;text-align:center;font-family:Inter,ui-sans-serif,system-ui,sans-serif}.auth-offline a{color:#b6ef74}
-.session-logout{position:fixed;top:12px;right:12px;z-index:50;min-height:36px;padding:6px 14px;border:1px solid #354337;border-radius:8px;background:#172219;color:#edf4ee;font:700 12px Inter,ui-sans-serif,system-ui,sans-serif;cursor:pointer}
-.session-logout:hover{background:#1f2d21}
 // Zero-specificity reset: wins over older layers, loses to every .auth-* rule above.
 :where(.auth) :where(p, h1, span, strong, label, footer, ul, li, a, input, button) { color: inherit; font-family: inherit; }
 :where(.auth) :where(footer, p, ul, li) { background: none; }

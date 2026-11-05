@@ -1,14 +1,8 @@
-import { getSession, logout, renderLogin, ssoNotice, shouldTryMytko, SSO_TRIED } from "./auth/login.js";
-import { initBoard } from "./board.js";
+import { getSession, renderLogin, ssoNotice, shouldTryMytko, SSO_TRIED } from "./auth/login.js";
+import { startApp } from "./app/app.js";
 
 const authRoot = document.querySelector("#auth");
-const board = document.querySelector("#kanban");
-
-function showLogin(state, notice) {
-  board.hidden = true;
-  authRoot.hidden = false;
-  renderLogin(authRoot, state, { notice, onAuthenticated: () => window.location.replace(window.location.pathname) });
-}
+const appRoot = document.querySelector("#app");
 
 async function start() {
   let state;
@@ -26,25 +20,16 @@ async function start() {
       sessionStorage.setItem(SSO_TRIED, "1");
       return window.location.assign("/auth/mytko/start");
     }
-    return showLogin(state, ssoNotice(window.location.search));
+    authRoot.hidden = false;
+    return renderLogin(authRoot, state, {
+      notice: ssoNotice(window.location.search),
+      onAuthenticated: () => window.location.replace(window.location.pathname)
+    });
   }
   if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
-
   window.addEventListener("mytko:session-ended", () => window.location.reload(), { once: true });
-  authRoot.hidden = true;
-  board.hidden = false;
-  const out = document.createElement("button");
-  out.type = "button";
-  out.className = "session-logout";
-  out.textContent = "Wyloguj";
-  out.addEventListener("click", async () => {
-    out.disabled = true;
-    sessionStorage.setItem(SSO_TRIED, "1");
-    await logout().catch(() => {});
-    window.location.reload();
-  });
-  document.body.append(out);
-  initBoard();
+  appRoot.hidden = false;
+  startApp(appRoot, state);
 }
 
 start();
