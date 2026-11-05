@@ -1,16 +1,22 @@
-# Build the exact merged commit into an image on GHCR and attest it (cosign keyless, GitHub OIDC).
-# The attestation's predicate is the Mytko RuntimeStatement (canonical JSON); see Mytko docs/external-deploy-oci-attestation.md.
-# Dispatched by the operator with identities issued by the Mytko release ledger. CI recomputes what it can
-# (commit, source archive digest) and fails closed on any mismatch.
+# Two phases, dispatched by Mytko for one release (see Mytko docs/external-deploy-oci-attestation.md):
+#   mode=build   build the exact merged commit (only code that reached main) into a single-platform image on GHCR and
+#                sign it keylessly. Its digest goes into the release's deploy profile, which Mytko pins before the
+#                release exists (the profile digest is an input of the statement, so it cannot come out of the same run).
+#   mode=attest  for an image this workflow built and signed from that commit, attest the Mytko RuntimeStatement
+#                (canonical JSON) with the identities issued by the Mytko release ledger.
+# CI recomputes what it can (commit on main, source archive digest, image signature and revision label) and fails
+# closed on any mismatch.
 name: build-attest
 on:
   workflow_dispatch:
     inputs:
-      project_id: {description: Mytko project id, required: true}
-      release_id: {description: Mytko release id, required: true}
+      mode: {description: "build | attest", required: true}
       merged_sha: {description: Full merged commit SHA, required: true}
-      source_archive_digest: {description: "sha256 of `git archive --format=tar <sha>` recorded by the ledger", required: true}
-      profile_digest: {description: Mytko deploy profile digest, required: true}
+      project_id: {description: "Mytko project id (attest)", required: false, default: ""}
+      release_id: {description: "Mytko release id (attest)", required: false, default: ""}
+      source_archive_digest: {description: "sha256 of `git archive --format=tar <sha>` recorded by the ledger (attest)", required: false, default: ""}
+      profile_digest: {description: "Mytko deploy profile digest (attest)", required: false, default: ""}
+      image: {description: "ghcr.io/<repo>@sha256:<digest> built by mode=build (attest)", required: false, default: ""}
 
 permissions: {}
 
@@ -19,40 +25,34 @@ env:
   NODE_IMAGE: node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
   BUILDER_ID: gha-todo-app
   PREDICATE_TYPE: https://mytko.dev/attestation/runtime-statement/v1
+  OIDC_ISSUER: https://token.actions.githubusercontent.com
 
 jobs:
   build:
+    if: inputs.mode == 'build'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
       id-token: write   # keyless signing identity
     steps:
-      # Trusted CI tooling comes from the workflow's own ref; the code being built (src/) can never alter it.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          path: ci
-          persist-credentials: false
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.merged_sha }}
           path: src
           fetch-depth: 0
           persist-credentials: false
-      - name: Bind the build to the exact commit and archive
+      - name: Only code that reached main
         env:
           SHA: ${{ inputs.merged_sha }}
-          ARCHIVE: ${{ inputs.source_archive_digest }}
         working-directory: src
         run: |
           set -euo pipefail
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$SHA"
-          git merge-base --is-ancestor "$SHA" origin/main   # only code that reached main
-          actual="sha256:$(git archive --format=tar "$SHA" | sha256sum | cut -d' ' -f1)"
-          test "$actual" = "$ARCHIVE" || { echo "source archive digest mismatch: $actual"; exit 1; }
+          git merge-base --is-ancestor "$SHA" origin/main
       - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
-      - name: Build and push (single-platform manifest, no buildx provenance)
+      - name: Build, push and sign (single-platform manifest, no buildx provenance)
         env:
           SHA: ${{ inputs.merged_sha }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,64 @@ jobs:
             --tag "$repo:${SHA:0:12}" --push --metadata-file meta.json .
           digest="$(python3 -c 'import json;print(json.load(open("meta.json"))["containerimage.digest"])')"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "IMAGE=$repo@$digest" >> "$GITHUB_ENV"
+          image="$repo@$digest"
+          cosign sign --yes "$image"
+          echo "$image" > "$GITHUB_WORKSPACE/image.txt"
+          echo "IMAGE=$image" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: image
+          path: image.txt
+
+  attest:
+    if: inputs.mode == 'attest'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      # Trusted CI tooling comes from the workflow's own ref; the code being attested (src/) can never alter it.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.merged_sha }}
+          path: src
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind to the exact commit and archive
+        env:
+          SHA: ${{ inputs.merged_sha }}
+          ARCHIVE: ${{ inputs.source_archive_digest }}
+        working-directory: src
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SHA"
+          git merge-base --is-ancestor "$SHA" origin/main   # only code that reached main
+          actual="sha256:$(git archive --format=tar "$SHA" | sha256sum | cut -d' ' -f1)"
+          test "$actual" = "$ARCHIVE" || { echo "source archive digest mismatch: $actual"; exit 1; }
+      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - name: The image was built and signed by this workflow from that commit
+        env:
+          SHA: ${{ inputs.merged_sha }}
+          IMAGE: ${{ inputs.image }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          [[ "$IMAGE" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          test "${IMAGE%@*}" = "$repo"
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build-attest.yml@refs/heads/main"
+          cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$OIDC_ISSUER" "$IMAGE" > /dev/null
+          echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          revision="$(docker buildx imagetools inspect "$IMAGE" --format '{{ index .Image.Config.Labels "org.opencontainers.image.revision" }}')"
+          test "$revision" = "$SHA" || { echo "image revision label is '$revision', not $SHA"; exit 1; }
+          platform="$(docker buildx imagetools inspect "$IMAGE" --format '{{ .Image.OS }}/{{ .Image.Architecture }}')"
+          test "$platform" = "linux/amd64"
       - name: Create the RuntimeStatement
         env:
           SHA: ${{ inputs.merged_sha }}
@@ -74,32 +131,36 @@ jobs:
           RELEASE_ID: ${{ inputs.release_id }}
           ARCHIVE: ${{ inputs.source_archive_digest }}
           PROFILE: ${{ inputs.profile_digest }}
+          IMAGE: ${{ inputs.image }}
         working-directory: src
         run: |
           set -euo pipefail
+          [[ "$PROJECT_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]
+          [[ "$RELEASE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]
           h() { printf 'sha256:%s' "$(sha256sum | cut -d' ' -f1)"; }
           recipe="$(h < Dockerfile)"
           deps="$(cat backend/package-lock.json frontend/package-lock.json | h)"
           base="$(printf '%s' "$NODE_IMAGE" | h)"
           tool="$(docker buildx version | h)"
           params="$(printf 'NODE_IMAGE=%s\nGIT_REVISION=%s\n' "$NODE_IMAGE" "$SHA" | h)"
+          # The exact build invocation of mode=build (every parameter; no credential, no mutable tag).
+          invocation="$(printf 'docker buildx build --platform linux/amd64 --provenance=false --sbom=false --build-arg NODE_IMAGE=%s --build-arg GIT_REVISION=%s .\n' "$NODE_IMAGE" "$SHA" | h)"
           python3 "$GITHUB_WORKSPACE/ci/scripts/oci/make_statement.py" \
             --project-id "$PROJECT_ID" --release-id "$RELEASE_ID" \
             --merged-sha "$SHA" --source-archive-digest "$ARCHIVE" \
             --profile-digest "$PROFILE" --image "$IMAGE" \
             --builder "$BUILDER_ID" --platform linux/amd64 \
             --input "recipe=$recipe" --input "dependencies=$deps" --input "base_images=$base" \
-            --input "toolchain=$tool" --input "parameters=$params" > "$GITHUB_WORKSPACE/statement.json"
+            --input "toolchain=$tool" --input "parameters=$params" --input "invocation=$invocation" \
+            > "$GITHUB_WORKSPACE/statement.json"
           sha256sum "$GITHUB_WORKSPACE/statement.json"
-      - name: Sign and attest (keyless)
+      - name: Attest (keyless)
+        env:
+          IMAGE: ${{ inputs.image }}
         run: |
           set -euo pipefail
-          cosign sign --yes "$IMAGE"
           cosign attest --yes --type "$PREDICATE_TYPE" --predicate "$GITHUB_WORKSPACE/statement.json" "$IMAGE"
-          echo "$IMAGE" > "$GITHUB_WORKSPACE/image.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: runtime-statement
-          path: |
-            statement.json
-            image.txt
+          path: statement.json
