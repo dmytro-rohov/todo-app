@@ -264,7 +264,7 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
     assert.deepEqual([session.authenticated, session.login], [true, USERNAME]);
 
     // a tampered cookie and an expired session are both anonymous
-    assert.equal((await ctx.request("/api/tasks", { auth: null, headers: { cookie: cookie.slice(0, -1) + "A" } })).status, 401);
+    assert.equal((await ctx.request("/api/tasks", { auth: null, headers: { cookie: cookie.slice(0, -1) + (cookie.endsWith("A") ? "B" : "A") } })).status, 401);
     await owner.query("UPDATE auth_sessions SET expires_at = now() - interval '1 second'");
     assert.equal((await ctx.request("/api/tasks", { auth: null, headers: { cookie } })).status, 401);
     await owner.query("UPDATE auth_sessions SET expires_at = now() + interval '1 hour'");

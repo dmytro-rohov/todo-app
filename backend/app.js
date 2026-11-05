@@ -7,6 +7,7 @@ const createProjectsRouter = require("./routes/projects");
 const createAssigneesRouter = require("./routes/assignees");
 const createTaskDetailsRouter = require("./routes/task-details");
 const { createAuthRouter } = require("./routes/auth");
+const { createSsoRouter } = require("./routes/sso");
 const { createSessionStore, cookieSettings } = require("./sessions");
 const { checkSchema } = require("./migrations");
 const {
@@ -21,7 +22,7 @@ const READINESS_TIMEOUT_MS = 2000;
 
 // Builds the Express app. `migrationVersions` are the migrations shipped with
 // this release; readiness fails until the database has all of them.
-function createApp({ config, pool, migrationVersions = [] }) {
+function createApp({ config, pool, migrationVersions = [], ...options }) {
   const app = express();
   const state = { shuttingDown: false };
   const stoppables = [];
@@ -76,7 +77,9 @@ function createApp({ config, pool, migrationVersions = [] }) {
   const json = express.json({ limit: "10kb", inflate: false });
   // The login screen's API is reachable without a session; everything after it is not, and anonymous requests are
   // refused before any other processing.
-  api.use("/auth", csrf, json, createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled }));
+  const sso = config.auth.disabled ? null : config.auth.sso;
+  const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso) });
+  api.use("/auth", csrf, json, authRouter);
   if (credentials) api.use(ownerAuth({ credentials, sessions, cookieName: cookie.name }));
   api.use(csrf);
   api.use(json);
@@ -90,6 +93,10 @@ function createApp({ config, pool, migrationVersions = [] }) {
     res.status(404).json({ message: "Not found" });
   });
   app.use("/api", api);
+
+  if (sso) {
+    app.use("/auth/mytko", createSsoRouter({ sso, publicOrigin: config.publicOrigin, cookie, startSession: authRouter.startSession, fetchImpl: options.fetchImpl }));
+  }
 
   // The app shell and assets hold no data and render the login screen, so they are public.
   app.use(express.static(config.staticDir, { index: "index.html", dotfiles: "ignore" }));

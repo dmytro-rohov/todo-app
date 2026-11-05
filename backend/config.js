@@ -39,6 +39,8 @@ function loadConfig(env = process.env) {
     errors.push("PUBLIC_ORIGIN must be an origin without path, e.g. https://task.mytko.dev");
   }
 
+  const sso = loadSso(env, errors);
+
   if (errors.length > 0) {
     const error = new Error(`Invalid configuration:\n- ${errors.join("\n- ")}`);
     error.code = "CONFIG_INVALID";
@@ -61,7 +63,8 @@ function loadConfig(env = process.env) {
       disabled: authDisabled,
       username: authUsername,
       passwordHash: authPasswordHash,
-      sessionTtlMs: toInt(env.SESSION_TTL_HOURS, 168) * 3600000
+      sessionTtlMs: toInt(env.SESSION_TTL_HOURS, 168) * 3600000,
+      sso
     },
     rateLimit: {
       windowMs: toInt(env.RATE_LIMIT_WINDOW_MS, 60000),
@@ -73,6 +76,25 @@ function loadConfig(env = process.env) {
     staticDir: env.STATIC_DIR || path.join(__dirname, "..", "frontend"),
     migrationsDir: path.join(__dirname, "drizzle")
   };
+}
+
+// "Zaloguj kontem Mytko" (routes/sso.js): enabled when MYTKO_SSO_ORIGIN and MYTKO_SSO_CLIENT_SECRET are set.
+// MYTKO_SSO_LOGIN, when set, is the only Mytko login allowed in.
+function loadSso(env, errors) {
+  const origin = env.MYTKO_SSO_ORIGIN || "";
+  const clientSecret = env.MYTKO_SSO_CLIENT_SECRET || "";
+  if (!origin && !clientSecret) return null;
+  if (!origin || !clientSecret) {
+    errors.push("MYTKO_SSO_ORIGIN and MYTKO_SSO_CLIENT_SECRET must be set together");
+    return null;
+  }
+  if (!/^https:\/\/[^/]+$/.test(origin) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    errors.push("MYTKO_SSO_ORIGIN must be an https origin without path, e.g. https://workflow.mytko.dev");
+  }
+  if (clientSecret.length < 32) errors.push("MYTKO_SSO_CLIENT_SECRET must be at least 32 characters");
+  const clientId = env.MYTKO_SSO_CLIENT_ID || "tasks";
+  if (!/^[a-z][a-z0-9-]{1,31}$/.test(clientId)) errors.push("MYTKO_SSO_CLIENT_ID must be a short lowercase id");
+  return { origin, clientSecret, clientId, login: env.MYTKO_SSO_LOGIN || "" };
 }
 
 function toInt(value, fallback) {
