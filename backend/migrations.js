@@ -94,7 +94,8 @@ async function grantAppRole(client, role) {
   }
   const name = client.escapeIdentifier(role);
   await client.query(`GRANT USAGE ON SCHEMA public TO ${name}`);
-  await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.tasks, public.categories TO ${name}`);
+  // Every application table: tables added by later migrations are covered without touching this list.
+  await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${name}`);
   await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${name}`);
   await client.query(`GRANT USAGE ON SCHEMA drizzle TO ${name}`);
   await client.query(`GRANT SELECT ON drizzle.__drizzle_migrations TO ${name}`);

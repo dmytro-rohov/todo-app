@@ -45,7 +45,7 @@ backup design.
 | Errors | A central handler returns only generic messages. Database errors are logged by code only. |
 | Health | `/healthz` (liveness) and `/readyz` (DB reachable + all shipped migrations applied) return only `{"status":"ok"|"unavailable"}`. Both are deliberately exempt from Basic auth (and from the auth lockout) so the container HEALTHCHECK and Caddy's active health check work without credentials; they serve nothing else. `/healthz` is also exempt from the rate limit. Caddy does not expose `/readyz` publicly (it triggers a DB query); Caddy's `health_uri` and the HEALTHCHECK reach it on the upstream directly. |
 | Container | Non-root uid 1000. The app tree is root-owned and read-only. Read-only rootfs, `/tmp` tmpfs (noexec), `cap_drop: ALL`, `no-new-privileges`, no npm/yarn at runtime. Limits: 0.5 CPU / 256 MB / 128 pids. |
-| DB privileges | The app role has SELECT/INSERT/UPDATE/DELETE on `tasks` and `categories`, sequence usage, and SELECT on the Drizzle migration history (`drizzle.__drizzle_migrations`). It has no DDL, TRUNCATE or ownership. |
+| DB privileges | The app role has SELECT/INSERT/UPDATE/DELETE on every table in `public` (granted by `migrate`), sequence usage, and SELECT on the Drizzle migration history (`drizzle.__drizzle_migrations`). It has no DDL, TRUNCATE or ownership. |
 
 ## 3. Operator prerequisites (before first release)
 

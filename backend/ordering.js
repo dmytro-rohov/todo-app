@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { parseId } = require('./validation');
+const { recordTaskChanges } = require('./task-history');
 const statuses = ['todo', 'in_progress', 'done'];
 function validateMove(body) {
   return body && parseId(body.id) !== null && statuses.includes(body.status) &&
@@ -35,6 +36,7 @@ async function moveTask(pool, body) {
       await client.query(`UPDATE tasks SET status=$1::text, position=$2, completed=($1::text='done'),
         completed_at=CASE WHEN $1::text='done' THEN COALESCE(completed_at, now()) ELSE NULL END, updated_at=now() WHERE id=$3`,[row.status,position,row.id]);
     }
+    if (task.status !== body.status) await recordTaskChanges(client, task.id, [{ field: 'status', oldValue: task.status, newValue: body.status }]);
     await client.query('COMMIT'); return { status: 200, message: 'Task moved' };
   } catch(error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }

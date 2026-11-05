@@ -64,9 +64,13 @@ async function startApp({ pool, env = {}, migrationVersions = MIGRATIONS } = {})
   };
 }
 
-// Minimal stand-in for pg.Pool that answers by SQL shape.
+// Minimal stand-in for pg.Pool that answers by SQL shape. connect() hands out the same fake as a
+// transaction client.
 function fakePool(overrides = {}) {
-  return {
+  const pool = {
+    async connect() {
+      return { query: (sql, params) => pool.query(sql, params), release() {} };
+    },
     async query(sql, params = []) {
       for (const [pattern, handler] of Object.entries(overrides)) {
         if (sql.includes(pattern)) return handler(sql, params);
@@ -87,6 +91,7 @@ function fakePool(overrides = {}) {
       return { rows: [], rowCount: 0 };
     }
   };
+  return pool;
 }
 
 const SAME_ORIGIN_JSON = { "sec-fetch-site": "same-origin", "content-type": "application/json" };
