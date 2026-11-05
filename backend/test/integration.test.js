@@ -51,7 +51,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query(`DROP TABLE IF EXISTS public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
+    await owner.query(`DROP TABLE IF EXISTS public.auth_sessions, public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
       public.task_labels, public.tasks, public.projects, public.spaces, public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
   });

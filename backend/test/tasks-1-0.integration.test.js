@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const { createPool } = require("../db");
 const { runMigrations, listMigrations } = require("../migrations");
-const { startApp, SAME_ORIGIN_JSON } = require("./support");
+const { startApp, SAME_ORIGIN_JSON, USERNAME, PASSWORD } = require("./support");
 
 const OWNER_URL = process.env.TEST_MIGRATION_DATABASE_URL;
 const APP_URL = process.env.TEST_DATABASE_URL;
@@ -38,7 +38,7 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query(`DROP TABLE IF EXISTS public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
+    await owner.query(`DROP TABLE IF EXISTS public.auth_sessions, public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
       public.task_labels, public.tasks, public.projects, public.spaces, public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
     await runMigrations(owner, { dir: MIGRATIONS_DIR, appRole: APP_ROLE, log: () => {} });
@@ -241,8 +241,42 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
     assert.equal((await owner.query("SELECT count(*)::int AS n FROM task_time_entries WHERE ended_at IS NULL")).rows[0].n, 0);
   });
 
+  test("browser sessions: login, use, survive a restart, end on logout and are stored only as hashes", async () => {
+    const anonymous = ctx.request.bind(ctx);
+    const post = (url, body, cookie) => anonymous(url, { method: "POST", auth: null,
+      headers: { ...SAME_ORIGIN_JSON, ...(cookie ? { cookie } : {}) }, body: JSON.stringify(body) });
+    const login = await post("/api/auth/login", { login: USERNAME, password: PASSWORD });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const token = cookie.split("=")[1];
+
+    assert.equal((await anonymous("/api/tasks", { auth: null, headers: { cookie } })).status, 200);
+    const created = await post("/api/tasks", { title: "Z sesji", date: "2026-11-06" }, cookie);
+    assert.equal(created.status, 201);
+    const stored = await owner.query("SELECT token_hash, login, method FROM auth_sessions");
+    assert.equal(stored.rowCount, 1);
+    assert.notEqual(stored.rows[0].token_hash, token);
+    assert.deepEqual([stored.rows[0].login, stored.rows[0].method], [USERNAME, "password"]);
+
+    await ctx.close(); // "restart": a new app instance keeps the session
+    ctx = await startApp({ pool: appPool, migrationVersions: VERSIONS });
+    const session = await (await ctx.request("/api/auth/session", { auth: null, headers: { cookie } })).json();
+    assert.deepEqual([session.authenticated, session.login], [true, USERNAME]);
+
+    // a tampered cookie and an expired session are both anonymous
+    assert.equal((await ctx.request("/api/tasks", { auth: null, headers: { cookie: cookie.slice(0, -1) + "A" } })).status, 401);
+    await owner.query("UPDATE auth_sessions SET expires_at = now() - interval '1 second'");
+    assert.equal((await ctx.request("/api/tasks", { auth: null, headers: { cookie } })).status, 401);
+    await owner.query("UPDATE auth_sessions SET expires_at = now() + interval '1 hour'");
+
+    const out = await ctx.request("/api/auth/logout", { method: "POST", auth: null, headers: { ...SAME_ORIGIN_JSON, cookie }, body: "{}" });
+    assert.equal(out.status, 200);
+    assert.equal((await ctx.request("/api/tasks", { auth: null, headers: { cookie } })).status, 401);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM auth_sessions")).rows[0].n, 0);
+  });
+
   test("the application role reads and writes the new tables but cannot change their structure", async () => {
-    for (const table of ["spaces", "projects", "assignees", "task_labels", "task_notes", "task_subtasks", "task_time_entries", "task_history"]) {
+    for (const table of ["auth_sessions", "spaces", "projects", "assignees", "task_labels", "task_notes", "task_subtasks", "task_time_entries", "task_history"]) {
       await appPool.query(`SELECT 1 FROM ${table} LIMIT 1`);
       await assert.rejects(appPool.query(`ALTER TABLE ${table} ADD COLUMN x int`), /must be owner|permission denied/);
     }

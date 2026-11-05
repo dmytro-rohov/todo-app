@@ -9,6 +9,7 @@
     "dev": "node --env-file-if-exists=.env --watch server.js",
     "migrate": "node --env-file-if-exists=.env migrate.js",
     "hash-password": "node scripts/hash-password.js",
+    "revoke-sessions": "node --env-file-if-exists=.env scripts/revoke-sessions.js",
     "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
     "db:generate": "drizzle-kit generate"
   },

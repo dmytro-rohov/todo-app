@@ -146,6 +146,22 @@ const taskHistory = pgTable("task_history", {
   index("task_history_task").on(table.taskId),
 ]);
 
+// Browser sessions of the single owner (password login or "Zaloguj kontem Mytko"). Only the SHA-256 of the random
+// cookie token is stored, so a database read never yields a usable session.
+const authSessions = pgTable("auth_sessions", {
+  id: serial("id").primaryKey(),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+  login: varchar("login", { length: 80 }).notNull(),
+  method: varchar("method", { length: 10 }).notNull(),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+  expiresAt: timestamptz("expires_at").notNull(),
+}, (table) => [
+  check("auth_sessions_method_check", sql`${table.method} IN ('password', 'mytko')`),
+  uniqueIndex("auth_sessions_token").on(table.tokenHash),
+  index("auth_sessions_expires").on(table.expiresAt),
+]);
+
 module.exports = {
+  authSessions,
   categories, spaces, projects, assignees, tasks, taskLabels, taskNotes, taskSubtasks, taskTimeEntries, taskHistory
 };

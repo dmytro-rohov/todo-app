@@ -60,7 +60,8 @@ function loadConfig(env = process.env) {
     auth: {
       disabled: authDisabled,
       username: authUsername,
-      passwordHash: authPasswordHash
+      passwordHash: authPasswordHash,
+      sessionTtlMs: toInt(env.SESSION_TTL_HOURS, 168) * 3600000
     },
     rateLimit: {
       windowMs: toInt(env.RATE_LIMIT_WINDOW_MS, 60000),

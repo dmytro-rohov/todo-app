@@ -22,7 +22,7 @@ test("the stylesheet source exists and builds into dist/ (ignored by Git)", () =
 test("SCSS declares the cascade layer order once and avoids deprecated @import", () => {
   const style = readFileSync(join(frontendDir, "styles", "style.scss"), "utf8");
   const reset = readFileSync(join(frontendDir, "styles", "reset.scss"), "utf8");
-  assert.match(style, /^@layer reset, base, components, main, utilities;$/m);
+  assert.match(style, /^@layer reset, base, components, main, utilities, auth;$/m);
   assert.doesNotMatch(style, /@import/);
   assert.doesNotMatch(reset, /@layer/, "reset.scss is wrapped by style.scss; nesting creates reset.reset");
 });
@@ -34,7 +34,7 @@ test("compiled stylesheet exists (run `npm run build` in frontend/)", (t) => {
     return;
   }
   const content = readFileSync(css, "utf8");
-  assert.match(content, /@layer reset, base, components, main, utilities;/);
+  assert.match(content, /@layer reset, base, components, main, utilities, auth;/);
   assert.doesNotMatch(content, /@layer reset\s*\{\s*@layer reset/);
 });
 

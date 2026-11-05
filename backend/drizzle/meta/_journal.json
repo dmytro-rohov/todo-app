@@ -15,6 +15,13 @@
       "when": 1793919960447,
       "tag": "0001_tasks_1_0",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793920160176,
+      "tag": "0002_auth_sessions",
+      "breakpoints": true
     }
   ]
 }

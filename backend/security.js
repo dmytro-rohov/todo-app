@@ -110,63 +110,92 @@ function rateLimit({ windowMs, max }) {
 }
 
 // ---- authentication ---------------------------------------------------------
-// HTTP Basic authentication for the single owner of this instance. The app has
-// no user model; every task and category belongs to whoever holds the
-// credentials. Must only be served over HTTPS (TLS terminated by Caddy).
-function basicAuth({ username, passwordHash, failWindowMs, failMax }) {
+// The single owner of this instance signs in with a browser session (login screen or "Zaloguj kontem Mytko", see
+// routes/auth.js). HTTP Basic stays accepted for scripts and the release smoke test, but is never requested
+// (no WWW-Authenticate), so browsers do not show their own password dialog. The app has no user model; every task
+// belongs to whoever is authenticated. Must only be served over HTTPS (TLS terminated by Caddy).
+function ownerCredentials({ username, passwordHash, failWindowMs, failMax }) {
   const parsedHash = parsePasswordHash(passwordHash);
   const expectedUser = sha256(username);
   const failures = createWindowCounter({ windowMs: failWindowMs });
 
-  // Successful credentials are remembered (as a keyed digest, never in plain
-  // text) so each static asset/API request does not cost a full scrypt run.
+  return {
+    username,
+    // Returns the seconds to wait when this client is locked out after too many failures, else 0.
+    lockedFor(req) {
+      if (failMax === 0) return 0;
+      const entry = failures.peek(clientAddress(req));
+      return entry.count >= failMax ? Math.ceil((entry.resetAt - Date.now()) / 1000) : 0;
+    },
+    async check(req, user, password) {
+      const userOk = crypto.timingSafeEqual(sha256(String(user)), expectedUser);
+      const passwordOk = await verifyPassword(String(password), parsedHash);
+      if (userOk && passwordOk) return true;
+      failures.hit(clientAddress(req));
+      return false;
+    },
+    stop: failures.stop
+  };
+}
+
+function ownerAuth({ credentials, sessions, cookieName }) {
+  // Successful Basic credentials are remembered (as a keyed digest, never in plain
+  // text) so each request does not cost a full scrypt run.
   const cacheKey = crypto.randomBytes(32);
   const verified = new Map();
   const VERIFIED_TTL_MS = 10 * 60000;
 
-  function challenge(res) {
-    res.set("WWW-Authenticate", 'Basic realm="Mytko Tasks", charset="UTF-8"');
-    return res.status(401).json({ message: "Authentication required" });
-  }
+  const deny = res => res.status(401).json({ message: "Authentication required" });
 
   const middleware = async (req, res, next) => {
-    if (failMax > 0 && failures.peek(clientAddress(req)).count >= failMax) {
-      const entry = failures.peek(clientAddress(req));
-      res.set("Retry-After", String(Math.ceil((entry.resetAt - Date.now()) / 1000)));
+    const waitSeconds = credentials.lockedFor(req);
+    if (waitSeconds) {
+      res.set("Retry-After", String(waitSeconds));
       return res.status(429).json({ message: "Too many failed login attempts" });
     }
 
-    const header = req.get("authorization") || "";
-    const match = /^Basic ([A-Za-z0-9+/=]+)$/.exec(header);
-    if (!match) return challenge(res);
-
-    const digest = crypto.createHmac("sha256", cacheKey).update(match[1]).digest("base64");
-    const cachedUntil = verified.get(digest);
-    if (cachedUntil && cachedUntil > Date.now()) return next();
-
-    const decoded = Buffer.from(match[1], "base64").toString("utf8");
-    const separator = decoded.indexOf(":");
-    if (separator === -1) return challenge(res);
-    const user = decoded.slice(0, separator);
-    const password = decoded.slice(separator + 1);
-
     try {
-      const userOk = crypto.timingSafeEqual(sha256(user), expectedUser);
-      const passwordOk = await verifyPassword(password, parsedHash);
-      if (userOk && passwordOk) {
-        if (verified.size > 1000) verified.clear();
-        verified.set(digest, Date.now() + VERIFIED_TTL_MS);
+      const session = await sessions.verify(readCookieValue(req, cookieName));
+      if (session && (session.method !== "password" || session.login === credentials.username)) {
+        req.auth = session;
         return next();
       }
     } catch (error) {
       return next(error);
     }
 
-    failures.hit(clientAddress(req));
-    return challenge(res);
+    const match = /^Basic ([A-Za-z0-9+/=]+)$/.exec(req.get("authorization") || "");
+    if (!match) return deny(res);
+
+    const digest = crypto.createHmac("sha256", cacheKey).update(match[1]).digest("base64");
+    const cachedUntil = verified.get(digest);
+    if (cachedUntil && cachedUntil > Date.now()) {
+      req.auth = { login: credentials.username, method: "basic" };
+      return next();
+    }
+
+    const decoded = Buffer.from(match[1], "base64").toString("utf8");
+    const separator = decoded.indexOf(":");
+    if (separator === -1) return deny(res);
+
+    try {
+      if (await credentials.check(req, decoded.slice(0, separator), decoded.slice(separator + 1))) {
+        if (verified.size > 1000) verified.clear();
+        verified.set(digest, Date.now() + VERIFIED_TTL_MS);
+        req.auth = { login: credentials.username, method: "basic" };
+        return next();
+      }
+    } catch (error) {
+      return next(error);
+    }
+    return deny(res);
   };
-  middleware.stop = failures.stop;
+  middleware.stop = () => {};
   return middleware;
+}
+
+function readCookieValue(req, name) {
+  return require("./sessions").readCookie(req, name);
 }
 
 function sha256(value) {
@@ -174,7 +203,7 @@ function sha256(value) {
 }
 
 // ---- CSRF -------------------------------------------------------------------
-// Browsers attach Basic credentials to cross-site requests automatically, so
+// Browsers attach cookies (and Basic credentials) to some cross-site requests, so
 // state-changing requests must prove they come from our own origin.
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -240,7 +269,9 @@ module.exports = {
   parsePasswordHash,
   verifyPassword,
   rateLimit,
-  basicAuth,
+  clientAddress,
+  ownerCredentials,
+  ownerAuth,
   csrfProtection,
   securityHeaders,
   CONTENT_SECURITY_POLICY
