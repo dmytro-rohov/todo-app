@@ -52,6 +52,14 @@ const SSO_NOTICES = {
   unavailable: "Mytko Workflow jest teraz niedostępny. Użyj loginu i hasła."
 };
 
+export const SSO_TRIED = "mytko-tasks-sso-tried";
+
+export function shouldTryMytko(state, search, storage) {
+  let tried = true;
+  try { tried = storage.getItem(SSO_TRIED) === "1"; } catch { /* storage blocked: never auto-redirect */ }
+  return Boolean(state.mytkoLogin) && !new URLSearchParams(search).has("sso") && !tried;
+}
+
 export function ssoNotice(search) {
   const code = new URLSearchParams(search).get("sso");
   return code && SSO_NOTICES[code] ? SSO_NOTICES[code] : null;
