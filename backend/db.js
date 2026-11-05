@@ -20,4 +20,20 @@ function createPool({ connectionString, max = 10, statementTimeoutMs = 10000, ap
   return pool;
 }
 
-module.exports = { createPool };
+// Runs fn(client) inside one transaction on a dedicated client; rolls back on any error.
+async function withTransaction(pool, fn) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { createPool, withTransaction };

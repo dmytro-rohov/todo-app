@@ -275,7 +275,9 @@ describe("input handling", () => {
           }
           return { rows: [{ id: 1 }], rowCount: 1 };
         },
-        "FROM tasks": () => {
+        // the task just inserted (id 1) is read back; any other id does not exist
+        "FROM tasks WHERE id": (sql, params) => (params[0] === 1 ? { rows: [{ id: 1, title: lastQuery[0] }], rowCount: 1 } : { rows: [], rowCount: 0 }),
+        "FROM tasks WHERE archived_at": () => {
           throw new Error('relation "tasks" does not exist');
         }
       })
@@ -302,7 +304,8 @@ describe("input handling", () => {
   test("normalizes a valid task (trimmed title, completed defaults to false)", async () => {
     const res = await post("/api/tasks", { title: "  Kupić mleko  ", date: "2026-10-30", categoryId: 2 });
     assert.equal(res.status, 201);
-    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null]);
+    // no space given and no built-in space in the fake database: the task is stored without one (= private)
+    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null, null, null, null, false]);
   });
 
   test("unknown category -> 400 instead of 500", async () => {
@@ -496,16 +499,22 @@ describe('TASKS-06 private surface', () => {
 
 describe("PATCH task contract", () => {
   test("returns the same camelCase task shape as reads and persists status/order", async () => {
-    const returned = { id: 7, title: "Updated", completed: true, date: "2026-10-31", categoryId: null, description: "Details", status: "done", priority: "P1", position: 2, dueDate: null, createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T01:00:00.000Z", completedAt: "2026-10-31T01:00:00.000Z", archivedAt: null };
+    const returned = { id: 7, title: "Updated", completed: true, date: "2026-10-31", categoryId: null, description: "Details", status: "done", priority: "P1", position: 2, dueDate: null, createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T01:00:00.000Z", completedAt: "2026-10-31T01:00:00.000Z", archivedAt: null, spaceId: 2, projectId: null, assigneeId: null, reviewRequestedAt: null, labelIds: [], subtaskCount: 0, subtaskDoneCount: 0, noteCount: 0, trackedSeconds: 0, timerStartedAt: null };
+    const before = { ...returned, status: "todo", completed: false, completedAt: null, position: 0 };
     let params;
+    let reads = 0;
+    const history = [];
     const ctx = await startApp({ pool: fakePool({
-      "UPDATE tasks SET": (sql, values) => { params = values; return { rows: [returned], rowCount: 1 }; }
+      "UPDATE tasks SET": (sql, values) => { params = values; return { rows: [], rowCount: 1 }; },
+      "INSERT INTO task_history": (sql, values) => { history.push(values); return { rows: [], rowCount: 2 }; },
+      "FROM tasks WHERE id": () => ({ rows: [reads++ === 0 ? before : returned], rowCount: 1 })
     }) });
     try {
       const res = await ctx.request("/api/tasks/7", { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ status: "done", position: 2 }) });
       assert.equal(res.status, 200);
       assert.deepEqual(await res.json(), returned);
-      assert.deepEqual(params, ["done", 2, true, 7]);
+      assert.deepEqual(params, [2, "done", 7]);
+      assert.deepEqual(history, [[7, ["status"], ["todo"], ["done"], "owner"]]); // position is not history
     } finally { await ctx.close(); }
   });
 

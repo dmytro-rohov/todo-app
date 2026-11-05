@@ -51,7 +51,8 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query("DROP TABLE IF EXISTS public.tasks, public.categories CASCADE");
+    await owner.query(`DROP TABLE IF EXISTS public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
+      public.task_labels, public.tasks, public.projects, public.spaces, public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
   });
 
@@ -143,7 +144,8 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
     const fks = await owner.query(`
       SELECT conname FROM pg_constraint
       WHERE conrelid = 'public.tasks'::regclass AND contype = 'f'`);
-    assert.deepEqual(fks.rows.map(r => r.conname), ["tasks_category_id_categories_id_fk"]);
+    assert.deepEqual(fks.rows.map(r => r.conname).sort(),
+      ["tasks_assignee_id_assignees_id_fk", "tasks_category_id_categories_id_fk", "tasks_project_id_projects_id_fk", "tasks_space_id_spaces_id_fk"]);
     await assert.rejects(
       owner.query("INSERT INTO tasks (title, completed, date) VALUES ('x', NULL, '2026-10-30')"),
       /null value/);
@@ -201,8 +203,20 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
         createdAt: tasks[0].createdAt,
         updatedAt: tasks[0].updatedAt,
         completedAt: tasks[0].completedAt,
-        archivedAt: null
+        archivedAt: null,
+        spaceId: tasks[0].spaceId, // the built-in private space
+        projectId: null,
+        assigneeId: null,
+        reviewRequestedAt: null,
+        labelIds: [],
+        subtaskCount: 0,
+        subtaskDoneCount: 0,
+        noteCount: 0,
+        trackedSeconds: 0,
+        timerStartedAt: null
       });
+      const spaces = await (await ctx.request("/api/spaces")).json();
+      assert.equal(spaces.find(space => space.key === "private").id, tasks[0].spaceId);
 
       assert.equal((await ctx.request("/api/tasks/date/2026-10-30", { method: "DELETE", headers: SAME_ORIGIN_JSON })).status, 200);
       assert.deepEqual(await (await ctx.request("/api/tasks")).json(), []);

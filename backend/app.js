@@ -2,6 +2,10 @@ const express = require("express");
 
 const createTasksRouter = require("./routes/tasks");
 const createCategoriesRouter = require("./routes/categories");
+const createSpacesRouter = require("./routes/spaces");
+const createProjectsRouter = require("./routes/projects");
+const createAssigneesRouter = require("./routes/assignees");
+const createTaskDetailsRouter = require("./routes/task-details");
 const { checkSchema } = require("./migrations");
 const {
   basicAuth,
@@ -69,7 +73,11 @@ function createApp({ config, pool, migrationVersions = [] }) {
   api.use(csrfProtection({ publicOrigin: config.publicOrigin }));
   api.use(express.json({ limit: "10kb", inflate: false }));
   api.use("/tasks", createTasksRouter(pool));
+  api.use("/tasks", createTaskDetailsRouter(pool));
   api.use("/categories", createCategoriesRouter(pool));
+  api.use("/spaces", createSpacesRouter(pool));
+  api.use("/projects", createProjectsRouter(pool));
+  api.use("/assignees", createAssigneesRouter(pool));
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });

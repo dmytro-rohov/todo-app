@@ -65,19 +65,13 @@ Aplikacja działa w architekturze klient–serwer:
 
 ## Struktura bazy danych
 
-### Tabela: tasks
+- `spaces`: przestrzenie (wbudowane Praca i Prywatne oraz własne)
+- `projects`: projekty i klienci, każdy w jednej przestrzeni
+- `tasks`: zadania (status, priorytet, termin, kolejność, przestrzeń, projekt, etykieta główna)
+- `categories`: etykiety; dodatkowe etykiety zadania w `task_labels`
+- `task_notes`, `task_subtasks`, `task_history`: notatki, podzadania i historia zmian zadania
 
-- id (PRIMARY KEY)
-- title (VARCHAR)
-- completed (BOOLEAN)
-- date (DATE)
-- category_id (FOREIGN KEY)
-
-### Tabela: categories
-
-- id (PRIMARY KEY)
-- name (VARCHAR)
-- color (VARCHAR)
+Szczegóły modelu, reguły i API: [docs/TASKS-1-0-DATA-MODEL.md](docs/TASKS-1-0-DATA-MODEL.md).
 
 ---
 
