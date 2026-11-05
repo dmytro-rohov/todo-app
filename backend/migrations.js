@@ -1,3 +1,6 @@
+// Schema migrations are Drizzle migrations (./drizzle, generated from ./db/schema.js by drizzle-kit).
+// Production schema changes are applied by Mytko's approved migration path; `npm run migrate` applies the same
+// files to dev/test databases using the standard Drizzle migrator and its standard history table.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -5,21 +8,19 @@ const path = require("node:path");
 // Arbitrary constant shared by every migrator for this database. Concurrent
 // migrators serialize on it instead of racing on DDL.
 const MIGRATION_LOCK_ID = 7243917461;
-const MIGRATION_FILE = /^(\d{3,})_[a-z0-9_]+\.sql$/;
 const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
+const TAG = /^[0-9]{4}_[A-Za-z0-9_]+$/;
 
+// Reads the shipped migrations from the Drizzle journal. `hash` is what Drizzle records in
+// drizzle.__drizzle_migrations (sha256 of the SQL file text).
 function listMigrations(dir) {
-  return fs.readdirSync(dir)
-    .filter(file => MIGRATION_FILE.test(file))
-    .sort()
-    .map(file => {
-      const sql = fs.readFileSync(path.join(dir, file), "utf8");
-      return {
-        version: file.replace(/\.sql$/, ""),
-        sql,
-        checksum: crypto.createHash("sha256").update(sql).digest("hex")
-      };
-    });
+  const journal = JSON.parse(fs.readFileSync(path.join(dir, "meta", "_journal.json"), "utf8"));
+  if (!Array.isArray(journal.entries)) throw new Error("Invalid Drizzle journal");
+  return journal.entries.map(entry => {
+    if (!TAG.test(entry.tag)) throw new Error(`Invalid migration tag ${entry.tag}`);
+    const sql = fs.readFileSync(path.join(dir, `${entry.tag}.sql`), "utf8");
+    return { version: entry.tag, when: entry.when, hash: crypto.createHash("sha256").update(sql).digest("hex"), sql };
+  });
 }
 
 async function acquireLock(client, timeoutMs) {
@@ -34,63 +35,49 @@ async function acquireLock(client, timeoutMs) {
   }
 }
 
+// Drizzle selects pending migrations by timestamp only, so a modified file that is already behind the newest
+// applied migration would be skipped silently. Applied history is therefore checked by hash as well.
+async function appliedHistory(client) {
+  const exists = await client.query("SELECT to_regclass('drizzle.__drizzle_migrations') AS name");
+  if (!exists.rows[0].name) return { hashes: new Set(), last: -1 };
+  const rows = await client.query("SELECT hash, created_at FROM drizzle.__drizzle_migrations");
+  return {
+    hashes: new Set(rows.rows.map(row => row.hash)),
+    last: rows.rows.reduce((max, row) => Math.max(max, Number(row.created_at)), -1)
+  };
+}
+
 async function runMigrations(pool, { dir, appRole, lockTimeoutMs = 60000, log = console.log }) {
+  const { drizzle } = require("drizzle-orm/node-postgres");
+  const { migrate } = require("drizzle-orm/node-postgres/migrator");
   const migrations = listMigrations(dir);
   const client = await pool.connect();
 
   try {
     await acquireLock(client, lockTimeoutMs);
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS public.schema_migrations (
-        version text PRIMARY KEY,
-        checksum text NOT NULL,
-        applied_at timestamptz NOT NULL DEFAULT now()
-      )
-    `);
-
-    const appliedRows = await client.query("SELECT version, checksum FROM public.schema_migrations");
-    const applied = new Map(appliedRows.rows.map(row => [row.version, row.checksum]));
-    const known = new Set(migrations.map(m => m.version));
-
+    const before = (await appliedHistory(client)).hashes;
+    const { last } = await appliedHistory(client);
     for (const migration of migrations) {
-      const checksum = applied.get(migration.version);
-      if (checksum && checksum !== migration.checksum) {
+      if (migration.when <= last && !before.has(migration.hash)) {
         throw new Error(`Migration ${migration.version} was modified after it was applied`);
       }
     }
-
     // A newer release may have applied migrations this code does not know.
     // That is expected when rolling the application back, so only warn.
-    for (const version of applied.keys()) {
-      if (!known.has(version)) {
-        log(`warning: database has migration ${version} that this release does not know`);
-      }
+    const known = new Set(migrations.map(m => m.hash));
+    for (const hash of before) {
+      if (!known.has(hash)) log(`warning: database has migration ${hash} that this release does not know`);
     }
-
-    const pending = migrations.filter(m => !applied.has(m.version));
-    for (const migration of pending) {
-      log(`applying ${migration.version}`);
-      await client.query("BEGIN");
-      try {
-        await client.query("SET LOCAL lock_timeout = '10s'");
-        await client.query(migration.sql);
-        await client.query(
-          "INSERT INTO public.schema_migrations (version, checksum) VALUES ($1, $2)",
-          [migration.version, migration.checksum]
-        );
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        error.message = `Migration ${migration.version} failed: ${error.message}`;
-        throw error;
-      }
+    const pending = migrations.filter(m => !before.has(m.hash));
+    if (pending.length) {
+      pending.forEach(m => log(`applying ${m.version}`));
+      await client.query("SET lock_timeout = '10s'");
+      await migrate(drizzle({ client }), { migrationsFolder: dir });
+      await client.query("RESET lock_timeout");
     }
-
     if (appRole) {
       await grantAppRole(client, appRole);
     }
-
     log(pending.length === 0 ? "schema up to date" : `applied ${pending.length} migration(s)`);
     return pending.map(m => m.version);
   } finally {
@@ -100,7 +87,7 @@ async function runMigrations(pool, { dir, appRole, lockTimeoutMs = 60000, log = 
 }
 
 // The application role gets data access only: no DDL, no ownership, and
-// read-only access to the migration ledger (used by the readiness check).
+// read-only access to the migration history (used by the readiness check).
 async function grantAppRole(client, role) {
   if (!ROLE_NAME.test(role)) {
     throw new Error(`Invalid APP_DB_ROLE "${role}"`);
@@ -109,14 +96,15 @@ async function grantAppRole(client, role) {
   await client.query(`GRANT USAGE ON SCHEMA public TO ${name}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON public.tasks, public.categories TO ${name}`);
   await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${name}`);
-  await client.query(`GRANT SELECT ON public.schema_migrations TO ${name}`);
+  await client.query(`GRANT USAGE ON SCHEMA drizzle TO ${name}`);
+  await client.query(`GRANT SELECT ON drizzle.__drizzle_migrations TO ${name}`);
 }
 
-// Readiness: every migration shipped with this release must be applied.
-async function checkSchema(pool, versions) {
-  const result = await pool.query("SELECT version FROM public.schema_migrations");
-  const applied = new Set(result.rows.map(row => row.version));
-  return versions.every(version => applied.has(version));
+// Readiness: every migration shipped with this release (by Drizzle hash) must be applied.
+async function checkSchema(pool, hashes) {
+  const result = await pool.query("SELECT hash FROM drizzle.__drizzle_migrations");
+  const applied = new Set(result.rows.map(row => row.hash));
+  return hashes.every(hash => applied.has(hash));
 }
 
 module.exports = { listMigrations, runMigrations, checkSchema, MIGRATION_LOCK_ID };

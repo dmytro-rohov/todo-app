@@ -2,7 +2,7 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const {startApp,SAME_ORIGIN_JSON}=require('./support');
 test('category HTTP CRUD, duplicate names allowed, normalized values and missing IDs',async()=>{
  let rows=[],next=1;const pool={async query(sql,p=[]){
- if(sql.includes('schema_migrations'))return {rows:[]};
+ if(sql.includes('__drizzle_migrations'))return {rows:[]};
  if(sql.includes('INSERT INTO categories')){const row={id:next++,name:p[0],color:p[1]};rows.push(row);return {rows:[row],rowCount:1};}
  if(sql.includes('UPDATE categories')){const row=rows.find(r=>r.id===p[2]);if(row)Object.assign(row,{name:p[0],color:p[1]});return {rows:row?[row]:[],rowCount:row?1:0};}
  if(sql.includes('DELETE FROM categories')){const old=rows.length;rows=rows.filter(r=>r.id!==p[0]);return {rows:[],rowCount:old-rows.length};}

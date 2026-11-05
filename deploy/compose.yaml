@@ -5,7 +5,8 @@
 #   node check-env.cjs app.env migrate.env                             (read-only pre-deploy check)
 #   APP_IMAGE=registry.example/mytko-tasks@sha256:<digest> docker compose up -d
 #
-# `migrate` runs to completion before `app` starts (schema first, code second).
+# `migrate` runs to completion before `app` starts (schema first, code second). Under Mytko external deploy this service
+# is NOT part of the deployment profile: production schema changes go through the approved Drizzle migration path.
 # PostgreSQL is external and operator-provisioned (see docs/PRODUCTION.md).
 # There is no data volume: the application stores nothing on disk.
 

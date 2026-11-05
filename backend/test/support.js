@@ -19,7 +19,8 @@ const { hashPassword } = require("../security");
 const ORIGIN = "https://task.mytko.dev";
 const USERNAME = "owner";
 const PASSWORD = "correct horse battery staple";
-const MIGRATIONS = ["001_baseline", "002_task_integrity"];
+const { listMigrations } = require("../migrations");
+const MIGRATIONS = listMigrations(require("node:path").join(__dirname, "..", "drizzle")).map(m => m.hash);
 
 // Low scrypt cost keeps tests fast; production hashes use the defaults.
 const passwordHashPromise = hashPassword(PASSWORD, { N: 1024, r: 8, p: 1, keyLength: 32 });
@@ -70,8 +71,8 @@ function fakePool(overrides = {}) {
       for (const [pattern, handler] of Object.entries(overrides)) {
         if (sql.includes(pattern)) return handler(sql, params);
       }
-      if (sql.includes("schema_migrations")) {
-        return { rows: MIGRATIONS.map(version => ({ version })), rowCount: MIGRATIONS.length };
+      if (sql.includes("__drizzle_migrations")) {
+        return { rows: MIGRATIONS.map(hash => ({ hash })), rowCount: MIGRATIONS.length };
       }
       if (sql.includes("INSERT INTO categories")) {
         return { rows: [{ id: 1, name: params[0], color: params[1] }], rowCount: 1 };

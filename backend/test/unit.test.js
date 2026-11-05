@@ -120,9 +120,10 @@ describe("validation", () => {
 
 describe("migrations on disk", () => {
   test("are ordered and checksummed", () => {
-    const migrations = listMigrations(path.join(__dirname, "..", "migrations"));
-    assert.deepEqual(migrations.map(m => m.version), ["001_baseline", "002_task_integrity", "003_kanban"]);
-    for (const m of migrations) assert.match(m.checksum, /^[0-9a-f]{64}$/);
+    const migrations = listMigrations(path.join(__dirname, "..", "drizzle"));
+    assert.deepEqual(migrations.map(m => m.version), ["0000_initial"]);
+    for (const m of migrations) assert.match(m.hash, /^[0-9a-f]{64}$/);
+    assert.deepEqual(migrations.map(m => m.when).slice().sort((a, b) => a - b), migrations.map(m => m.when));
   });
 });
 

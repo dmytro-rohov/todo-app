@@ -13,7 +13,7 @@ try {
 
 const pool = createPool(config.database);
 
-const migrationVersions = listMigrations(config.migrationsDir).map(m => m.version);
+const migrationVersions = listMigrations(config.migrationsDir).map(m => m.hash);
 const { app, markShuttingDown, stop } = createApp({ config, pool, migrationVersions });
 
 const server = app.listen(config.port, config.host, () => {

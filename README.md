@@ -92,7 +92,7 @@ Wymagania: Node.js 24, PostgreSQL.
 cd backend
 npm install
 cp .env.example .env        # uzupełnić DATABASE_URL / MIGRATION_DATABASE_URL
-npm run migrate             # tworzy/aktualizuje schemat (migrations/*.sql)
+npm run migrate             # tworzy/aktualizuje schemat (backend/drizzle/*.sql, Drizzle)
 npm run dev                 # http://localhost:3000 – API + frontend
 
 # 3. Style (SCSS -> frontend/dist/style.css)
@@ -106,7 +106,7 @@ npm test                    # testy integracyjne wymagają TEST_DATABASE_URL, pa
 ../deploy/smoke-test.sh     # pełny test obrazu Docker (wymaga Dockera)
 ```
 
-Schemat bazy jest zarządzany przez migracje w `backend/migrations/` (dawny `database.sql` = `001_baseline.sql`).
+Schemat bazy jest zdefiniowany w `backend/db/schema.js`, a migracje (Drizzle, `backend/drizzle/`) generuje `npm run db:generate`. Na produkcji migracje stosuje zatwierdzona ścieżka Mytko (Database Broker); `npm run migrate` służy do baz dev/test. Reguły domenowe (`completed` ⇔ `status`, `position`, `updated_at`) są w aplikacji, nie w triggerach.
 
 ## Produkcja
 

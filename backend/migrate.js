@@ -11,7 +11,7 @@ async function main() {
 
   try {
     await runMigrations(pool, {
-      dir: path.join(__dirname, "migrations"),
+      dir: path.join(__dirname, "drizzle"),
       appRole: process.env.APP_DB_ROLE || ""
     });
   } finally {

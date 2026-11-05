@@ -57,7 +57,7 @@ describe("readiness failures do not leak details", () => {
   test("database error -> 503 without message", async () => {
     const ctx = await startApp({
       pool: fakePool({
-        schema_migrations: () => {
+        __drizzle_migrations: () => {
           throw new Error('password authentication failed for user "tasks_app" at db.secret.internal');
         }
       })

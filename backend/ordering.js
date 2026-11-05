@@ -32,7 +32,8 @@ async function moveTask(pool, body) {
     const lists=task.status===body.status ? [target] : [source,target];
     for(const list of lists) for(let position=0;position<list.length;position++) {
       const row=list[position];
-      await client.query('UPDATE tasks SET status=$1, position=$2 WHERE id=$3',[row.status,position,row.id]);
+      await client.query(`UPDATE tasks SET status=$1::text, position=$2, completed=($1::text='done'),
+        completed_at=CASE WHEN $1::text='done' THEN COALESCE(completed_at, now()) ELSE NULL END, updated_at=now() WHERE id=$3`,[row.status,position,row.id]);
     }
     await client.query('COMMIT'); return { status: 200, message: 'Task moved' };
   } catch(error) { await client.query('ROLLBACK'); throw error; }
