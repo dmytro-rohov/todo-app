@@ -22,7 +22,7 @@ test("the stylesheet source exists and builds into dist/ (ignored by Git)", () =
 test("SCSS declares the cascade layer order once and avoids deprecated @import", () => {
   const style = readFileSync(join(frontendDir, "styles", "style.scss"), "utf8");
   const reset = readFileSync(join(frontendDir, "styles", "reset.scss"), "utf8");
-  assert.match(style, /^@layer reset, base, components, main, utilities, auth;$/m);
+  assert.match(style, /^@layer reset, base, components, views, auth;$/m);
   assert.doesNotMatch(style, /@import/);
   assert.doesNotMatch(reset, /@layer/, "reset.scss is wrapped by style.scss; nesting creates reset.reset");
 });
@@ -34,7 +34,7 @@ test("compiled stylesheet exists (run `npm run build` in frontend/)", (t) => {
     return;
   }
   const content = readFileSync(css, "utf8");
-  assert.match(content, /@layer reset, base, components, main, utilities, auth;/);
+  assert.match(content, /@layer reset, base, components, views, auth;/);
   assert.doesNotMatch(content, /@layer reset\s*\{\s*@layer reset/);
 });
 
@@ -86,11 +86,13 @@ test("every module reachable from main.js resolves with matching named exports",
     }
   }
 
-  assert.ok(seen.has(join(frontendDir, "js", "board.js")), "entry point must load the Kanban module");
+  for (const view of ["board.js", "list.js", "calendar.js", "drawer.js"]) {
+    assert.ok(seen.has(join(frontendDir, "js", "app", view)), `entry point must load ${view}`);
+  }
 });
 
 test("no API module hardcodes a localhost URL", () => {
-  for (const name of ["http.js", "tasks.js", "categories.js"]) {
+  for (const name of ["http.js", "client.js"]) {
     const source = readFileSync(join(frontendDir, "js", "api", name), "utf8");
     assert.doesNotMatch(source, /localhost|127\.0\.0\.1/, `${name} hardcodes a local URL`);
   }

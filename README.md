@@ -1,65 +1,44 @@
-# Todo App
+# Mytko Tasks
 
-## Opis projektu
-
-Aplikacja typu Todo List wykonana w pełnym stacku (frontend + backend + baza danych).
-Umożliwia zarządzanie zadaniami oraz kategoriami z pełną integracją z bazą danych PostgreSQL.
-
-Projekt został wykonany bez frameworków frontendowych (Vanilla JS), aby pokazać zrozumienie działania komunikacji klient–serwer oraz REST API.
-
----
+Prywatna lista zadań właściciela Mytko: praca i sprawy prywatne, projekty klientów, terminy i czas pracy.
+Działa na `tasks.mytko.dev`, wygląda i loguje się tak samo jak Mytko Workflow.
 
 ## Technologie
 
-### Frontend
-- HTML
-- CSS
-- JavaScript (Vanilla JS)
-- Fetch API
-
-### Backend
-- Node.js
-- Express.js
-- REST API
-
-### Baza danych
-- PostgreSQL
-
----
+- **Frontend:** Vanilla JS (natywne moduły ES, bez bundlera), SCSS, ikony SVG inline.
+- **Backend:** Node.js 24, Express 5, REST API.
+- **Baza:** PostgreSQL 17, schemat i migracje w Drizzle.
 
 ## Funkcjonalności
 
-### Zadania (Tasks)
-- Dodawanie nowych zadań
-- Usuwanie pojedynczych zadań
-- Usuwanie wszystkich zadań z danej daty
-- Edycja zadań (update)
-- Oznaczanie zadań jako wykonane
-- Grupowanie zadań według daty
+### Logowanie
+- Ekran logowania taki sam jak w Mytko Workflow: login i hasło właściciela.
+- **„Zaloguj kontem Mytko”**: kto jest zalogowany w Mytko Workflow, jest logowany automatycznie.
+- Sesje po stronie serwera: 7 dni, wylogowanie, blokada po nieudanych próbach.
 
-### Kategorie (Categories)
-- Dodawanie kategorii
-- Usuwanie kategorii
-- Przypisywanie kategorii do zadań
-- Licznik zadań w kategoriach
+### Tablica
+- Cztery kolumny: **ToDo, W realizacji, Needs review, Zakończone**.
+- Przeciąganie kart między kolumnami i w obrębie kolumny: myszą, palcem (przytrzymaj kartę) i klawiaturą (Alt + strzałki).
+  Kolejność w kolumnie to priorytet. Przeniesienie można cofnąć.
+- Karty pokazują projekt, etykiety, wykonawcę, termin (Dziś / Jutro / data; po terminie na czerwono), podzadania i czas pracy.
+- **Licznik czasu**: ▶ na karcie ToDo zaczyna pracę (zadanie przechodzi do „W realizacji”). Działa jeden licznik naraz.
+  ⚠ w „Needs review” zatwierdza zadanie i je kończy.
 
-### Dodatkowe funkcjonalności
-- Walidacja danych po stronie backendu
-- Obsługa błędów API
-- Formatowanie dat (Dzisiaj / Wczoraj / konkretna data)
-- Przechowywanie danych w PostgreSQL (brak localStorage)
+### Szczegóły zadania (panel boczny)
+- Edycja tytułu, statusu, terminu, przestrzeni, projektu, wykonawcy, priorytetu, etykiet i opisu.
+- Podzadania, notatki z datą, historia zmian, licznik czasu, usuwanie.
 
----
+### Widoki, wyszukiwanie i filtry
+- **Tablica, Lista** (grupy po statusie, sortowanie) i **Kalendarz** (miesiąc; przeciągnięcie zadania na inny dzień zmienia termin, klik w dzień dodaje zadanie).
+- Kafelki: otwarte, na dziś, po terminie, w ciągu 7 dni. Kliknięcie kafelka filtruje.
+- Wyszukiwarka (Ctrl K) po tytule, opisie, projekcie, etykietach i osobach.
+- Filtry: status, projekt, etykieta, wykonawca, „Pokaż zakończone”. Powiadomienia (dzwonek): na dziś i po terminie.
 
-## Architektura aplikacji
-
-Aplikacja działa w architekturze klient–serwer:
-
-- Frontend komunikuje się z backendem poprzez HTTP (Fetch API)
-- Backend udostępnia REST API
-- Dane przechowywane są w bazie PostgreSQL
-- Relacje między tabelami:
-  - tasks.category_id -> categories.id (FOREIGN KEY)
+### Porządek
+- **Przestrzenie**: Praca, Prywatne i własne. Prywatne nigdy nie są widoczne dla integracji ani agentów.
+- **Projekty / klienci** jako foldery w przestrzeni, z kolorem i archiwum.
+- **Etykiety** (kilka na zadanie) i **wykonawcy**.
+- Linki: `#board`, `#list`, `#calendar`, `#task-<id>`, `#new`, `#manage-projects`.
 
 ---
 
