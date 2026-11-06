@@ -10,6 +10,8 @@ export const api = {
   deleteTask: id => request(`/api/tasks/${id}`, { method: "DELETE" }),
   moveTask: body => request("/api/tasks/move", json("POST", body)),
   history: id => request(`/api/tasks/${id}/history`),
+  archive: () => request("/api/archive"),
+  restore: id => request(`/api/archive/${id}/restore`, json("POST", {})),
   timer: (id, action) => request(`/api/tasks/${id}/timer/${action}`, json("POST", {})),
 
   notes: id => request(`/api/tasks/${id}/notes`),

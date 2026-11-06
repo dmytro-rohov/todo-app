@@ -39,6 +39,7 @@ const PATHS = {
   subtasks: '<path d="M5 6.5h.01M5 12h.01M5 17.5h.01"/><path d="M9 6.5h10M9 12h10M9 17.5h10"/>',
   flag: '<path d="M6 20V4.5M6 5h10l-1.8 3.5L16 12H6"/>',
   undo: '<path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/>',
+  archive: '<rect x="3.5" y="4.5" width="17" height="4.5" rx="1.2"/><path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/>',
   grip: '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/>'
 };
 

@@ -108,6 +108,34 @@ try {
   await click('dialog [data-add] input[name="name"]'); await type("Pilne");
   await click('dialog [data-add] button[type="submit"]'); await sleep(900);
   check("labels can be added from Porządek", (await api("/api/categories")).some(l => l.name === "Pilne"));
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }); await sleep(300);
+
+  // 7. long columns scroll inside; a card can be dropped at the bottom of a long column
+  const post = body => fetch(BASE + "/api/tasks", { method: "POST", headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" }, body: JSON.stringify({ date: "2026-11-06", ...body }) }).then(r => r.json());
+  for (let i = 1; i <= 10; i++) await post({ title: `Długa kolumna ${i}`, status: "done" });
+  await send("Page.reload"); await sleep(2500);
+  const box = await evaluate("(() => { const c = document.querySelector('.column--done .column__cards'); return { client: c.clientHeight, scroll: c.scrollHeight, page: document.documentElement.scrollHeight }; })()");
+  check("a long column scrolls inside instead of growing the page", box.scroll > box.client && box.client <= 720, JSON.stringify(box));
+  const mover = (await api("/api/tasks")).find(t => t.status === "todo");
+  await evaluate("document.querySelector('.column--done .column__cards').scrollIntoView({ block: 'end' })"); await sleep(300);
+  const start = await center(`.card[data-id="${mover.id}"] .card__title`, false);
+  const zone = await evaluate("(() => { const r = document.querySelector('.column--done .column__cards').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.bottom - 15 }; })()");
+  await mouse("mousePressed", start.x, start.y);
+  for (let i = 1; i <= 10; i++) await mouse("mouseMoved", start.x + (zone.x - start.x) * i / 10, start.y + (zone.y - start.y) * i / 10);
+  await sleep(4000); // resting near the column's bottom edge scrolls it to the end
+  if (process.env.DEBUG) console.log("  at drop:", await evaluate(`JSON.stringify((() => { try { const c = document.querySelector('.column--done .column__cards'); const m = document.querySelector('.drop-marker'); return { top: c.scrollTop, max: c.scrollHeight - c.clientHeight, marker: m ? (m.parentElement?.dataset.drop || '?') + ' next=' + (m.nextElementSibling?.dataset?.id || 'end') : 'none', ghost: !!document.querySelector('.card--ghost'), y: ${zone.y}, inner: innerHeight, bottom: c.getBoundingClientRect().bottom, sy: scrollY }; } catch (e) { return String(e); } })())`), JSON.stringify(zone));
+  await mouse("mouseReleased", zone.x, zone.y); await sleep(1500);
+  const done = (await api("/api/tasks")).filter(t => t.status === "done").sort((a, b) => a.position - b.position);
+  check("resting at a column's edge scrolls it, so a card lands at the end of a long column", done.at(-1)?.id === mover.id, `last=${done.at(-1)?.title}`);
+
+  // 8. archive: restore brings a task back to ToDo
+  const archived = (await api("/api/archive")).tasks[0];
+  const archivedTitle = archived?.title;
+  if (archivedTitle) {
+    await click('[data-view="archive"]'); await sleep(800);
+    await click(`.row--archived[data-id="${archived.id}"] [data-arch=restore]`); await sleep(1200);
+    check("restoring from the archive reopens the task", (await api("/api/tasks")).some(t => t.title === archivedTitle && t.status === "todo"));
+  }
   check("no console errors or exceptions", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (error) {
   check("test run", false, error.stack);

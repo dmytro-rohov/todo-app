@@ -22,7 +22,8 @@ for (let i = 1; i <= 5; i++) await send("Input.dispatchTouchEvent", { type: "tou
 await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); await sleep(500);
 console.log(((await api("/api/tasks")).find(t => t.id === id).status === "todo" ? "PASS" : "FAIL") + " a quick swipe does not move the card");
 // Press and hold, then drag to the right edge (next column scrolls in), drop on the In progress column.
-await ev("scrollTo(0,0); document.querySelector('.board').scrollLeft = 0"); await sleep(300);
+// the swipe scrolled the column itself (long columns scroll inside); start the hold from the top again
+await ev("scrollTo(0,0); document.querySelector('.board').scrollLeft = 0; document.querySelectorAll('.column__cards').forEach(c => { c.scrollTop = 0; })"); await sleep(300);
 const q = await ev(`(() => { const r = document.querySelector('.card[data-id="${id}"] .card__title').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
 await send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: q.x, y: q.y }] });
 await sleep(450);

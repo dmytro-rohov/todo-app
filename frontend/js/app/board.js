@@ -6,6 +6,7 @@ import { applyMove, boardCanonical, byPosition, columns, dueLabel, dueState, for
   STATUS_LABELS, trackedNow } from "./logic.js";
 import { lookup, reload, render, runTask, store, visibleTasks } from "./app.js";
 import { openDrawer } from "./drawer.js";
+import { retentionNote } from "./archive.js";
 import { toast } from "./toast.js";
 
 const COLUMN_ICONS = { todo: "circle", in_progress: "play", needs_review: "warning", done: "checkCircle" };
@@ -84,6 +85,7 @@ export function renderBoard() {
       <div class="column__cards" data-drop="${status}">
         ${cols[status].map(cardHtml).join("") || `<p class="column__empty">${status === "done" && !store.filters.showDone ? "Zakończone są ukryte." : "Brak zadań. Przeciągnij tu kartę albo dodaj nową."}</p>`}
       </div>
+      ${status === "done" && retentionNote() ? `<p class="column__note">${icon("archive", 15)}${retentionNote()}</p>` : ""}
     </section>`).join("")}</div>`;
 }
 
@@ -161,9 +163,24 @@ function autoScroll(x, y) {
     if (x < r.left + 48) scroller.scrollLeft -= 12; else if (x > r.right - 48) scroller.scrollLeft += 12;
     scrolled = scroller.scrollLeft !== before;
   }
+  // the column under the pointer scrolls too, so a card reaches any place in a long column
+  const column = document.elementFromPoint(x, y)?.closest(".column__cards");
+  if (column && column.scrollHeight > column.clientHeight) {
+    const r = column.getBoundingClientRect();
+    const before = column.scrollTop;
+    column.scrollTop += edgeSpeed(y - r.top) ? -edgeSpeed(y - r.top) : edgeSpeed(r.bottom - y);
+    scrolled = scrolled || column.scrollTop !== before;
+  }
+  // Over a column only the column scrolls: moving the page too would pull the column away from the pointer.
+  if (column) return scrolled;
   const top = window.scrollY;
   if (y < 60) window.scrollBy(0, -12); else if (y > window.innerHeight - 60) window.scrollBy(0, 12);
   return scrolled || window.scrollY !== top;
+}
+
+// Pixels per frame: faster the closer the pointer is to the edge (0 outside the 48 px band).
+function edgeSpeed(distance) {
+  return distance < 48 ? Math.round(4 + 28 * (1 - Math.max(0, distance) / 48)) : 0;
 }
 
 function scrollLoop() {

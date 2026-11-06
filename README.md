@@ -14,6 +14,7 @@ Działa na `tasks.mytko.dev`, wygląda i loguje się tak samo jak Mytko Workflow
 ### Logowanie
 - Ekran logowania taki sam jak w Mytko Workflow: login i hasło właściciela.
 - **„Zaloguj kontem Mytko”**: kto jest zalogowany w Mytko Workflow, jest logowany automatycznie.
+  Tasks działa na OVH niezależnie od Workflow: gdy Workflow (serwer domowy) nie odpowiada, przycisk się wyłącza i działa login i hasło.
 - Sesje po stronie serwera: 7 dni, wylogowanie, blokada po nieudanych próbach.
 
 ### Tablica
@@ -29,6 +30,9 @@ Działa na `tasks.mytko.dev`, wygląda i loguje się tak samo jak Mytko Workflow
 - Podzadania, notatki z datą, historia zmian, licznik czasu, usuwanie.
 
 ### Widoki, wyszukiwanie i filtry
+- Długie kolumny przewijają się w środku (widać ok. 4 karty), przy przeciąganiu kolumna przewija się sama.
+- **Archiwum**: zakończone trafiają tam po 7 dniach; prywatne znikają na zawsze po kolejnych 7, praca i klienci po 90.
+  Z archiwum można przywrócić zadanie albo usunąć je od razu.
 - **Tablica, Lista** (grupy po statusie, sortowanie) i **Kalendarz** (miesiąc; przeciągnięcie zadania na inny dzień zmienia termin, klik w dzień dodaje zadanie).
 - Kafelki: otwarte, na dziś, po terminie, w ciągu 7 dni. Kliknięcie kafelka filtruje.
 - Wyszukiwarka (Ctrl K) po tytule, opisie, projekcie, etykietach i osobach.

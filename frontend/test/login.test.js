@@ -25,12 +25,14 @@ test("only known Mytko sign-in outcomes become notices", () => {
 
 test("the automatic Mytko sign-in runs once per tab and never after a reported outcome", () => {
   const storage = values => ({ getItem: key => values[key] ?? null });
-  assert.equal(shouldTryMytko({ mytkoLogin: true }, "", storage({})), true);
+  assert.equal(shouldTryMytko({ mytkoLogin: true, mytkoAvailable: true }, "", storage({})), true);
   assert.equal(shouldTryMytko({ mytkoLogin: false }, "", storage({})), false);
-  assert.equal(shouldTryMytko({ mytkoLogin: true }, "?sso=login_required", storage({})), false);
-  assert.equal(shouldTryMytko({ mytkoLogin: true }, "", storage({ [SSO_TRIED]: "1" })), false);
-  assert.equal(shouldTryMytko({ mytkoLogin: true }, "", { getItem() { throw new Error("blocked"); } }), false);
+  // configured, but Workflow (home server) is off: no redirect to its error page
+  assert.equal(shouldTryMytko({ mytkoLogin: true, mytkoAvailable: false }, "", storage({})), false);
+  assert.equal(shouldTryMytko({ mytkoLogin: true, mytkoAvailable: true }, "?sso=login_required", storage({})), false);
+  assert.equal(shouldTryMytko({ mytkoLogin: true, mytkoAvailable: true }, "", storage({ [SSO_TRIED]: "1" })), false);
+  assert.equal(shouldTryMytko({ mytkoLogin: true, mytkoAvailable: true }, "", { getItem() { throw new Error("blocked"); } }), false);
   // a logout in another tab of this browser stops every tab from signing back in by itself
-  assert.equal(shouldTryMytko({ mytkoLogin: true }, "", storage({}), storage({ [SSO_OFF]: "1" })), false);
-  assert.equal(shouldTryMytko({ mytkoLogin: true }, "", storage({}), storage({})), true);
+  assert.equal(shouldTryMytko({ mytkoLogin: true, mytkoAvailable: true }, "", storage({}), storage({ [SSO_OFF]: "1" })), false);
+  assert.equal(shouldTryMytko({ mytkoLogin: true, mytkoAvailable: true }, "", storage({}), storage({})), true);
 });

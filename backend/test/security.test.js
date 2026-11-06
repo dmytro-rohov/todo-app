@@ -544,7 +544,7 @@ describe("login screen API", () => {
   test("session state is readable anonymously and reveals nothing", async () => {
     const res = await ctx.request("/api/auth/session", { auth: null });
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { authenticated: false, login: null, method: null, expiresAt: null, ttlSeconds: 604800, mytkoLogin: false });
+    assert.deepEqual(await res.json(), { authenticated: false, login: null, method: null, expiresAt: null, ttlSeconds: 604800, mytkoLogin: false, mytkoAvailable: false });
   });
 
   test("a correct login sets a host-only, HttpOnly, Secure, SameSite=Strict session cookie", async () => {

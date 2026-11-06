@@ -7,12 +7,13 @@ import { counters, filterTasks, initials, isoDay, STATUS_LABELS } from "./logic.
 import { renderBoard, bindBoard, isDragging } from "./board.js";
 import { renderList, bindList } from "./list.js";
 import { renderCalendar, bindCalendar } from "./calendar.js";
+import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
 
 const PREFS = "mytko-tasks-prefs";
-const VIEWS = { board: ["board", "Tablica"], list: ["list", "Lista"], calendar: ["calendar", "Kalendarz"] };
+const VIEWS = { board: ["board", "Tablica"], list: ["list", "Lista"], calendar: ["calendar", "Kalendarz"], archive: ["archive", "Archiwum"] };
 
 export const store = {
   session: null,
@@ -23,6 +24,7 @@ export const store = {
   view: "board",
   listSort: "position",
   month: isoDay(),
+  archive: null,
   sidebarOpen: false
 };
 
@@ -268,7 +270,8 @@ export function render() {
   }
   const view = root.querySelector(".view");
   view.dataset.view = store.view;
-  view.innerHTML = store.view === "list" ? renderList() : store.view === "calendar" ? renderCalendar() : renderBoard();
+  view.innerHTML = store.view === "list" ? renderList() : store.view === "calendar" ? renderCalendar()
+    : store.view === "archive" ? renderArchive() : renderBoard();
   paint(root);
 }
 
@@ -293,6 +296,7 @@ function shellHtml() {
         <button type="button" role="tab" class="tab" data-view="board">${icon("board")}<span>Tablica</span></button>
         <button type="button" role="tab" class="tab" data-view="list">${icon("list")}<span>Lista</span></button>
         <button type="button" role="tab" class="tab" data-view="calendar">${icon("calendar")}<span>Kalendarz</span></button>
+        <button type="button" role="tab" class="tab" data-view="archive">${icon("archive")}<span>Archiwum</span></button>
       </div>
       <div class="split-btn">
         <button type="button" class="btn btn--primary" data-action="new-task">${icon("plus")}<span>Nowe zadanie</span></button>
@@ -395,6 +399,7 @@ export function startApp(element, session) {
     savePrefs();
     writeLink();
     render();
+    if (store.view === "archive") loadArchive();
   });
   root.querySelector(".filters").addEventListener("change", event => {
     const key = event.target.dataset.filter;
@@ -424,8 +429,10 @@ export function startApp(element, session) {
   bindBoard(root);
   bindList(root);
   bindCalendar(root);
+  bindArchive(root);
   render();
   reload();
+  loadArchive();
   // Running timers tick; other devices' changes arrive when the tab comes back.
   setInterval(() => !isDragging() && root.querySelector("[data-timer]") && render(), 30000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reload({ quiet: true }); });

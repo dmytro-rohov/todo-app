@@ -75,6 +75,12 @@ function loadConfig(env = process.env) {
       authFailWindowMs: toInt(env.AUTH_FAIL_WINDOW_MS, 15 * 60000),
       authFailMax: toInt(env.AUTH_FAIL_MAX, 10)
     },
+    // Archive after N days done; delete private / other archived tasks after N days in the archive. 0 = off.
+    retention: {
+      archiveDays: toInt(env.RETENTION_ARCHIVE_DAYS, 7),
+      deletePrivateDays: toInt(env.RETENTION_DELETE_PRIVATE_DAYS, 7),
+      deleteWorkDays: toInt(env.RETENTION_DELETE_WORK_DAYS, 90)
+    },
     shutdownTimeoutMs: toInt(env.SHUTDOWN_TIMEOUT_MS, 10000),
     staticDir: env.STATIC_DIR || path.join(__dirname, "..", "frontend"),
     migrationsDir: path.join(__dirname, "drizzle")
