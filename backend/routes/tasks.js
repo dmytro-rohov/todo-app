@@ -17,6 +17,7 @@ const TASK_COLUMNS = `
   TO_CHAR(due_date, 'YYYY-MM-DD') AS "dueDate",
   created_at AS "createdAt", updated_at AS "updatedAt", completed_at AS "completedAt", archived_at AS "archivedAt",
   space_id AS "spaceId", project_id AS "projectId", assignee_id AS "assigneeId", review_requested_at AS "reviewRequestedAt",
+  planned_at AS "plannedAt",
   ARRAY_REMOVE(ARRAY[category_id] || ARRAY(
     SELECT l.category_id FROM task_labels l
     WHERE l.task_id = tasks.id AND l.category_id IS DISTINCT FROM tasks.category_id ORDER BY l.id), NULL) AS "labelIds",
@@ -157,15 +158,15 @@ module.exports = function createTasksRouter(pool) {
           `WITH next AS (SELECT nextval(pg_get_serial_sequence('tasks', 'id')) AS id)
           INSERT INTO tasks
           (id, title, completed, date, category_id, description, status, priority, due_date, position, completed_at, space_id, project_id,
-           assignee_id, review_requested_at)
+           assignee_id, review_requested_at, planned_at)
           SELECT next.id, $1::varchar, $2::boolean, $3::date, $4::integer, $5::text, $6::text, $7::text, $8::date,
             COALESCE($9::bigint, next.id), CASE WHEN $2::boolean THEN now() ELSE NULL END, $10::integer, $11::integer,
-            $12::integer, CASE WHEN $13::boolean THEN now() ELSE NULL END
+            $12::integer, CASE WHEN $13::boolean THEN now() ELSE NULL END, CASE WHEN $14::boolean THEN now() ELSE NULL END
           FROM next
           RETURNING id`,
           [value.title, status === "done", value.date, labelIds ? labelIds[0] ?? null : value.categoryId, domain.description || "",
-            status === "needs_review" ? "in_progress" : status, domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null,
-            placement.spaceId ?? null, placement.projectId ?? null, domain.assigneeId ?? null, status === "needs_review"]
+            status === "needs_review" ? "in_progress" : status === "planned" ? "todo" : status, domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null,
+            placement.spaceId ?? null, placement.projectId ?? null, domain.assigneeId ?? null, status === "needs_review", status === "planned"]
         );
         const id = inserted.rows[0].id;
         if (labelIds && labelIds.length > 1) await setLabels(client, id, labelIds);
@@ -289,6 +290,7 @@ module.exports = function createTasksRouter(pool) {
             completed = (s.next_status = 'done'),
             completed_at = CASE WHEN s.next_status = 'done' THEN COALESCE(tasks.completed_at, now()) ELSE NULL END,
             review_requested_at = CASE WHEN s.next_status = tasks.status THEN tasks.review_requested_at ELSE NULL END,
+            planned_at = CASE WHEN s.next_status = tasks.status THEN tasks.planned_at ELSE NULL END,
             updated_at = now()
           FROM (
             SELECT CASE WHEN $2::boolean IS DISTINCT FROM completed

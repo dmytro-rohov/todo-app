@@ -163,7 +163,7 @@ All must hold before announcing tasks.mytko.dev:
 10. In PostgreSQL:
     - `\dt` shows the tables owned by `tasks_owner`.
     - `tasks_app` cannot run `CREATE TABLE` or `DROP TABLE`.
-    - `drizzle.__drizzle_migrations` holds one row per shipped migration (`0000_initial`, `0001_tasks_1_0`, `0002_auth_sessions`); the hashes match `backend/drizzle/*.sql`.
+    - `drizzle.__drizzle_migrations` holds one row per shipped migration (`0000_initial`, `0001_tasks_1_0`, `0002_auth_sessions`, `0003_long_term_plans`); the hashes match `backend/drizzle/*.sql`.
 11. A first backup has been taken and successfully restored into a scratch database.
 12. `app.env` and `migrate.env` are mode 600 on the server and absent from git; `node deploy/check-env.cjs deploy/app.env deploy/migrate.env` reports PASS. `git grep -i password` shows no real credentials.
 

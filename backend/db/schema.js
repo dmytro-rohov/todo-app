@@ -79,6 +79,8 @@ const tasks = pgTable("tasks", {
   // "Needs review" is status in_progress with this timestamp set: the status CHECK of 0000 cannot be widened inside
   // Mytko's additive grammar, so the application maps the four board statuses onto it (see task-status.js).
   reviewRequestedAt: timestamptz("review_requested_at"),
+  // "Long-term plans" (the fifth board column) is status todo with this timestamp set, for the same reason.
+  plannedAt: timestamptz("planned_at"),
 }, (table) => [
   check("tasks_status_check", sql`${table.status} IN ('todo', 'in_progress', 'done')`),
   check("tasks_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2', 'P3')`),

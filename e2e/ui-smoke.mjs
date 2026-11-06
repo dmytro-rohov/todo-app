@@ -32,7 +32,12 @@ try {
     if (m.method === "Log.entryAdded" && m.params.entry.level === "error") errors.push(m.params.entry.text); });
   await send("Runtime.enable"); await send("Log.enable"); await send("Page.enable");
   await send("Page.navigate", { url: BASE + "/#board" }); await sleep(2500);
-  check("board renders 4 columns", await evaluate("document.querySelectorAll('.column').length") === 4);
+  check("board renders 5 columns", await evaluate("document.querySelectorAll('.column').length") === 5);
+  const layout = await evaluate("(() => { const b = document.querySelector('.board').getBoundingClientRect(); const cols = [...document.querySelectorAll('.column')].map(c => c.getBoundingClientRect()); return { visible: cols.filter(c => c.right <= b.right + 1).length, planLeft: Math.round(cols[4].left), boardRight: Math.round(b.right) }; })()");
+  check("four columns fill the board and long-term plans wait to the right", layout.visible === 4 && layout.planLeft >= layout.boardRight, JSON.stringify(layout));
+  await click("[data-card=peek]"); await sleep(900);
+  check("the Plany button scrolls to the fifth column and then hides", await evaluate("(() => { const b = document.querySelector('.board').getBoundingClientRect(); const p = document.querySelector('.column--planned').getBoundingClientRect(); return p.right <= b.right + 2 && getComputedStyle(document.querySelector('[data-card=peek]')).display === 'none' && getComputedStyle(document.querySelector('[data-card=peek-back]')).display !== 'none'; })()"));
+  await evaluate("document.querySelector('.board').scrollLeft = 0"); await sleep(300);
 
   // 1. drag a ToDo card into Needs review, before its first card
   const title = "Zoptymalizować obrazy na stronie usług";
@@ -59,6 +64,20 @@ try {
   await click(`.card[data-id="${other.id}"] [data-card="timer-start"]`); await sleep(1000);
   check("starting another timer stops the first one on the board", await evaluate(`!document.querySelector('.card[data-id="${todo.id}"] .timer.is-running') && Boolean(document.querySelector('.card[data-id="${other.id}"] .timer.is-running, .card[data-id="${other.id}"] [data-card="timer-stop"]'))`));
 
+  // 2b. a plan created from the dialog goes to the fifth column with a goal, and "→ ToDo" brings it in
+  await click('[data-action="new-task"]');
+  await click('dialog input[name="title"]'); await type("Nauczyć się latać szybowcem");
+  await evaluate("(() => { const s = document.querySelector('dialog select[name=status]'); s.value = 'planned'; s.dispatchEvent(new Event('change')); })()");
+  await click('dialog [data-years="2"]');
+  await click('dialog button[type="submit"]'); await sleep(1000);
+  const plan = (await api("/api/tasks")).find(t => t.title === "Nauczyć się latać szybowcem");
+  check("a long-term plan with a goal in 2 years", plan?.status === "planned" && plan.dueDate?.slice(0, 4) === String(new Date().getFullYear() + 2), JSON.stringify(plan && { s: plan.status, d: plan.dueDate }));
+  check("plans do not count as open work", await evaluate("Number(document.querySelector('[data-quick=all] strong').textContent)") === (await api("/api/tasks")).filter(t => !["done", "planned"].includes(t.status)).length);
+  await click(`.card[data-id="${plan.id}"] [data-card="to-todo"]`); await sleep(1200);
+  check("→ ToDo moves a plan onto the board", (await api("/api/tasks")).find(t => t.id === plan.id).status === "todo");
+  check("the board stays scrolled where the reader is after an update", await evaluate("document.querySelector('.board').scrollLeft") > 0);
+  await evaluate("document.querySelector('.board').scrollLeft = 0"); await sleep(300);
+
   // 3. new task dialog
   await click('[data-action="new-task"]');
   await click('dialog input[name="title"]'); await type("Zadanie z testu przeglądarki");
@@ -71,7 +90,7 @@ try {
   // 4. drawer: rename and add a note
   await click(`.card[data-id="${created.id}"] .card__title`); await sleep(600);
   check("clicking a card opens its details", await evaluate("!document.querySelector('.drawer').hidden"));
-  await evaluate("const t = document.querySelector('.drawer__title'); t.focus(); t.select();");
+  await evaluate("(() => { const t = document.querySelector('.drawer__title'); t.focus(); t.select(); })()");
   await type("Zmieniony tytuł z panelu");
   await evaluate("document.querySelector('.drawer__title').blur()"); await sleep(900);
   check("title edits save on blur", (await api("/api/tasks")).find(t => t.id === created.id).title === "Zmieniony tytuł z panelu");
@@ -94,7 +113,7 @@ try {
   check("Ctrl K focuses search", await evaluate("document.activeElement.id === 'search'"));
   await type("fontów"); await sleep(600);
   check("search narrows the board", await evaluate("document.querySelectorAll('.card').length") === 1);
-  await evaluate("const s = document.querySelector('#search'); s.value=''; s.dispatchEvent(new Event('input'))"); await sleep(500);
+  await evaluate("(() => { const s = document.querySelector('#search'); s.value = ''; s.dispatchEvent(new Event('input')); })()"); await sleep(500);
   await click('[data-quick="overdue"]');
   const overdue = await evaluate("[...document.querySelectorAll('.card__title')].map(e => e.textContent)");
   check("the overdue tile filters to overdue tasks", overdue.length === 2, overdue.join(" | "));

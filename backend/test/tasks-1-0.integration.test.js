@@ -208,6 +208,27 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
     assert.equal((await call(`/api/tasks/${task.id}`, "PATCH", { status: "review" })).status, 400);
   });
 
+  test("long-term plans are a fifth column stored inside the original status CHECK", async () => {
+    const plan = await newTask({ status: "planned", dueDate: "2031-06-30" });
+    assert.deepEqual([plan.status, plan.completed, Boolean(plan.plannedAt)], ["planned", false, true]);
+    assert.equal((await owner.query("SELECT status FROM tasks WHERE id = $1", [plan.id])).rows[0].status, "todo");
+    assert.deepEqual((await call("/api/tasks?status=planned")).body.map(t => t.id), [plan.id]);
+    assert.deepEqual((await call("/api/tasks?status=todo")).body, []);
+    // the board move uses the same mapping; moving to ToDo clears it
+    const board = (await call("/api/tasks")).body.map(({ id, status, position }) => ({ id, status, position: Number(position) }));
+    assert.equal((await call("/api/tasks/move", "POST", { id: plan.id, status: "todo", beforeId: null, expected: board })).status, 200);
+    const moved = (await call("/api/tasks")).body[0];
+    assert.deepEqual([moved.status, moved.plannedAt], ["todo", null]);
+    // starting work on a plan makes it in progress
+    await call(`/api/tasks/${plan.id}`, "PATCH", { status: "planned" });
+    const started = (await call(`/api/tasks/${plan.id}/timer/start`, "POST")).body;
+    assert.deepEqual([started.status, started.plannedAt], ["in_progress", null]);
+    // legacy PUT keeps a plan a plan
+    await call(`/api/tasks/${plan.id}`, "PATCH", { status: "planned" });
+    assert.equal((await call(`/api/tasks/${plan.id}`, "PUT", { title: "Zadanie", date: "2026-11-05", completed: false })).body.status, "planned");
+    assert.equal((await call(`/api/tasks/${plan.id}`, "PATCH", { status: "someday" })).status, 400);
+  });
+
   test("legacy PUT keeps needs_review when completion does not change, and clears it when it does", async () => {
     const task = await newTask({ status: "needs_review" });
     const put = body => call(`/api/tasks/${task.id}`, "PUT", { title: "Zadanie", date: "2026-11-05", ...body });

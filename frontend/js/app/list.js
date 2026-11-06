@@ -6,7 +6,7 @@ import { render, store, visibleTasks } from "./app.js";
 import { avatarHtml, chipsHtml, dueHtml, moveTask } from "./board.js";
 import { openDrawer } from "./drawer.js";
 
-const STATUS_ICONS = { todo: "circle", in_progress: "playCircle", needs_review: "warningCircle", done: "checkCircle" };
+const STATUS_ICONS = { todo: "circle", in_progress: "playCircle", needs_review: "warningCircle", done: "checkCircle", planned: "target" };
 
 function rowHtml(task) {
   const tracked = trackedNow(task, store.fetchedAt);

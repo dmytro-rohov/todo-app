@@ -18,7 +18,9 @@ Działa na `tasks.mytko.dev`, wygląda i loguje się tak samo jak Mytko Workflow
 - Sesje po stronie serwera: 7 dni, wylogowanie, blokada po nieudanych próbach.
 
 ### Tablica
-- Cztery kolumny: **ToDo, W realizacji, Needs review, Zakończone**.
+- Cztery kolumny: **ToDo, W realizacji, Needs review, Zakończone**, a po przewinięciu w prawo piąta: **Plany długoterminowe**
+  (cele na rok, 2, 5 lat albo marzenia; szybki wybór celu „za rok / 2 lata / 5 lat”, „→ ToDo” gdy przychodzi pora;
+  nie liczą się do otwartych zadań ani terminów).
 - Przeciąganie kart między kolumnami i w obrębie kolumny: myszą, palcem (przytrzymaj kartę) i klawiaturą (Alt + strzałki).
   Kolejność w kolumnie to priorytet. Przeniesienie można cofnąć.
 - Karty pokazują projekt, etykiety, wykonawcę, termin (Dziś / Jutro / data; po terminie na czerwono), podzadania i czas pracy.

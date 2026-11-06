@@ -1,7 +1,14 @@
 // Pure board logic: no DOM, no network. Everything here is unit tested.
 
-export const STATUSES = ["todo", "in_progress", "needs_review", "done"];
-export const STATUS_LABELS = { todo: "ToDo", in_progress: "W realizacji", needs_review: "Needs review", done: "Zakończone" };
+// The fifth column holds long-term plans and dreams (a year, two, five): off the daily counters, to the right.
+export const STATUSES = ["todo", "in_progress", "needs_review", "done", "planned"];
+export const STATUS_LABELS = { todo: "ToDo", in_progress: "W realizacji", needs_review: "Needs review", done: "Zakończone",
+  planned: "Plany długoterminowe" };
+
+// Work that is on the table now: not finished and not a long-term plan.
+export function isOpen(task) {
+  return task.status !== "done" && task.status !== "planned";
+}
 export const PRIORITY_LABELS = { P0: "Krytyczny", P1: "Wysoki", P2: "Normalny", P3: "Niski" };
 const MONTHS_SHORT = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 export const MONTHS = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień",
@@ -31,7 +38,7 @@ export function dueLabel(dueDate, today = isoDay()) {
 
 // "overdue" | "today" | "soon" (next 7 days) | "later" | null, for open tasks only.
 export function dueState(task, today = isoDay()) {
-  if (!task.dueDate || task.status === "done") return null;
+  if (!task.dueDate || !isOpen(task)) return null;
   if (task.dueDate < today) return "overdue";
   if (task.dueDate === today) return "today";
   return task.dueDate <= addDays(today, 6) ? "soon" : "later";
@@ -93,7 +100,7 @@ export function counters(tasks, filters, ctx, today = isoDay()) {
   const scoped = tasks.filter(task => inScope(task, filters, ctx));
   const due = state => scoped.filter(task => dueState(task, today) === state).length;
   return {
-    all: scoped.filter(task => task.status !== "done").length,
+    all: scoped.filter(isOpen).length,
     today: due("today"),
     overdue: due("overdue"),
     week: due("today") + due("soon"),
@@ -159,6 +166,19 @@ export function monthGrid(day) {
 export function shiftMonth(day, delta) {
   const [y, m] = day.split("-").map(Number);
   return isoDay(new Date(y, m - 1 + delta, 1));
+}
+
+// The same calendar day `years` years ahead (29 Feb becomes 28 Feb).
+export function yearsAhead(years, today = isoDay()) {
+  const [y, m, d] = today.split("-").map(Number);
+  const target = new Date(y + years, m - 1, d);
+  return isoDay(target.getMonth() === m - 1 ? target : new Date(y + years, m, 0));
+}
+
+// "Cel: 2031" for a goal in another year, "Cel: 30 cze" within this one.
+export function goalLabel(dueDate, today = isoDay()) {
+  if (!dueDate) return "Bez daty";
+  return dueDate.slice(0, 4) === today.slice(0, 4) ? `Cel: ${dueLabel(dueDate, today)}` : `Cel: ${dueDate.slice(0, 4)}`;
 }
 
 export function titleError(title, original = null) {

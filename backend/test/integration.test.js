@@ -208,6 +208,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
         projectId: null,
         assigneeId: null,
         reviewRequestedAt: null,
+        plannedAt: null,
         labelIds: [],
         subtaskCount: 0,
         subtaskDoneCount: 0,

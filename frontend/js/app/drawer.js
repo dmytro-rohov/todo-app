@@ -3,7 +3,7 @@
 import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { formatDuration, PRIORITY_LABELS, STATUS_LABELS, titleError, trackedNow } from "./logic.js";
+import { formatDuration, PRIORITY_LABELS, STATUS_LABELS, titleError, trackedNow, yearsAhead } from "./logic.js";
 import { lookup, paint, reload, runTask, store } from "./app.js";
 import { moveTask } from "./board.js";
 import { confirmDialog } from "./dialogs.js";
@@ -62,8 +62,9 @@ function bodyHtml(task) {
       <textarea id="drawer-title" class="drawer__title" data-field="title" rows="1" maxlength="255">${escapeHtml(task.title)}</textarea>
       <p class="field-error" data-error="title" hidden></p>
       <dl class="props">
-        <dt>${icon("calendar", 18)}Termin</dt>
-        <dd><input type="date" data-field="dueDate" value="${task.dueDate || ""}" aria-label="Termin"></dd>
+        <dt>${icon(task.status === "planned" ? "target" : "calendar", 18)}${task.status === "planned" ? "Cel" : "Termin"}</dt>
+        <dd><input type="date" data-field="dueDate" value="${task.dueDate || ""}" aria-label="${task.status === "planned" ? "Cel" : "Termin"}">
+          ${task.status === "planned" ? `<span class="horizon">${[[1, "za rok"], [2, "za 2 lata"], [5, "za 5 lat"]].map(([years, label]) => `<button type="button" class="chip chip--toggle-btn" data-d="horizon" data-years="${years}">${label}</button>`).join("")}</span>` : ""}</dd>
         <dt>${icon("layers", 18)}Przestrzeń</dt>
         <dd><label class="select select--sm"><select data-field="spaceId" aria-label="Przestrzeń">${options(store.spaces, spaceId)}</select>${icon("chevronDown", 16)}</label></dd>
         <dt>${icon("folder", 18)}Projekt</dt>
@@ -200,6 +201,7 @@ async function onClick(event) {
   const id = current.id;
   const kind = button.dataset.d;
   if (kind === "close") return closeDrawer();
+  if (kind === "horizon") return save({ dueDate: yearsAhead(Number(button.dataset.years)) }, "Nie udało się ustawić celu.");
   if (kind === "timer-start" || kind === "timer-stop") {
     await runTask(() => api.timer(id, kind === "timer-start" ? "start" : "stop"));
     return kind === "timer-start" ? reload({ quiet: true }) : null; // the server stopped any other timer

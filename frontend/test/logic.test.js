@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addDays, applyMove, boardCanonical, counters, dueLabel, dueState, filterTasks, formatDuration, initials, monthGrid,
-  shiftMonth, titleError, trackedNow
+  shiftMonth, titleError, trackedNow, yearsAhead, goalLabel, isOpen
 } from "../js/app/logic.js";
 
 const TODAY = "2026-11-06";
@@ -70,7 +70,7 @@ test("counters share the scope and ignore status, done switch and the quick filt
   ];
   const result = counters(tasks, { status: "done", quick: "today", showDone: false }, ctx, TODAY);
   assert.deepEqual([result.all, result.today, result.overdue, result.week], [4, 1, 1, 2]);
-  assert.deepEqual(result.byStatus, { todo: 3, in_progress: 1, needs_review: 0, done: 1 });
+  assert.deepEqual(result.byStatus, { todo: 3, in_progress: 1, needs_review: 0, done: 1, planned: 0 });
   assert.deepEqual(filterTasks(tasks, { quick: "week" }, ctx, TODAY).map(t => t.id), [1, 3]);
   assert.deepEqual(filterTasks(tasks, { quick: "overdue" }, ctx, TODAY).map(t => t.id), [2]);
 });
@@ -92,6 +92,19 @@ test("month grid starts on Monday and covers the month", () => {
   assert.ok(weeks.flat().filter(c => c.inMonth).length === 30);
   assert.ok(weeks.every(week => week.length === 7));
   assert.equal(shiftMonth("2026-01-31", -1), "2025-12-01");
+});
+
+test("long-term plans: goals years ahead, off the daily counters and due states", () => {
+  assert.equal(yearsAhead(1, TODAY), "2027-11-06");
+  assert.equal(yearsAhead(5, "2028-02-29"), "2033-02-28");
+  assert.equal(goalLabel("2031-06-30", TODAY), "Cel: 2031");
+  assert.equal(goalLabel("2026-12-24", TODAY), "Cel: 24 gru");
+  assert.equal(goalLabel(null, TODAY), "Bez daty");
+  const plan = task(9, { status: "planned", dueDate: "2026-11-01" });
+  assert.equal(isOpen(plan), false);
+  assert.equal(dueState(plan, TODAY), null);
+  const result = counters([plan, task(1)], { showDone: true }, ctx, TODAY);
+  assert.deepEqual([result.all, result.overdue, result.byStatus.planned], [1, 0, 1]);
 });
 
 test("title rules: 3–100 characters, an unchanged historical title stays valid", () => {

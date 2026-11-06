@@ -3,8 +3,8 @@ import { api } from "../api/client.js";
 import { logout, markLoggedOut } from "../auth/login.js";
 import { escapeHtml, safeColor } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { counters, filterTasks, initials, isoDay, STATUS_LABELS } from "./logic.js";
-import { renderBoard, bindBoard, isDragging } from "./board.js";
+import { counters, filterTasks, initials, isOpen, isoDay, STATUS_LABELS } from "./logic.js";
+import { renderBoard, bindBoard, isDragging, updatePeek } from "./board.js";
 import { renderList, bindList } from "./list.js";
 import { renderCalendar, bindCalendar } from "./calendar.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
@@ -155,8 +155,8 @@ function scopeTitle() {
 
 function sidebarHtml() {
   const { filters } = store;
-  const openCount = id => store.tasks.filter(t => t.status !== "done" && (t.spaceId ?? lookup.privateSpace()?.id) === id).length;
-  const projectCount = id => store.tasks.filter(t => t.status !== "done" && t.projectId === id).length;
+  const openCount = id => store.tasks.filter(t => isOpen(t) && (t.spaceId ?? lookup.privateSpace()?.id) === id).length;
+  const projectCount = id => store.tasks.filter(t => isOpen(t) && t.projectId === id).length;
   const activeProjects = store.projects.filter(p => !p.archivedAt && (!filters.spaceId || p.spaceId === filters.spaceId));
   const user = store.session?.login || "";
   return `
@@ -167,7 +167,7 @@ function sidebarHtml() {
     </div>
     <nav class="sidebar__nav" aria-label="Przestrzenie i projekty">
       <button type="button" class="nav-item${!filters.spaceId && !filters.projectId ? " is-active" : ""}" data-action="scope" data-space="" data-project="">
-        ${icon("checkSquare")}<span>Wszystkie zadania</span><em>${store.tasks.filter(t => t.status !== "done").length}</em>
+        ${icon("checkSquare")}<span>Wszystkie zadania</span><em>${store.tasks.filter(isOpen).length}</em>
       </button>
       <p class="nav-heading"><span>Przestrzenie</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="spaces" aria-label="Zarządzaj przestrzeniami">${icon("plus", 16)}</button></p>
       ${store.spaces.map(space => `
@@ -246,7 +246,7 @@ function filtersHtml() {
 }
 
 function notificationsHtml() {
-  const due = store.tasks.filter(t => t.status !== "done" && t.dueDate && t.dueDate <= isoDay())
+  const due = store.tasks.filter(t => isOpen(t) && t.dueDate && t.dueDate <= isoDay())
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 8);
   if (!due.length) return '<p class="popover__empty">Nic na dziś i nic po terminie.</p>';
   return `<p class="popover__title">Na dziś i po terminie</p>${due.map(t => `
@@ -262,16 +262,27 @@ export function render() {
   root.querySelector(".page-head").innerHTML = headHtml();
   const filters = root.querySelector(".filters");
   if (!filters.contains(document.activeElement)) filters.innerHTML = filtersHtml();
-  const hasDue = store.tasks.some(t => t.status !== "done" && t.dueDate && t.dueDate <= isoDay());
+  const hasDue = store.tasks.some(t => isOpen(t) && t.dueDate && t.dueDate <= isoDay());
   root.querySelector(".bell").classList.toggle("has-dot", hasDue);
   for (const tab of root.querySelectorAll("[data-view]")) {
     tab.classList.toggle("is-active", tab.dataset.view === store.view);
     tab.setAttribute("aria-selected", String(tab.dataset.view === store.view));
   }
   const view = root.querySelector(".view");
+  // Re-rendering must not throw the reader back to the start of the board or the top of a long column.
+  const keep = view.dataset.view === store.view ? {
+    left: view.querySelector(".board")?.scrollLeft || 0,
+    columns: Object.fromEntries([...view.querySelectorAll("[data-drop]")].map(zone => [zone.dataset.drop, zone.scrollTop]))
+  } : null;
   view.dataset.view = store.view;
   view.innerHTML = store.view === "list" ? renderList() : store.view === "calendar" ? renderCalendar()
     : store.view === "archive" ? renderArchive() : renderBoard();
+  if (keep) {
+    const board = view.querySelector(".board");
+    if (board) board.scrollLeft = keep.left;
+    for (const zone of view.querySelectorAll("[data-drop]")) zone.scrollTop = keep.columns[zone.dataset.drop] || 0;
+  }
+  updatePeek(view);
   paint(root);
 }
 
