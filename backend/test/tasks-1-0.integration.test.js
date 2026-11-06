@@ -7,6 +7,7 @@ const path = require("node:path");
 const { createPool } = require("../db");
 const { runMigrations, listMigrations } = require("../migrations");
 const { startApp, SAME_ORIGIN_JSON, USERNAME, PASSWORD } = require("./support");
+const { runRetention } = require("../retention");
 
 const OWNER_URL = process.env.TEST_MIGRATION_DATABASE_URL;
 const APP_URL = process.env.TEST_DATABASE_URL;
@@ -308,6 +309,50 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
     assert.equal(out.status, 200);
     assert.equal((await ctx.request("/api/tasks", { auth: null, headers: { cookie } })).status, 401);
     assert.equal((await owner.query("SELECT count(*)::int AS n FROM auth_sessions")).rows[0].n, 0);
+  });
+
+  test("retention: done tasks archive after 7 days; private ones go after 7 more, work ones after 90", async () => {
+    const spaces = await builtIn();
+    const settings = { archiveDays: 7, deletePrivateDays: 7, deleteWorkDays: 90 };
+    const priv = await newTask({ status: "done" });
+    const work = await newTask({ status: "done", spaceId: spaces.work.id });
+    const fresh = await newTask({ status: "done" });
+    const open = await newTask();
+    await call(`/api/tasks/${priv.id}/notes`, "POST", { body: "znika razem z zadaniem" });
+    await owner.query("UPDATE tasks SET completed_at = now() - interval '8 days' WHERE id = ANY($1)", [[priv.id, work.id]]);
+
+    assert.deepEqual(await runRetention(appPool, settings), { archived: 2, deleted: 0, skipped: false }); // the app role can do it
+    assert.deepEqual((await call("/api/tasks")).body.map(t => t.id).sort((a, b) => a - b), [fresh.id, open.id]);
+    const archive = (await call("/api/archive")).body;
+    assert.deepEqual(archive.settings, settings);
+    const days = id => Math.round((new Date(archive.tasks.find(t => t.id === id).deleteAt) - new Date(archive.tasks.find(t => t.id === id).archivedAt)) / 86400000);
+    assert.deepEqual([days(priv.id), days(work.id)], [7, 90]);
+    assert.ok((await call(`/api/tasks/${priv.id}/history`)).body.some(h => h.field === "archived_at" && h.actor === "retention"));
+
+    await owner.query("UPDATE tasks SET archived_at = now() - interval '8 days' WHERE archived_at IS NOT NULL");
+    assert.equal((await runRetention(appPool, settings)).deleted, 1);
+    assert.deepEqual((await call("/api/archive")).body.tasks.map(t => t.id), [work.id]);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM task_notes")).rows[0].n, 0);
+    await owner.query("UPDATE tasks SET archived_at = now() - interval '91 days' WHERE id = $1", [work.id]);
+    assert.equal((await runRetention(appPool, settings)).deleted, 1);
+    assert.deepEqual((await call("/api/archive")).body.tasks, []);
+
+    // 0 switches a step off
+    await owner.query("UPDATE tasks SET completed_at = now() - interval '30 days' WHERE id = $1", [fresh.id]);
+    assert.equal((await runRetention(appPool, { archiveDays: 0, deletePrivateDays: 0, deleteWorkDays: 0 })).archived, 0);
+  });
+
+  test("restoring from the archive reopens the task at the end of ToDo", async () => {
+    const first = await newTask();
+    const task = await newTask({ status: "done" });
+    await owner.query("UPDATE tasks SET completed_at = now() - interval '8 days' WHERE id = $1", [task.id]);
+    await runRetention(appPool, { archiveDays: 7, deletePrivateDays: 7, deleteWorkDays: 90 });
+    const restored = await call(`/api/archive/${task.id}/restore`, "POST", {});
+    assert.deepEqual([restored.status, restored.body.status, restored.body.archivedAt, restored.body.completedAt], [200, "todo", null, null]);
+    const todo = (await call("/api/tasks?status=todo")).body;
+    assert.deepEqual(todo.map(t => t.id), [first.id, task.id]);
+    assert.equal((await call(`/api/archive/${task.id}/restore`, "POST", {})).status, 404); // not archived any more
+    assert.equal((await call("/api/archive/abc/restore", "POST", {})).status, 400);
   });
 
   test("the application role reads and writes the new tables but cannot change their structure", async () => {

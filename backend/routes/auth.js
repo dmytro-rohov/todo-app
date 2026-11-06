@@ -7,17 +7,20 @@ const { ownerSession } = require("../security");
 const MAX_LOGIN = 200;
 const MAX_PASSWORD = 1024;
 
-function createAuthRouter({ credentials, sessions, cookie, authDisabled = false, mytkoLogin = false, ssoLogin = "" }) {
+function createAuthRouter({ credentials, sessions, cookie, authDisabled = false, mytkoLogin = false, ssoLogin = "", workflowUp = null }) {
   const router = express.Router();
 
-  function state(session) {
+  // mytkoLogin: configured; mytkoAvailable: Mytko Workflow answers right now (the button and the automatic
+  // attempt are offered only then).
+  function state(session, mytkoAvailable = false) {
     return {
       authenticated: Boolean(session),
       login: session ? session.login : null,
       method: session ? session.method : null,
       expiresAt: session ? session.expiresAt : null,
       ttlSeconds: Math.round(sessions.ttlMs / 1000),
-      mytkoLogin
+      mytkoLogin,
+      mytkoAvailable
     };
   }
 
@@ -31,7 +34,8 @@ function createAuthRouter({ credentials, sessions, cookie, authDisabled = false,
   router.get("/session", async (req, res) => {
     if (authDisabled) return res.json({ ...state({ login: "dev", method: "password", expiresAt: null }) });
     const session = await sessions.verify(readCookie(req, cookie.name));
-    res.json(state(ownerSession(session, { username: credentials.username, ssoLogin }) ? session : null));
+    const owner = ownerSession(session, { username: credentials.username, ssoLogin });
+    res.json(state(owner ? session : null, !owner && mytkoLogin && workflowUp ? await workflowUp() : false));
   });
 
   router.post("/login", async (req, res) => {

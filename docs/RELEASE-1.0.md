@@ -36,6 +36,12 @@ every migration the image ships**. Deploying first would leave the new container
    - the app container needs outbound HTTPS to `workflow.mytko.dev`;
    - check: signed in to Workflow, opening `tasks.mytko.dev` in the same browser lands on the board.
 
+## Retention starts with this release
+
+About a minute after the new container starts, done tasks older than 7 days move to the archive; private archived
+tasks are deleted after 7 more days, others after 90 (`RETENTION_*` in app.env change this; 0 switches a step off).
+Existing old done tasks are therefore archived right away, and deleted 7 or 90 days later.
+
 ## Rollback
 
 - **Application:** Mytko "Recover" to the previous image. The Lite image tolerates the newer migrations, but it

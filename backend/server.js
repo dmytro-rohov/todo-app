@@ -2,6 +2,7 @@ const { loadConfig } = require("./config");
 const { createPool } = require("./db");
 const { createApp } = require("./app");
 const { listMigrations } = require("./migrations");
+const { scheduleRetention } = require("./retention");
 
 let config;
 try {
@@ -19,6 +20,8 @@ const { app, markShuttingDown, stop } = createApp({ config, pool, migrationVersi
 const server = app.listen(config.port, config.host, () => {
   console.log(`Server listening on ${config.host}:${config.port}`);
 });
+
+const retention = scheduleRetention(pool, config.retention);
 
 // Startup DB probe is informational only; /readyz reports actual readiness.
 pool.query("SELECT 1").then(
@@ -45,6 +48,7 @@ function shutdown(signal) {
   server.close(async (error) => {
     if (error) console.error("HTTP server close error:", "operation failed");
     stop();
+    retention.stop();
     try {
       await pool.end();
     } catch (poolError) {

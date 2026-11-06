@@ -12,6 +12,8 @@ const express = require("express");
 const { readCookie } = require("../sessions");
 
 const PENDING_MS = 10 * 60000;
+const HEALTH_TIMEOUT_MS = 2500;
+const HEALTH_TTL_MS = 30000;
 const TOKEN_TIMEOUT_MS = 5000;
 const URLSAFE = /^[A-Za-z0-9_-]{16,256}$/;
 
@@ -25,14 +27,29 @@ function equal(a, b) {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-function createSsoRouter({ sso, publicOrigin, cookie, startSession, fetchImpl = fetch }) {
+// Workflow runs on the home server; when it is off, the browser must not be sent to an error page there. Its public
+// /api/v1/health is checked (cached for 30 s) before every redirect and for the login screen's button.
+function createWorkflowHealth(sso, fetchImpl = fetch) {
+  let cached = { ok: false, at: 0 };
+  let pending = null;
+  return async function workflowUp() {
+    if (Date.now() - cached.at < HEALTH_TTL_MS) return cached.ok;
+    pending ??= fetchImpl(`${sso.origin}/api/v1/health`, { redirect: "error", signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) })
+      .then(response => response.ok, () => false)
+      .then(ok => { cached = { ok, at: Date.now() }; pending = null; return ok; });
+    return pending;
+  };
+}
+
+function createSsoRouter({ sso, publicOrigin, cookie, startSession, fetchImpl = fetch, workflowUp = createWorkflowHealth(sso, fetchImpl) }) {
   const router = express.Router();
   const pendingCookie = cookie.secure ? "__Host-mytko-tasks-sso" : "mytko-tasks-sso";
   const pendingOptions = { httpOnly: true, secure: cookie.secure, sameSite: "lax", path: "/" };
   const redirectUri = `${publicOrigin}/auth/mytko/callback`;
   const done = (res, reason) => res.redirect(303, reason ? `/?sso=${reason}` : "/");
 
-  router.get("/start", (req, res) => {
+  router.get("/start", async (req, res) => {
+    if (!(await workflowUp())) return done(res, "unavailable");
     const state = base64url(crypto.randomBytes(24));
     const verifier = base64url(crypto.randomBytes(48));
     const challenge = base64url(crypto.createHash("sha256").update(verifier).digest());
@@ -82,4 +99,4 @@ function createSsoRouter({ sso, publicOrigin, cookie, startSession, fetchImpl = 
   return router;
 }
 
-module.exports = { createSsoRouter };
+module.exports = { createSsoRouter, createWorkflowHealth };

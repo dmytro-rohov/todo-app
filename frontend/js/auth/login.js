@@ -60,7 +60,7 @@ export const SSO_OFF = "mytko-tasks-sso-off";
 export function shouldTryMytko(state, search, storage, shared = null) {
   let tried = true;
   try { tried = storage.getItem(SSO_TRIED) === "1" || shared?.getItem(SSO_OFF) === "1"; } catch { /* storage blocked: never auto-redirect */ }
-  return Boolean(state.mytkoLogin) && !new URLSearchParams(search).has("sso") && !tried;
+  return Boolean(state.mytkoAvailable) && !new URLSearchParams(search).has("sso") && !tried;
 }
 
 export function markLoggedOut() {
@@ -102,10 +102,10 @@ export function renderLogin(root, state, { notice = null, onAuthenticated }) {
         <h1>Zaloguj się</h1>
         <p class="auth-card__lead">Masz aktywną sesję Mytko? Wejdziesz jednym kliknięciem. Sesja trwa ${hours(state.ttlSeconds)}.</p>
         ${notice ? `<p class="auth-notice" role="status">${escapeHtml(notice)}</p>` : ""}
-        <button type="button" class="auth-quick" data-quick ${state.mytkoLogin ? "" : 'disabled title="Logowanie kontem Mytko nie jest skonfigurowane na serwerze" aria-describedby="auth-quick-off"'}>
+        <button type="button" class="auth-quick" data-quick ${state.mytkoAvailable ? "" : `disabled title="${state.mytkoLogin ? "Mytko Workflow jest teraz niedostępny" : "Logowanie kontem Mytko nie jest skonfigurowane na serwerze"}" aria-describedby="auth-quick-off"`}>
           <img src="./icons/icon-192.png" alt="" width="26" height="26"><span>Zaloguj kontem <strong>Mytko</strong></span>
         </button>
-        ${state.mytkoLogin ? "" : '<span id="auth-quick-off" class="visually-hidden">Niedostępne: logowanie kontem Mytko nie jest skonfigurowane. Użyj loginu i hasła.</span>'}
+        ${state.mytkoAvailable ? "" : `<span id="auth-quick-off" class="visually-hidden">Niedostępne: ${state.mytkoLogin ? "Mytko Workflow nie odpowiada" : "logowanie kontem Mytko nie jest skonfigurowane"}. Użyj loginu i hasła.</span>`}
         <p class="auth-divider"><span>albo loginem i hasłem</span></p>
         <form class="auth-form" novalidate>
           <label for="auth-login">E-mail lub login</label>

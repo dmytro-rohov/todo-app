@@ -11,8 +11,12 @@ const SECRET = "synthetic-client-secret-" + "s".repeat(24);
 
 function fakeWorkflow() {
   const calls = [];
-  const state = { status: 200, login: "operator", challenge: null, used: new Set() };
+  const state = { status: 200, login: "operator", challenge: null, used: new Set(), down: false };
   const server = http.createServer((req, res) => {
+    if (req.url === "/api/v1/health") {
+      res.writeHead(state.down ? 502 : 200, { "content-type": "application/json" });
+      return res.end(state.down ? "" : '{"status":"ok"}');
+    }
     let body = "";
     req.on("data", chunk => { body += chunk; });
     req.on("end", () => {
@@ -65,7 +69,8 @@ describe("Zaloguj kontem Mytko", () => {
       assert.match(location.searchParams.get("state"), /^[A-Za-z0-9_-]{32}$/);
       assert.match(pending, /^__Host-mytko-tasks-sso=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+;/);
       for (const attribute of [/HttpOnly/, /Secure/, /SameSite=Lax/, /Path=\//]) assert.match(pending, attribute);
-      assert.equal((await (await ctx.request("/api/auth/session", { auth: null })).json()).mytkoLogin, true);
+      const session = await (await ctx.request("/api/auth/session", { auth: null })).json();
+      assert.deepEqual([session.mytkoLogin, session.mytkoAvailable], [true, true]);
     });
   });
 
@@ -112,10 +117,20 @@ describe("Zaloguj kontem Mytko", () => {
       assert.equal(res.headers.get("location"), "/?sso=denied");
     });
     await withApp({ MYTKO_SSO_ORIGIN: "http://127.0.0.1:1" }, async ctx => {
-      const { location, cookie } = await begin(ctx);
-      const res = await get(ctx, `/auth/mytko/callback?code=the-code-0123456789&state=${location.searchParams.get("state")}`, cookie);
-      assert.equal(res.headers.get("location"), "/?sso=unavailable");
+      assert.equal((await get(ctx, "/auth/mytko/start")).headers.get("location"), "/?sso=unavailable");
     });
+  });
+
+  test("when Workflow is down nobody is sent there: the button is off and start returns to the login screen", async () => {
+    workflow.state.down = true;
+    try {
+      await withApp({}, async ctx => {
+        const session = await (await ctx.request("/api/auth/session", { auth: null })).json();
+        assert.deepEqual([session.mytkoLogin, session.mytkoAvailable], [true, false]);
+        const start = await get(ctx, "/auth/mytko/start");
+        assert.deepEqual([start.status, start.headers.get("location")], [303, "/?sso=unavailable"]);
+      });
+    } finally { workflow.state.down = false; }
   });
 
   test("without configuration the feature does not exist", async () => {

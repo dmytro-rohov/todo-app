@@ -5,9 +5,10 @@ const createCategoriesRouter = require("./routes/categories");
 const createSpacesRouter = require("./routes/spaces");
 const createProjectsRouter = require("./routes/projects");
 const createAssigneesRouter = require("./routes/assignees");
+const createArchiveRouter = require("./routes/archive");
 const createTaskDetailsRouter = require("./routes/task-details");
 const { createAuthRouter } = require("./routes/auth");
-const { createSsoRouter } = require("./routes/sso");
+const { createSsoRouter, createWorkflowHealth } = require("./routes/sso");
 const { createSessionStore, cookieSettings } = require("./sessions");
 const { checkSchema } = require("./migrations");
 const {
@@ -79,7 +80,8 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   // refused before any other processing.
   const sso = config.auth.disabled ? null : config.auth.sso;
   const ssoLogin = sso ? sso.login : "";
-  const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso), ssoLogin });
+  const workflowUp = sso ? createWorkflowHealth(sso, options.fetchImpl) : null;
+  const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso), ssoLogin, workflowUp });
   api.use("/auth", csrf, json, authRouter);
   if (credentials) api.use(ownerAuth({ credentials, sessions, cookieName: cookie.name, ssoLogin }));
   api.use(csrf);
@@ -90,13 +92,14 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use("/spaces", createSpacesRouter(pool));
   api.use("/projects", createProjectsRouter(pool));
   api.use("/assignees", createAssigneesRouter(pool));
+  api.use("/archive", createArchiveRouter(pool, config.retention));
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });
   app.use("/api", api);
 
   if (sso) {
-    app.use("/auth/mytko", createSsoRouter({ sso, publicOrigin: config.publicOrigin, cookie, startSession: authRouter.startSession, fetchImpl: options.fetchImpl }));
+    app.use("/auth/mytko", createSsoRouter({ sso, publicOrigin: config.publicOrigin, cookie, startSession: authRouter.startSession, fetchImpl: options.fetchImpl, workflowUp }));
   }
 
   // The app shell and assets hold no data and render the login screen, so they are public.
