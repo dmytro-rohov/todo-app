@@ -31,6 +31,7 @@ COPY --from=deps /build/backend/node_modules/ backend/node_modules/
 COPY frontend/index.html frontend/
 COPY frontend/js/ frontend/js/
 COPY frontend/icons/ frontend/icons/
+COPY frontend/manifest.webmanifest frontend/sw.js frontend/
 COPY --from=css /build/frontend/dist/ frontend/dist/
 # Owned by root, readable by everyone, writable by nobody else: the runtime
 # user cannot modify application code.

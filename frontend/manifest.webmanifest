@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "Mytko Tasks",
+  "short_name": "Tasks",
+  "description": "Mytko Tasks — zadania, projekty klientów, terminy i plany długoterminowe.",
+  "lang": "pl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0b110d",
+  "background_color": "#0b110d",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Nowe zadanie", "url": "/#new", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Kalendarz", "url": "/#calendar", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "prefer_related_applications": false,
+  "display_override": ["standalone"]
+}
