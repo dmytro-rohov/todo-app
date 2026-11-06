@@ -100,19 +100,48 @@ function bodyHtml(task) {
     </div>`;
 }
 
+// Text the user has typed but not saved: drafts of new notes/subtasks always, and the field in focus.
+function drafts() {
+  const kept = new Map();
+  for (const field of panel.querySelectorAll("[data-form] [name]")) if (field.value) kept.set(`[data-form="${field.closest("[data-form]").dataset.form}"] [name="${field.name}"]`, field.value);
+  const focused = document.activeElement;
+  if (focused && panel.contains(focused) && focused.dataset.field && focused.matches("textarea, input:not([type=checkbox])")) {
+    kept.set(`[data-field="${focused.dataset.field}"]`, focused.value);
+  }
+  return kept;
+}
+
+// A selector that finds the same control again after the panel is rebuilt.
+function focusKey(element) {
+  if (element.dataset.field) return `[data-field="${element.dataset.field}"]`;
+  if (element.dataset.label) return `[data-label="${element.dataset.label}"]`;
+  const form = element.closest("[data-form]");
+  if (form && element.name) return `[data-form="${form.dataset.form}"] [name="${element.name}"]`;
+  const item = element.closest("[data-sub], [data-note]");
+  if (item && element.dataset.d) return `[data-${item.dataset.sub ? "sub" : "note"}="${item.dataset.sub || item.dataset.note}"] [data-d="${element.dataset.d}"]`;
+  return element.dataset.d ? `[data-d="${element.dataset.d}"]` : null;
+}
+
 function draw() {
   const task = current && lookup.task(current.id);
   if (!panel || !task) return;
   const focused = document.activeElement;
-  const keep = focused && panel.contains(focused) && (focused.dataset.field || focused.name) ? (focused.dataset.field || focused.name) : null;
+  const keep = focused && panel.contains(focused) ? focusKey(focused) : null;
+  const selection = keep && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
+  const typed = drafts();
   const scroll = panel.querySelector(".drawer__scroll")?.scrollTop || 0;
   panel.querySelector(".drawer__panel").innerHTML = bodyHtml(task);
+  for (const [selector, value] of typed) { const field = panel.querySelector(selector); if (field) field.value = value; }
   paint(panel);
   panel.querySelector(".drawer__scroll").scrollTop = scroll;
   const title = panel.querySelector(".drawer__title");
   title.style.height = "auto";
   title.style.height = `${title.scrollHeight}px`;
-  if (keep) panel.querySelector(`[data-field="${keep}"], [name="${keep}"]`)?.focus();
+  if (keep) {
+    const field = panel.querySelector(keep);
+    field?.focus();
+    if (field && selection) try { field.setSelectionRange(...selection); } catch { /* not a text field */ }
+  }
 }
 
 async function loadDetails() {
@@ -171,7 +200,10 @@ async function onClick(event) {
   const id = current.id;
   const kind = button.dataset.d;
   if (kind === "close") return closeDrawer();
-  if (kind === "timer-start" || kind === "timer-stop") return runTask(() => api.timer(id, kind === "timer-start" ? "start" : "stop"));
+  if (kind === "timer-start" || kind === "timer-stop") {
+    await runTask(() => api.timer(id, kind === "timer-start" ? "start" : "stop"));
+    return kind === "timer-start" ? reload({ quiet: true }) : null; // the server stopped any other timer
+  }
   if (kind === "delete") {
     const task = lookup.task(id);
     if (!(await confirmDialog(`Usunąć zadanie „${task.title}” razem z notatkami i podzadaniami? Tego nie da się cofnąć.`, "Usuń"))) return;
@@ -253,8 +285,5 @@ export function closeDrawer() {
 export function refreshDrawer() {
   if (!current) return;
   if (!lookup.task(current.id)) return closeDrawer();
-  // Never replace a text field the user is typing in; its own save redraws afterwards.
-  const focused = document.activeElement;
-  if (focused && panel.contains(focused) && focused.matches("textarea, input[type=text], input:not([type])")) return;
   draw();
 }

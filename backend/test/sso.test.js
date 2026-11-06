@@ -11,7 +11,7 @@ const SECRET = "synthetic-client-secret-" + "s".repeat(24);
 
 function fakeWorkflow() {
   const calls = [];
-  const state = { status: 200, login: "operator", challenge: null };
+  const state = { status: 200, login: "operator", challenge: null, used: new Set() };
   const server = http.createServer((req, res) => {
     let body = "";
     req.on("data", chunk => { body += chunk; });
@@ -19,8 +19,10 @@ function fakeWorkflow() {
       const data = JSON.parse(body || "{}");
       calls.push({ path: req.url, headers: req.headers, data });
       const challenge = crypto.createHash("sha256").update(data.code_verifier || "").digest("base64url");
+      // Codes are one-time, as in Workflow.
       const valid = state.status === 200 && data.client_secret === SECRET && data.code === "the-code-0123456789" &&
-        challenge === state.challenge;
+        challenge === state.challenge && !state.used.has(challenge);
+      if (valid) state.used.add(challenge);
       res.writeHead(valid ? 200 : state.status === 200 ? 400 : state.status, { "content-type": "application/json" });
       res.end(JSON.stringify(valid ? { login: state.login } : { detail: "invalid_grant" }));
     });
@@ -39,7 +41,7 @@ describe("Zaloguj kontem Mytko", () => {
   after(() => new Promise(resolve => workflow.server.close(resolve)));
 
   const withApp = async (env, check) => {
-    const ctx = await startApp({ pool: fakePool(), env: { MYTKO_SSO_ORIGIN: origin, MYTKO_SSO_CLIENT_SECRET: SECRET, ...env } });
+    const ctx = await startApp({ pool: fakePool(), env: { MYTKO_SSO_ORIGIN: origin, MYTKO_SSO_CLIENT_SECRET: SECRET, MYTKO_SSO_LOGIN: "operator", ...env } });
     try { await check(ctx); } finally { await ctx.close(); }
   };
   const get = (ctx, path, cookie) => ctx.request(path, { auth: null, redirect: "manual", headers: cookie ? { cookie } : {} });
@@ -75,7 +77,10 @@ describe("Zaloguj kontem Mytko", () => {
       assert.equal(back.status, 303);
       assert.equal(back.headers.get("location"), "/");
       assert.match(back.headers.get("set-cookie"), /__Host-mytko-tasks-session=[A-Za-z0-9_-]{43};/);
-      const exchange = workflow.calls.at(-1);
+      // Replaying the same callback (same pending cookie, same code) does not sign in again.
+      const replay = await get(ctx, `/auth/mytko/callback?code=the-code-0123456789&state=${state}`, cookie);
+      assert.equal(replay.headers.get("location"), "/?sso=failed");
+      const exchange = workflow.calls.at(-2);
       assert.equal(exchange.path, "/api/v1/auth/sso/token");
       assert.equal(exchange.headers.origin, undefined);
       assert.equal(exchange.data.redirect_uri, "https://task.mytko.dev/auth/mytko/callback");
@@ -126,6 +131,9 @@ describe("Zaloguj kontem Mytko", () => {
     assert.throws(() => loadConfig({ ...base, MYTKO_SSO_ORIGIN: "https://workflow.mytko.dev" }), /set together/);
     assert.throws(() => loadConfig({ ...base, MYTKO_SSO_ORIGIN: "http://workflow.mytko.dev", MYTKO_SSO_CLIENT_SECRET: SECRET }), /https origin/);
     assert.throws(() => loadConfig({ ...base, MYTKO_SSO_ORIGIN: "https://workflow.mytko.dev", MYTKO_SSO_CLIENT_SECRET: "short" }), /32 characters/);
-    assert.equal(loadConfig({ ...base, MYTKO_SSO_ORIGIN: "https://workflow.mytko.dev", MYTKO_SSO_CLIENT_SECRET: SECRET }).auth.sso.clientId, "tasks");
+    // Workflow can have several operators: the one let in must be named.
+    assert.throws(() => loadConfig({ ...base, MYTKO_SSO_ORIGIN: "https://workflow.mytko.dev", MYTKO_SSO_CLIENT_SECRET: SECRET }), /MYTKO_SSO_LOGIN/);
+    assert.equal(loadConfig({ ...base, MYTKO_SSO_ORIGIN: "https://workflow.mytko.dev", MYTKO_SSO_CLIENT_SECRET: SECRET, MYTKO_SSO_LOGIN: "operator" }).auth.sso.clientId, "tasks");
+    assert.throws(() => loadConfig({ ...base, AUTH_USERNAME: "x".repeat(81) }), /at most 80/);
   });
 });

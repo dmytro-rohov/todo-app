@@ -1,4 +1,8 @@
 import { getSession, renderLogin, ssoNotice, shouldTryMytko, SSO_TRIED } from "./auth/login.js";
+
+function shared() {
+  try { return localStorage; } catch { return null; }
+}
 import { startApp } from "./app/app.js";
 
 const authRoot = document.querySelector("#auth");
@@ -16,7 +20,7 @@ async function start() {
   if (!state.authenticated) {
     // Signed in to Mytko Workflow in this browser? Then this signs in here without a click (once per tab, so a
     // failure or a logout never loops).
-    if (shouldTryMytko(state, window.location.search, sessionStorage)) {
+    if (shouldTryMytko(state, window.location.search, sessionStorage, shared())) {
       sessionStorage.setItem(SSO_TRIED, "1");
       return window.location.assign("/auth/mytko/start");
     }

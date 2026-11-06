@@ -154,7 +154,7 @@ export function openManage(kind = "projects") {
       <ul class="manage__list">${k.list().map(item => itemHtml(active, item)).join("") || `<li class="muted">Jeszcze nic tu nie ma.</li>`}</ul>
       <form class="manage__add" data-add>
         <input type="color" name="color" value="${color}" aria-label="Kolor">
-        <input name="name" maxlength="80" placeholder="${k.placeholder}" aria-label="Nazwa" required>
+        <input name="name" maxlength="${active === "spaces" || active === "categories" ? 50 : 80}" placeholder="${k.placeholder}" aria-label="Nazwa" required>
         ${active === "projects" ? `<span class="select select--sm"><select name="spaceId" aria-label="Przestrzeń">${choices(store.spaces, defaultSpace)}</select>${icon("chevronDown", 16)}</span>` : ""}
         <button type="submit" class="btn btn--primary btn--sm">${icon("plus", 18)}Dodaj</button>
       </form>

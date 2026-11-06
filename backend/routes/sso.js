@@ -74,7 +74,7 @@ function createSsoRouter({ sso, publicOrigin, cookie, startSession, fetchImpl = 
       console.error("Mytko sign-in: code exchange refused", response.status);
       return done(res, response.status >= 500 ? "unavailable" : "failed");
     }
-    if (sso.login && !equal(sso.login, data.login)) return done(res, "denied");
+    if (!equal(sso.login, data.login)) return done(res, "denied");
     await startSession(req, res, { login: data.login, method: "mytko" });
     return done(res, null);
   });

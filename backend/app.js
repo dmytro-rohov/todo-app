@@ -78,9 +78,10 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   // The login screen's API is reachable without a session; everything after it is not, and anonymous requests are
   // refused before any other processing.
   const sso = config.auth.disabled ? null : config.auth.sso;
-  const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso) });
+  const ssoLogin = sso ? sso.login : "";
+  const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso), ssoLogin });
   api.use("/auth", csrf, json, authRouter);
-  if (credentials) api.use(ownerAuth({ credentials, sessions, cookieName: cookie.name }));
+  if (credentials) api.use(ownerAuth({ credentials, sessions, cookieName: cookie.name, ssoLogin }));
   api.use(csrf);
   api.use(json);
   api.use("/tasks", createTasksRouter(pool));

@@ -22,6 +22,9 @@ function loadConfig(env = process.env) {
   if (authDisabled && isProduction) {
     errors.push("AUTH_DISABLED=true is not allowed when NODE_ENV=production");
   }
+  if (authUsername.length > 80) {
+    errors.push("AUTH_USERNAME must be at most 80 characters");
+  }
   if (!authDisabled && (!authUsername || !authPasswordHash)) {
     errors.push("AUTH_USERNAME and AUTH_PASSWORD_HASH are required (or AUTH_DISABLED=true outside production)");
   } else if (!authDisabled) {
@@ -79,7 +82,7 @@ function loadConfig(env = process.env) {
 }
 
 // "Zaloguj kontem Mytko" (routes/sso.js): enabled when MYTKO_SSO_ORIGIN and MYTKO_SSO_CLIENT_SECRET are set.
-// MYTKO_SSO_LOGIN, when set, is the only Mytko login allowed in.
+// MYTKO_SSO_LOGIN is the only Mytko Workflow login let in.
 function loadSso(env, errors) {
   const origin = env.MYTKO_SSO_ORIGIN || "";
   const clientSecret = env.MYTKO_SSO_CLIENT_SECRET || "";
@@ -94,7 +97,10 @@ function loadSso(env, errors) {
   if (clientSecret.length < 32) errors.push("MYTKO_SSO_CLIENT_SECRET must be at least 32 characters");
   const clientId = env.MYTKO_SSO_CLIENT_ID || "tasks";
   if (!/^[a-z][a-z0-9-]{1,31}$/.test(clientId)) errors.push("MYTKO_SSO_CLIENT_ID must be a short lowercase id");
-  return { origin, clientSecret, clientId, login: env.MYTKO_SSO_LOGIN || "" };
+  // Workflow may have several operators; only this one becomes the owner here.
+  const login = env.MYTKO_SSO_LOGIN || "";
+  if (!login || login.length > 80) errors.push("MYTKO_SSO_LOGIN (the Mytko Workflow login let in, at most 80 characters) is required with MYTKO_SSO_ORIGIN");
+  return { origin, clientSecret, clientId, login };
 }
 
 function toInt(value, fallback) {

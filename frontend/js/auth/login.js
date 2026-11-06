@@ -53,11 +53,22 @@ const SSO_NOTICES = {
 };
 
 export const SSO_TRIED = "mytko-tasks-sso-tried";
+// Set on logout in localStorage, so no tab of this browser signs back in automatically until the owner signs in
+// again on purpose (password or the Mytko button).
+export const SSO_OFF = "mytko-tasks-sso-off";
 
-export function shouldTryMytko(state, search, storage) {
+export function shouldTryMytko(state, search, storage, shared = null) {
   let tried = true;
-  try { tried = storage.getItem(SSO_TRIED) === "1"; } catch { /* storage blocked: never auto-redirect */ }
+  try { tried = storage.getItem(SSO_TRIED) === "1" || shared?.getItem(SSO_OFF) === "1"; } catch { /* storage blocked: never auto-redirect */ }
   return Boolean(state.mytkoLogin) && !new URLSearchParams(search).has("sso") && !tried;
+}
+
+export function markLoggedOut() {
+  try { sessionStorage.setItem(SSO_TRIED, "1"); localStorage.setItem(SSO_OFF, "1"); } catch { /* ignore */ }
+}
+
+function markSignedInOnPurpose() {
+  try { localStorage.removeItem(SSO_OFF); } catch { /* ignore */ }
 }
 
 export function ssoNotice(search) {
@@ -147,6 +158,7 @@ export function renderLogin(root, state, { notice = null, onAuthenticated }) {
   });
 
   root.querySelector("[data-quick]").addEventListener("click", event => {
+    markSignedInOnPurpose();
     event.currentTarget.disabled = true;
     event.currentTarget.querySelector("span").textContent = "Logowanie…";
     window.location.assign("/auth/mytko/start");
@@ -166,6 +178,7 @@ export function renderLogin(root, state, { notice = null, onAuthenticated }) {
     form.setAttribute("aria-busy", "true");
     try {
       const next = await request("/api/auth/login", { method: "POST", body: { login, password: passwordField.value } });
+      markSignedInOnPurpose();
       onAuthenticated(next);
     } catch (error) {
       showError(loginErrorMessage(error));

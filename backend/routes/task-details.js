@@ -12,6 +12,7 @@ const MAX_NOTE = 5000;
 const MAX_SUBTASK_TITLE = 200;
 const MAX_SUBTASKS = 100;
 const HISTORY_LIMIT = 200;
+const TIMER_LOCK_ID = 7243917462;
 
 function isBody(data) {
   return data !== null && typeof data === "object" && !Array.isArray(data);
@@ -48,6 +49,9 @@ module.exports = function createTaskDetailsRouter(pool) {
   // task to "in progress". Both return the task.
   router.post("/:id/timer/start", async (req, res) => {
     const task = await withTransaction(pool, async client => {
+      // Starts are serialised: otherwise two concurrent starts on different tasks each miss the other's
+      // uncommitted timer and both keep running.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TIMER_LOCK_ID]);
       const before = await loadTask(client, req.taskId, { lock: true });
       if (before.status === "done" || before.status === "needs_review") return { conflict: true };
       await client.query("UPDATE task_time_entries SET ended_at = now() WHERE ended_at IS NULL AND task_id <> $1", [req.taskId]);

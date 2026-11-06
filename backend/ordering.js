@@ -31,8 +31,11 @@ async function moveTask(pool, body) {
     target.splice(index,0,{...task,status:body.status});
     const source=rows.filter(t=>t.status===task.status && t.id!==task.id);
     const lists=task.status===body.status ? [target] : [source,target];
+    const original = new Map(rows.map(r => [r.id, r]));
     for(const list of lists) for(let position=0;position<list.length;position++) {
       const row=list[position];
+      // Unchanged rows keep their updated_at ("recently changed" stays meaningful).
+      if (original.get(row.id).status === row.status && Number(original.get(row.id).position) === position) continue;
       await client.query(`UPDATE tasks SET ${statusAssignmentsSql('$1').join(', ')}, position=$2, updated_at=now() WHERE id=$3`,[row.status,position,row.id]);
     }
     if (task.status !== body.status) {

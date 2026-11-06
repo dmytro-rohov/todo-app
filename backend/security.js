@@ -138,7 +138,15 @@ function ownerCredentials({ username, passwordHash, failWindowMs, failMax }) {
   };
 }
 
-function ownerAuth({ credentials, sessions, cookieName }) {
+// A session belongs to the owner only while it still matches the configuration: password sessions the owner login,
+// Mytko sessions the one allowed Workflow login (so changing either cuts older sessions).
+function ownerSession(session, { username, ssoLogin }) {
+  if (!session) return false;
+  if (session.method === "password") return session.login === username;
+  return session.method === "mytko" && Boolean(ssoLogin) && session.login === ssoLogin;
+}
+
+function ownerAuth({ credentials, sessions, cookieName, ssoLogin = "" }) {
   // Successful Basic credentials are remembered (as a keyed digest, never in plain
   // text) so each request does not cost a full scrypt run.
   const cacheKey = crypto.randomBytes(32);
@@ -148,20 +156,21 @@ function ownerAuth({ credentials, sessions, cookieName }) {
   const deny = res => res.status(401).json({ message: "Authentication required" });
 
   const middleware = async (req, res, next) => {
-    const waitSeconds = credentials.lockedFor(req);
-    if (waitSeconds) {
-      res.set("Retry-After", String(waitSeconds));
-      return res.status(429).json({ message: "Too many failed login attempts" });
-    }
-
+    // A valid session works even while this address is locked out (e.g. failed guesses from the same NAT).
     try {
       const session = await sessions.verify(readCookieValue(req, cookieName));
-      if (session && (session.method !== "password" || session.login === credentials.username)) {
+      if (ownerSession(session, { username: credentials.username, ssoLogin })) {
         req.auth = session;
         return next();
       }
     } catch (error) {
       return next(error);
+    }
+
+    const waitSeconds = credentials.lockedFor(req);
+    if (waitSeconds) {
+      res.set("Retry-After", String(waitSeconds));
+      return res.status(429).json({ message: "Too many failed login attempts" });
     }
 
     const match = /^Basic ([A-Za-z0-9+/=]+)$/.exec(req.get("authorization") || "");
@@ -272,6 +281,7 @@ module.exports = {
   clientAddress,
   ownerCredentials,
   ownerAuth,
+  ownerSession,
   csrfProtection,
   securityHeaders,
   CONTENT_SECURITY_POLICY
