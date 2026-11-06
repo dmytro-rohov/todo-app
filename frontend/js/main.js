@@ -37,3 +37,8 @@ async function start() {
 }
 
 start();
+
+// Installable app (PWA): the worker only keeps the app shell for offline / release moments, never API data.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}

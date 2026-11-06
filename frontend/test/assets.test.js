@@ -97,3 +97,16 @@ test("no API module hardcodes a localhost URL", () => {
     assert.doesNotMatch(source, /localhost|127\.0\.0\.1/, `${name} hardcodes a local URL`);
   }
 });
+
+test("the app is installable: manifest, icons and a service worker that never touches the API", () => {
+  assert.match(indexHtml, /<link rel="manifest" href="\.\/manifest\.webmanifest">/);
+  assert.match(indexHtml, /<meta name="theme-color" content="#0b110d">/);
+  const manifest = JSON.parse(readFileSync(join(frontendDir, "manifest.webmanifest"), "utf8"));
+  assert.deepEqual([manifest.name, manifest.start_url, manifest.display], ["Mytko Tasks", "/", "standalone"]);
+  for (const icon of manifest.icons) assert.ok(existsSync(join(frontendDir, icon.src)), icon.src);
+  assert.ok(manifest.icons.some(icon => icon.purpose === "maskable" && icon.sizes === "512x512"));
+  const worker = readFileSync(join(frontendDir, "sw.js"), "utf8");
+  assert.match(worker, /startsWith\("\/api\/"\)/);
+  assert.match(worker, /startsWith\("\/auth\/"\)/);
+  assert.match(readFileSync(join(frontendDir, "js", "main.js"), "utf8"), /serviceWorker\.register\("\/sw\.js"\)/);
+});

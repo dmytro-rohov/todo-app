@@ -194,11 +194,12 @@
 
 @layer views {
     // ---- shell ------------------------------------------------------------------------------------------------
-    .app { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
+    .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
 
     .sidebar {
-        position: sticky; top: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; padding: 22px 16px 16px;
-        border-right: 1px solid var(--border); background: #090e0b; overflow-y: auto;
+        position: sticky; top: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; padding: 22px 12px 16px;
+        border-right: 1px solid var(--border); background: #090e0b; overflow-x: hidden; overflow-y: auto;
+        scrollbar-width: thin; scrollbar-color: #2f3e31 transparent;
         &__brand {
             display: flex; align-items: center; gap: 12px; padding: 0 6px 26px;
             img { width: 44px; height: 44px; border-radius: 12px; }
@@ -206,11 +207,12 @@
             small { display: block; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .22em; text-transform: uppercase; }
         }
         &__close { display: none; margin-left: auto; }
-        &__nav { display: grid; gap: 2px; align-content: start; }
+        // One track that never grows past the sidebar: long names are cut with an ellipsis, nothing scrolls sideways.
+        &__nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; align-content: start; }
         &__foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
     }
     .nav-item {
-        display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid transparent;
+        display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px; padding: 0 10px; border: 1px solid transparent;
         border-radius: 10px; color: #dbe4dc; font-size: 15px; font-weight: 550; text-align: left;
         span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         em { color: var(--faint); font-size: 13px; font-style: normal; }
@@ -299,15 +301,16 @@
     .filters {
         display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; padding: 12px 18px; border: 1px solid var(--border);
         border-radius: var(--radius-lg); background: var(--surface);
-        .select { min-width: 200px; }
-        &__spacer { flex: 1; }
+        // Wide enough for the full labels; on narrower screens the switch moves to a second row instead.
+        .select { flex: 1 1 190px; min-width: 190px; max-width: 240px; select { text-overflow: ellipsis; } }
+        &__spacer { flex: 1 0 0; }
     }
 
     // ---- board ------------------------------------------------------------------------------------------------
     // Four columns fill the width; the fifth (long-term plans) waits to the right and is reached by scrolling.
     .board-wrap { position: relative; }
     .board {
-        display: grid; grid-auto-flow: column; grid-auto-columns: max(260px, calc((100% - 48px) / 4)); gap: 16px;
+        display: grid; grid-auto-flow: column; grid-auto-columns: max(220px, calc((100% - 48px) / 4)); gap: 16px;
         align-items: start; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 10px;
         scrollbar-width: thin; scrollbar-color: #2f3e31 transparent;
         .column { scroll-snap-align: start; }
@@ -324,15 +327,16 @@
     .board-wrap.is-end .board__peek--back { display: flex; }
     .column {
         display: flex; flex-direction: column; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: #0f1611;
+        container-type: inline-size;
         &__head {
             display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 2px 4px 12px 8px;
-            h2 { font-size: 19px; font-weight: 800; white-space: nowrap; }
+            h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 19px; font-weight: 800; white-space: nowrap; }
         }
-        &__icon { color: #e3ebe4; }
+        &__icon { flex: 0 0 auto; color: #e3ebe4; }
         &__tools { display: flex; margin-left: auto; .icon-btn { color: #dbe4dc; } }
         // About four cards; longer columns scroll inside, so the board never becomes a page-long stack.
         &__cards {
-            display: grid; gap: 12px; min-height: 90px; max-height: 720px; align-content: start; overflow-y: auto;
+            display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-height: 90px; max-height: 720px; align-content: start; overflow-y: auto;
             overscroll-behavior: contain; margin-right: -6px; padding-right: 6px;
             scrollbar-width: thin; scrollbar-color: #2f3e31 transparent;
         }
@@ -352,7 +356,7 @@
         &:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         &__title { font-size: 16.5px; line-height: 1.35; font-weight: 700; }
         &__meta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; margin-top: -4px; }
-        &__foot { display: flex; align-items: center; gap: 12px; min-height: 34px; }
+        &__foot { display: flex; align-items: center; gap: 12px; min-height: 34px; min-width: 0; }
         &__who { display: flex; align-items: center; gap: 8px; margin-right: auto; }
         &__action { margin-left: auto; }
         &--in_progress { border-left: 3px solid var(--accent); }
@@ -363,6 +367,21 @@
         &--ghost { position: fixed; z-index: 100; top: 0; left: 0; pointer-events: none; box-shadow: var(--shadow); border-color: #b7e34d80; cursor: grabbing; }
     }
     .card__foot .due, .card__foot .timer { margin: 0 auto; }
+
+    // Narrow columns (four on a ~1280 px screen): tighter header and cards instead of clipping.
+    @container (max-width: 280px) {
+        .column__head { gap: 6px; padding-left: 4px; h2 { font-size: 15px; } .count { min-width: 20px; height: 20px; padding: 0 5px; font-size: 12px; } }
+        .column__icon .i { width: 19px; height: 19px; }
+        .column__tools .icon-btn { width: 28px; height: 28px; }
+        .column__tools .icon-btn[data-card="only"] { display: none; }
+        .card { padding: 14px; gap: 12px; }
+        .card__title { font-size: 15.5px; }
+        .card__foot { gap: 6px; }
+        .card .avatar { width: 30px; height: 30px; font-size: 12px; }
+        .card .round-btn { width: 30px; height: 30px; }
+        .timer { gap: 5px; min-height: 28px; padding: 0 8px; font-size: 12.5px; .i { display: none; } }
+        .due { gap: 5px; font-size: 13px; }
+    }
     .drop-marker { border: 2px dashed #b7e34d99; border-radius: var(--radius); background: var(--accent-soft); }
 
     // ---- list -------------------------------------------------------------------------------------------------
@@ -511,10 +530,7 @@
     @media (max-width: 1380px) {
         .tiles { grid-template-columns: repeat(4, minmax(130px, 1fr)); width: 100%; }
     }
-    @media (max-width: 1180px) {
-        .board { display: flex; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 8px; .column { flex: 0 0 300px; scroll-snap-align: start; } }
-        .filters .select { min-width: 170px; }
-    }
+
     @media (max-width: 900px) {
         .app { grid-template-columns: minmax(0, 1fr); }
         .sidebar { position: fixed; z-index: 70; inset: 0 auto 0 0; width: min(300px, 86vw); transform: translateX(-102%); transition: transform .2s ease; }
@@ -531,8 +547,8 @@
         .tile { min-height: 58px; padding: 6px 12px 6px 8px; strong { font-size: 19px; } small { font-size: 13.5px; } &__icon { width: 38px; height: 38px; } }
         .toolbar { flex-wrap: wrap; .tabs { flex: 1; } }
         .tab { padding: 0 14px; font-size: 15px; }
-        .filters { flex-wrap: nowrap; overflow-x: auto; padding: 10px 12px; scrollbar-width: none; .select { min-width: 160px; flex: 0 0 auto; } &__spacer { display: none; } }
-        .board .column { flex-basis: min(320px, 84vw); }
+        .filters { flex-wrap: nowrap; overflow-x: auto; padding: 10px 12px; scrollbar-width: none; .select { min-width: 160px; max-width: none; flex: 0 0 auto; } &__spacer { display: none; } }
+        .board { display: flex; .column { flex: 0 0 min(320px, 84vw); } }
         .column__cards { max-height: 62vh; }
         .row { grid-template-columns: 36px minmax(0, 1fr) auto; row-gap: 4px; .row__who { display: none; } .row__time { grid-column: 2; } .row__due { grid-row: 1; grid-column: 3; } }
         .row--archived { .row__when { grid-column: 2; } .row__actions { grid-column: 2 / -1; justify-content: flex-end; } }

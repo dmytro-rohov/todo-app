@@ -11,4 +11,6 @@
 !frontend/index.html
 !frontend/js/
 !frontend/icons/
+!frontend/manifest.webmanifest
+!frontend/sw.js
 !frontend/styles/*.scss

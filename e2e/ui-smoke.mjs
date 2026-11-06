@@ -32,6 +32,9 @@ try {
     if (m.method === "Log.entryAdded" && m.params.entry.level === "error") errors.push(m.params.entry.text); });
   await send("Runtime.enable"); await send("Log.enable"); await send("Page.enable");
   await send("Page.navigate", { url: BASE + "/#board" }); await sleep(2500);
+  const pwa = await evaluate("(async () => { const reg = await navigator.serviceWorker.ready; const m = await fetch('/manifest.webmanifest'); return { active: Boolean(reg.active), scope: reg.scope, type: m.headers.get('content-type'), name: (await m.json()).name }; })()");
+  check("installable app: manifest served and the service worker active", pwa?.active && pwa.scope === BASE + "/" && /manifest\+json/.test(pwa.type) && pwa.name === "Mytko Tasks", JSON.stringify(pwa));
+  check("the sidebar never scrolls sideways", await evaluate("(() => { const s = document.querySelector('.sidebar'); return s.scrollWidth <= s.clientWidth; })()"));
   check("board renders 5 columns", await evaluate("document.querySelectorAll('.column').length") === 5);
   const layout = await evaluate("(() => { const b = document.querySelector('.board').getBoundingClientRect(); const cols = [...document.querySelectorAll('.column')].map(c => c.getBoundingClientRect()); return { visible: cols.filter(c => c.right <= b.right + 1).length, planLeft: Math.round(cols[4].left), boardRight: Math.round(b.right) }; })()");
   check("four columns fill the board and long-term plans wait to the right", layout.visible === 4 && layout.planLeft >= layout.boardRight, JSON.stringify(layout));
