@@ -46,9 +46,10 @@ export function formatDuration(seconds) {
   return m ? `${h} h ${m} min` : `${h} h`;
 }
 
-// Tracked time including a running timer, as of `now` (ms). `fetchedAt` is when trackedSeconds was read.
+// Tracked time including a running timer, as of `now` (ms). trackedSeconds was computed by the server when the
+// task was read: task.fetchedAt (set per task by the store), else `fetchedAt`.
 export function trackedNow(task, fetchedAt, now = Date.now()) {
-  const running = task.timerStartedAt ? Math.max(0, (now - fetchedAt) / 1000) : 0;
+  const running = task.timerStartedAt ? Math.max(0, (now - (task.fetchedAt ?? fetchedAt)) / 1000) : 0;
   return (task.trackedSeconds || 0) + running;
 }
 

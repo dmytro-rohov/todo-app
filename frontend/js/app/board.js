@@ -122,7 +122,11 @@ async function cardAction(button) {
     store.filters.status = store.filters.status === button.dataset.status ? "" : button.dataset.status;
     return render();
   }
-  if (kind === "timer-start") return runTask(() => api.timer(id, "start"), "Nie udało się uruchomić licznika.");
+  if (kind === "timer-start") {
+    // The server stops any other running timer, so every card is refreshed, not only this one.
+    if (await runTask(() => api.timer(id, "start"), "Nie udało się uruchomić licznika.")) await reload({ quiet: true });
+    return;
+  }
   if (kind === "timer-stop") return runTask(() => api.timer(id, "stop"), "Nie udało się zatrzymać licznika.");
   if (kind === "approve") {
     const firstDone = store.tasks.filter(t => t.status === "done").sort(byPosition)[0]?.id ?? null;
@@ -146,14 +150,26 @@ function showMarker(target) {
   else target.zone.append(drag.marker);
 }
 
+// Near an edge the board (sideways) or the page (vertically) keeps scrolling while the pointer rests there, so a
+// card can travel to a column that is off screen on a phone. Returns whether anything scrolled.
 function autoScroll(x, y) {
-  const board = drag.card.closest(".view");
-  const scroller = board?.querySelector(".board");
+  let scrolled = false;
+  const scroller = drag.card.closest(".view")?.querySelector(".board");
   if (scroller) {
     const r = scroller.getBoundingClientRect();
-    if (x < r.left + 48) scroller.scrollLeft -= 14; else if (x > r.right - 48) scroller.scrollLeft += 14;
+    const before = scroller.scrollLeft;
+    if (x < r.left + 48) scroller.scrollLeft -= 12; else if (x > r.right - 48) scroller.scrollLeft += 12;
+    scrolled = scroller.scrollLeft !== before;
   }
-  if (y < 60) window.scrollBy(0, -14); else if (y > window.innerHeight - 60) window.scrollBy(0, 14);
+  const top = window.scrollY;
+  if (y < 60) window.scrollBy(0, -12); else if (y > window.innerHeight - 60) window.scrollBy(0, 12);
+  return scrolled || window.scrollY !== top;
+}
+
+function scrollLoop() {
+  if (!drag?.active) return;
+  if (autoScroll(drag.lastX, drag.lastY)) { drag.target = dropTarget(drag.lastX, drag.lastY); showMarker(drag.target); }
+  drag.frame = requestAnimationFrame(scrollLoop);
 }
 
 function beginDrag() {
@@ -172,18 +188,23 @@ function beginDrag() {
   drag.card.classList.add("is-dragging");
   document.body.classList.add("is-dragging");
   try { drag.card.setPointerCapture(drag.pointerId); } catch { /* pointer already gone */ }
+  drag.lastX = drag.x;
+  drag.lastY = drag.y;
+  drag.frame = requestAnimationFrame(scrollLoop);
 }
 
 function moveGhost(x, y) {
   drag.ghost.style.transform = `translate(${x - drag.offsetX}px, ${y - drag.offsetY}px) rotate(1.5deg)`;
+  drag.lastX = x;
+  drag.lastY = y;
   drag.target = dropTarget(x, y);
   showMarker(drag.target);
-  autoScroll(x, y);
 }
 
 function endDrag(commit) {
   if (!drag) return;
   clearTimeout(drag.hold);
+  cancelAnimationFrame(drag.frame);
   const { active, target, id } = drag;
   if (active) {
     drag.ghost.remove();

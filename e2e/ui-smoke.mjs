@@ -55,6 +55,10 @@ try {
   const started = (await api("/api/tasks")).find(t => t.id === todo.id);
   check("play starts the timer and moves the task to W realizacji", started.status === "in_progress" && Boolean(started.timerStartedAt));
 
+  const other = (await api("/api/tasks")).find(t => t.status === "todo" && t.id !== todo.id);
+  await click(`.card[data-id="${other.id}"] [data-card="timer-start"]`); await sleep(1000);
+  check("starting another timer stops the first one on the board", await evaluate(`!document.querySelector('.card[data-id="${todo.id}"] .timer.is-running') && Boolean(document.querySelector('.card[data-id="${other.id}"] .timer.is-running, .card[data-id="${other.id}"] [data-card="timer-stop"]'))`));
+
   // 3. new task dialog
   await click('[data-action="new-task"]');
   await click('dialog input[name="title"]'); await type("Zadanie z testu przeglądarki");
@@ -76,6 +80,12 @@ try {
   const notes = await api(`/api/tasks/${created.id}/notes`);
   check("notes are added from the panel", notes[0]?.body === "Notatka z testu");
   check("history lists the rename", (await api(`/api/tasks/${created.id}/history`)).some(h => h.field === "title"));
+  await click('.drawer [data-form="subtask"] input'); await type("Podzadanie z testu");
+  await click('.drawer [data-form="subtask"] button[type="submit"]'); await sleep(900);
+  await click('.drawer [data-form="note"] textarea'); await type("Szkic, jeszcze nie zapisany");
+  await click('.drawer .subtasks input[type="checkbox"]'); await sleep(1200);
+  check("a note draft survives other changes in the panel", await evaluate("document.querySelector('.drawer [data-form=\"note\"] textarea').value") === "Szkic, jeszcze nie zapisany");
+  check("the subtask was ticked", (await api(`/api/tasks/${created.id}/subtasks`))[0]?.done === true);
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }); await sleep(400);
   check("Escape closes the panel", await evaluate("document.querySelector('.drawer').hidden"));
 

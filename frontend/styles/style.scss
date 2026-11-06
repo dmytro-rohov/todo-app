@@ -501,6 +501,8 @@
         .calendar__note { display: none; }
         .calendar__weekday { padding: 6px 4px; font-size: 11px; text-align: center; }
     }
+    // Snapping would pull every small programmatic scroll back while a card is dragged to an off-screen column.
+    body.is-dragging .board { scroll-snap-type: none; }
     @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation: none !important; transition: none !important; }
     }

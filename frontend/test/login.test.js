@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ApiError } from "../js/api/http.js";
-import { hours, loginErrorMessage, ssoNotice, shouldTryMytko, SSO_TRIED } from "../js/auth/login.js";
+import { hours, loginErrorMessage, ssoNotice, shouldTryMytko, SSO_OFF, SSO_TRIED } from "../js/auth/login.js";
 
 test("login errors are explained without leaking server messages", () => {
   assert.equal(loginErrorMessage(new ApiError("Invalid login or password", 401)), "Nieprawidłowy login lub hasło.");
@@ -30,4 +30,7 @@ test("the automatic Mytko sign-in runs once per tab and never after a reported o
   assert.equal(shouldTryMytko({ mytkoLogin: true }, "?sso=login_required", storage({})), false);
   assert.equal(shouldTryMytko({ mytkoLogin: true }, "", storage({ [SSO_TRIED]: "1" })), false);
   assert.equal(shouldTryMytko({ mytkoLogin: true }, "", { getItem() { throw new Error("blocked"); } }), false);
+  // a logout in another tab of this browser stops every tab from signing back in by itself
+  assert.equal(shouldTryMytko({ mytkoLogin: true }, "", storage({}), storage({ [SSO_OFF]: "1" })), false);
+  assert.equal(shouldTryMytko({ mytkoLogin: true }, "", storage({}), storage({})), true);
 });

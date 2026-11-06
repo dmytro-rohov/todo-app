@@ -207,13 +207,43 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
     assert.equal((await call(`/api/tasks/${task.id}`, "PATCH", { status: "review" })).status, 400);
   });
 
+  test("legacy PUT keeps needs_review when completion does not change, and clears it when it does", async () => {
+    const task = await newTask({ status: "needs_review" });
+    const put = body => call(`/api/tasks/${task.id}`, "PUT", { title: "Zadanie", date: "2026-11-05", ...body });
+    assert.equal((await put({ completed: false })).body.status, "needs_review");
+    const done = (await put({ completed: true })).body;
+    assert.deepEqual([done.status, done.reviewRequestedAt], ["done", null]);
+    assert.equal((await put({ completed: false })).body.status, "todo");
+  });
+
+  test("a move only touches tasks whose column or position changes", async () => {
+    const [a, b, c] = [await newTask(), await newTask(), await newTask()];
+    // dense positions 0, 1, 2 as after any earlier move
+    await owner.query("UPDATE tasks SET position = id - (SELECT min(id) FROM tasks), updated_at = '2026-01-01T00:00:00Z'");
+    const board = (await call("/api/tasks")).body.map(({ id, status, position }) => ({ id, status, position: Number(position) }));
+    assert.equal((await call("/api/tasks/move", "POST", { id: c.id, status: "done", beforeId: null, expected: board })).status, 200);
+    const rows = (await owner.query("SELECT id, updated_at FROM tasks ORDER BY id")).rows;
+    const untouched = rows.filter(r => r.updated_at.toISOString() === "2026-01-01T00:00:00.000Z").map(r => r.id);
+    assert.deepEqual(untouched, [a.id, b.id]); // positions 0 and 1 in ToDo stay as they were
+  });
+
+  test("a valid session keeps working while its address is locked out after failed guesses", async () => {
+    const login = await ctx.request("/api/auth/login", { method: "POST", auth: null, headers: SAME_ORIGIN_JSON, body: JSON.stringify({ login: USERNAME, password: PASSWORD }) });
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const wrong = "Basic " + Buffer.from(`${USERNAME}:wrong`).toString("base64");
+    for (let i = 0; i < 10; i++) await ctx.request("/api/tasks", { auth: wrong });
+    assert.equal((await ctx.request("/api/tasks", { auth: wrong })).status, 429);
+    assert.equal((await ctx.request("/api/tasks", { auth: null, headers: { cookie } })).status, 200);
+  });
+
   test("assignees: filter, history and unassignment on delete", async () => {
     const person = await call("/api/assignees", "POST", { name: "Dima Rohov", color: "#B7E34D" });
     assert.deepEqual([person.status, person.body.color], [201, "#b7e34d"]);
     const task = await newTask({ assigneeId: person.body.id });
     assert.equal(task.assigneeId, person.body.id);
     assert.deepEqual((await call(`/api/tasks?assigneeId=${person.body.id}`)).body.map(t => t.id), [task.id]);
-    assert.equal((await call("/api/tasks", "POST", { title: "Zadanie", date: "2026-11-05", assigneeId: 999999 })).status, 400);
+    const unknown = await call("/api/tasks", "POST", { title: "Zadanie", date: "2026-11-05", assigneeId: 999999 });
+    assert.deepEqual([unknown.status, unknown.body.message], [400, "Assignee does not exist"]);
     assert.equal((await call(`/api/assignees/${person.body.id}`, "PATCH", { name: "Dima R." })).body.name, "Dima R.");
     assert.equal((await call(`/api/assignees/${person.body.id}`, "DELETE")).status, 200);
     assert.equal((await call("/api/tasks")).body[0].assigneeId, null);
@@ -239,6 +269,11 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
     await call(`/api/tasks/${first.id}/timer/start`, "POST");
     assert.equal((await call(`/api/tasks/${first.id}/timer/stop`, "POST")).body.timerStartedAt, null);
     assert.equal((await owner.query("SELECT count(*)::int AS n FROM task_time_entries WHERE ended_at IS NULL")).rows[0].n, 0);
+
+    // Concurrent starts on different tasks are serialised: exactly one timer keeps running.
+    const many = [await newTask(), await newTask(), await newTask(), await newTask()];
+    await Promise.all(many.map(t => call(`/api/tasks/${t.id}/timer/start`, "POST")));
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM task_time_entries WHERE ended_at IS NULL")).rows[0].n, 1);
   });
 
   test("browser sessions: login, use, survive a restart, end on logout and are stored only as hashes", async () => {

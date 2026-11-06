@@ -36,6 +36,8 @@ test("durations and initials match the cards", () => {
   assert.equal(formatDuration(59), "0 min");
   assert.equal(trackedNow({ trackedSeconds: 60, timerStartedAt: "x" }, 1000, 61000), 120);
   assert.equal(trackedNow({ trackedSeconds: 60, timerStartedAt: null }, 1000, 61000), 60);
+  // each task counts from when it was read, not from the store's last write
+  assert.equal(trackedNow({ trackedSeconds: 600, timerStartedAt: "x", fetchedAt: 1000 }, 50000, 61000), 660);
   assert.equal(initials("Dima Rohov"), "DR");
   assert.equal(initials("kasia"), "KA");
   assert.equal(initials(""), "?");

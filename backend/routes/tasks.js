@@ -84,7 +84,12 @@ async function setLabels(db, taskId, labelIds) {
 
 function sendWriteError(res, error) {
   if (error instanceof TaskInputError) return res.status(400).json({ message: error.message });
-  if (error.code === FOREIGN_KEY_VIOLATION) return res.status(400).json({ message: "Category does not exist" });
+  if (error.code === FOREIGN_KEY_VIOLATION) {
+    const message = /assignee/.test(error.constraint || "") ? "Assignee does not exist"
+      : /project/.test(error.constraint || "") ? "Project does not exist"
+      : /space/.test(error.constraint || "") ? "Space does not exist" : "Category does not exist";
+    return res.status(400).json({ message });
+  }
   throw error;
 }
 

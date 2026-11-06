@@ -1,6 +1,6 @@
 // Mytko Tasks app shell: state, sidebar, header with counters, view tabs, filters, and the active view.
 import { api } from "../api/client.js";
-import { logout } from "../auth/login.js";
+import { logout, markLoggedOut } from "../auth/login.js";
 import { escapeHtml, safeColor } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { counters, filterTasks, initials, isoDay, STATUS_LABELS } from "./logic.js";
@@ -102,7 +102,8 @@ export async function reload({ quiet = false } = {}) {
     const [tasks, spaces, projects, labels, assignees] = await Promise.all([
       api.tasks(), api.list("spaces"), api.list("projects?archived=true"), api.list("categories"), api.list("assignees")
     ]);
-    Object.assign(store, { tasks, spaces, projects, labels, assignees, fetchedAt: Date.now() });
+    const now = Date.now();
+    Object.assign(store, { tasks: tasks.map(t => ({ ...t, fetchedAt: now })), spaces, projects, labels, assignees, fetchedAt: now });
     if (store.filters.spaceId && !lookup.space(store.filters.spaceId)) store.filters.spaceId = null;
     if (store.filters.projectId && !lookup.project(store.filters.projectId)) store.filters.projectId = null;
     render();
@@ -114,10 +115,10 @@ export async function reload({ quiet = false } = {}) {
 }
 
 // Replaces one task in place after a write (the API returns the full task).
-export function upsertTask(task) {
+export function upsertTask(written) {
+  const task = { ...written, fetchedAt: Date.now() };
   const index = store.tasks.findIndex(t => t.id === task.id);
   if (index === -1) store.tasks.push(task); else store.tasks[index] = task;
-  store.fetchedAt = Date.now();
   render();
   refreshDrawer();
 }
@@ -361,7 +362,7 @@ async function handleAction(target, event) {
     toggleSidebar(false);
   } else if (action === "logout") {
     if (!(await confirmDialog("Wylogować się z Mytko Tasks?", "Wyloguj"))) return;
-    try { sessionStorage.setItem("mytko-tasks-sso-tried", "1"); } catch { /* ignore */ }
+    markLoggedOut();
     await logout().catch(() => {});
     window.location.replace("/");
   } else {
@@ -413,6 +414,8 @@ export function startApp(element, session) {
       search.focus();
       search.select();
     } else if (event.key === "Escape") {
+      if (document.querySelector("dialog[open]")) return; // the dialog closes itself
+      closeDrawer();
       closePopups();
       toggleSidebar(false);
     }

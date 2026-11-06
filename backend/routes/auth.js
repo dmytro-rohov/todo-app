@@ -2,11 +2,12 @@
 // Mounted before the authentication middleware; CSRF, JSON and rate limits apply as to the rest of /api.
 const express = require("express");
 const { readCookie } = require("../sessions");
+const { ownerSession } = require("../security");
 
 const MAX_LOGIN = 200;
 const MAX_PASSWORD = 1024;
 
-function createAuthRouter({ credentials, sessions, cookie, authDisabled = false, mytkoLogin = false }) {
+function createAuthRouter({ credentials, sessions, cookie, authDisabled = false, mytkoLogin = false, ssoLogin = "" }) {
   const router = express.Router();
 
   function state(session) {
@@ -30,8 +31,7 @@ function createAuthRouter({ credentials, sessions, cookie, authDisabled = false,
   router.get("/session", async (req, res) => {
     if (authDisabled) return res.json({ ...state({ login: "dev", method: "password", expiresAt: null }) });
     const session = await sessions.verify(readCookie(req, cookie.name));
-    const valid = session && (session.method !== "password" || session.login === credentials.username);
-    res.json(state(valid ? session : null));
+    res.json(state(ownerSession(session, { username: credentials.username, ssoLogin }) ? session : null));
   });
 
   router.post("/login", async (req, res) => {

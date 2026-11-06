@@ -53,9 +53,11 @@ rewritten; they read as private.
 
 ### Release order (operator)
 
+The full 1.0 checklist (with `0002_auth_sessions` from stage 2) is [RELEASE-1.0.md](RELEASE-1.0.md).
+
 1. **Migrate before deploying.** A Mytko release replaces only the `app` container and never migrates, while
-   `/readyz` requires every shipped migration. Deploying this image before `0001` is applied makes the new
-   container fail its readiness check.
+   `/readyz` requires every shipped migration. Deploying this image before `0001` (and, from stage 2 on, `0002`)
+   is applied makes the new container fail its readiness check.
 2. **Grants for the new tables.** `npm run migrate` / the `migrate` container now grants the app role DML on
    *all* tables in `public` (previously only `tasks` and `categories`). If the migration is applied by a path
    that does not run `grantAppRole`, the app role must get the same grants, or the API answers 500 on every
