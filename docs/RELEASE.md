@@ -19,7 +19,15 @@ Mytko Workflow and on the operator's phone.
    checks that the new image serves.
 5. **Recover** — if the outcome is uncertain, the operator can restore the previous image with a fresh code.
 
-What a release never does: run `migrate`, touch the database, its volume or backups, Caddy, DNS, or other
-applications. Schema changes go through the approved Drizzle migration path (see [PRODUCTION.md](PRODUCTION.md)).
+**Database migrations.** When the release brings new Drizzle migrations, the panel shows a "Migracja bazy" step
+between approval and deploy: the pending migrations (each one must be additive: new tables, columns, indexes, foreign
+keys), checked by Mytko against the database. With a separate 6-digit code the deploy host takes a named backup,
+checks that the image would apply exactly that plan, runs this image's `migrate` service once and reads the schema
+afterwards. The running version keeps working on the extended schema; the new version is deployed after that.
+A failed migration leaves the application unchanged; restoring the backup is a separate, explicit operator action.
+
+What a release never does: touch the database outside that migration step, its volume or the daily backups, Caddy,
+DNS, or other applications. Schema changes go through the approved Drizzle migration path
+(see [PRODUCTION.md](PRODUCTION.md)).
 
 The workflow takes no secret as an input; the image is public on GHCR and verification needs no registry credential.
