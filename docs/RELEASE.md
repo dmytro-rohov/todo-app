@@ -31,3 +31,8 @@ DNS, or other applications. Schema changes go through the approved Drizzle migra
 (see [PRODUCTION.md](PRODUCTION.md)).
 
 The workflow takes no secret as an input; the image is public on GHCR and verification needs no registry credential.
+
+**Changes merged outside a Mytko Session.** A pull request merged on GitHub (for example 2060c2f, the layout fixes
+and the installable app) has no Session, so it gets none of the release steps above. It reaches production through a
+short technical Mytko Session started from that `main`: Validate, Push, Review, Merge, then "Wydanie produkcyjne" as
+usual. The release then contains exactly that `main` plus the Session's own small change.
