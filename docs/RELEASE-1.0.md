@@ -1,6 +1,6 @@
 # Mytko Tasks 1.0 — production release checklist
 
-From the Lite release (`a5aed09`, live on `tasks.mytko.dev`) to 1.0. Two schema migrations come with it, so the order
+From the Lite release (`a5aed09`, live on `tasks.mytko.dev`) to 1.0. Three schema migrations come with it, so the order
 below matters: **a Mytko release only replaces the `app` container and never migrates, while `/readyz` requires
 every migration the image ships**. Deploying first would leave the new container unready.
 
@@ -17,10 +17,10 @@ every migration the image ships**. Deploying first would leave the new container
    `ghcr.io/dmytro-rohov/todo-app@sha256:…`). Note the digest; do not deploy yet.
 2. **Backup** on mary-vps, as `tasks_owner` (PRODUCTION.md §5):
    `pg_dump -Fc -d "$OWNER_URL" -f tasks-$(date -u +%Y%m%dT%H%M%SZ)-pre-1.0.dump`
-3. **Migrate with the new image** (applies `0001_tasks_1_0` and `0002_auth_sessions`, additive only, and grants the
+3. **Migrate with the new image** (applies `0001_tasks_1_0`, `0002_auth_sessions` and `0003_long_term_plans`, additive only, and grants the
    app role DML on every table in `public`):
    `cd /srv/apps/mytko-tasks/release/deploy && APP_IMAGE=<digest from step 1> docker compose run --rm migrate`
-   It must end with `applied 2 migration(s)`. If the migration is applied by Mytko's Database Broker instead, run
+   It must end with `applied 3 migration(s)`. If the migration is applied by Mytko's Database Broker instead, run
    the same command afterwards anyway: it is idempotent and is what grants the app role access to the new tables.
 4. **Deploy** through Mytko (approve → preview → authenticator code). The release waits for `/readyz`.
 5. **Verify:**

@@ -2,7 +2,7 @@
 import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { isoDay, STATUS_LABELS, titleError } from "./logic.js";
+import { isoDay, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
 import { lookup, paint, reload, store, upsertTask } from "./app.js";
 import { openDrawer } from "./drawer.js";
 import { toast } from "./toast.js";
@@ -53,8 +53,11 @@ export function openNewTask({ status = "todo", dueDate = null } = {}) {
       <p class="field-error" data-error hidden></p>
       <div class="field-row">
         <label class="field"><span>Status</span><span class="select"><select name="status">${Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}"${k === status ? " selected" : ""}>${v}</option>`).join("")}</select>${icon("chevronDown", 16)}</span></label>
-        <label class="field"><span>Termin</span><input type="date" name="dueDate" value="${dueDate || ""}"></label>
+        <label class="field"><span data-date-label>${status === "planned" ? "Cel (opcjonalnie)" : "Termin"}</span><input type="date" name="dueDate" value="${dueDate || ""}"></label>
       </div>
+      <div class="horizon" data-horizon${status === "planned" ? "" : " hidden"}><span>Cel za:</span>
+        ${[[1, "rok"], [2, "2 lata"], [5, "5 lat"]].map(([years, label]) => `<button type="button" class="chip chip--toggle-btn" data-years="${years}">${label}</button>`).join("")}
+        <button type="button" class="chip chip--toggle-btn" data-years="0">kiedyś</button></div>
       <div class="field-row">
         <label class="field"><span>Przestrzeń</span><span class="select"><select name="spaceId">${choices(store.spaces, spaceId)}</select>${icon("chevronDown", 16)}</span></label>
         <label class="field"><span>Projekt</span><span class="select"><select name="projectId">${choices(projectsFor(spaceId), project?.id, "Bez projektu")}</select>${icon("chevronDown", 16)}</span></label>
@@ -71,6 +74,15 @@ export function openNewTask({ status = "todo", dueDate = null } = {}) {
   const form = element.querySelector("form");
   form.title.focus();
   element.addEventListener("click", event => { if (event.target.closest("[data-close]")) element.close(); });
+  form.status.addEventListener("change", () => {
+    const plan = form.status.value === "planned";
+    form.querySelector("[data-horizon]").hidden = !plan;
+    form.querySelector("[data-date-label]").textContent = plan ? "Cel (opcjonalnie)" : "Termin";
+  });
+  form.querySelector("[data-horizon]").addEventListener("click", event => {
+    const button = event.target.closest("[data-years]");
+    if (button) form.dueDate.value = Number(button.dataset.years) ? yearsAhead(Number(button.dataset.years)) : "";
+  });
   form.spaceId.addEventListener("change", () => {
     form.projectId.innerHTML = choices(projectsFor(Number(form.spaceId.value)), null, "Bez projektu");
   });

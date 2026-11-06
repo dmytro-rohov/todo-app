@@ -2,14 +2,14 @@
 import { api, sha256Hex } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { applyMove, boardCanonical, byPosition, columns, dueLabel, dueState, formatDuration, initials, STATUSES,
+import { applyMove, boardCanonical, byPosition, columns, dueLabel, dueState, formatDuration, goalLabel, initials, STATUSES,
   STATUS_LABELS, trackedNow } from "./logic.js";
 import { lookup, reload, render, runTask, store, visibleTasks } from "./app.js";
 import { openDrawer } from "./drawer.js";
 import { retentionNote } from "./archive.js";
 import { toast } from "./toast.js";
 
-const COLUMN_ICONS = { todo: "circle", in_progress: "play", needs_review: "warning", done: "checkCircle" };
+const COLUMN_ICONS = { todo: "circle", in_progress: "play", needs_review: "warning", done: "checkCircle", planned: "target" };
 const DRAG_THRESHOLD = 6;
 const TOUCH_HOLD_MS = 280;
 let drag = null;
@@ -33,6 +33,7 @@ export function avatarHtml(task) {
 }
 
 export function dueHtml(task) {
+  if (task.status === "planned") return `<span class="due due--goal">${icon("target", 17)}${escapeHtml(goalLabel(task.dueDate))}</span>`;
   if (!task.dueDate) return "";
   const state = dueState(task);
   return `<span class="due${state ? ` due--${state}` : ""}">${icon("calendar", 17)}${escapeHtml(dueLabel(task.dueDate))}</span>`;
@@ -52,6 +53,7 @@ function actionHtml(task) {
       ? `<button type="button" class="round-btn is-running" data-card="timer-stop" aria-label="Zatrzymaj licznik: ${title}" title="Zatrzymaj licznik">${icon("pauseCircle", 20)}</button>`
       : `<button type="button" class="round-btn" data-card="timer-start" aria-label="Wznów licznik: ${title}" title="Wznów licznik">${icon("play", 14)}</button>`;
   }
+  if (task.status === "planned") return `<button type="button" class="round-btn round-btn--plan" data-card="to-todo" aria-label="Przenieś do ToDo: ${title}" title="Przenieś do ToDo">${icon("arrowLeft", 15)}</button>`;
   if (task.status === "needs_review") return `<button type="button" class="round-btn round-btn--warn" data-card="approve" aria-label="Zatwierdź i zakończ: ${title}" title="Zatwierdź i zakończ">${icon("warning", 15)}</button>`;
   return `<span class="round-btn round-btn--done" title="Zakończone">${icon("check", 15)}</span>`;
 }
@@ -72,7 +74,14 @@ export function cardHtml(task) {
 
 export function renderBoard() {
   const cols = columns(visibleTasks());
-  return `<div class="board">${STATUSES.map(status => `
+  return `<div class="board-wrap">
+    <div class="board__bar">
+      <button type="button" class="board__peek" data-card="peek" aria-label="Przewiń do kolumny Plany długoterminowe">
+        ${icon("target", 17)}<span>Plany długoterminowe</span><em>${cols.planned.length}</em>${icon("chevronRight", 17)}</button>
+      <button type="button" class="board__peek board__peek--back" data-card="peek-back" aria-label="Wróć do początku tablicy">
+        ${icon("chevronLeft", 17)}<span>Wróć do tablicy</span></button>
+    </div>
+    <div class="board">${STATUSES.map(status => `
     <section class="column column--${status}" data-status="${status}" aria-label="${STATUS_LABELS[status]}">
       <header class="column__head">
         <span class="column__icon">${icon(COLUMN_ICONS[status], 22)}</span>
@@ -86,7 +95,16 @@ export function renderBoard() {
         ${cols[status].map(cardHtml).join("") || `<p class="column__empty">${status === "done" && !store.filters.showDone ? "Zakończone są ukryte." : "Brak zadań. Przeciągnij tu kartę albo dodaj nową."}</p>`}
       </div>
       ${status === "done" && retentionNote() ? `<p class="column__note">${icon("archive", 15)}${retentionNote()}</p>` : ""}
-    </section>`).join("")}</div>`;
+      ${status === "planned" ? `<p class="column__note">${icon("target", 15)}Cele na rok, dwa, pięć lat. Nie liczą się do „Otwarte” i terminów.</p>` : ""}
+    </section>`).join("")}</div></div>`;
+}
+
+// The fifth column waits off screen to the right; the peek button shows until the board is scrolled to its end.
+export function updatePeek(view) {
+  const board = view.querySelector(".board");
+  if (!board) return;
+  const atEnd = board.scrollLeft + board.clientWidth >= board.scrollWidth - 8;
+  view.querySelector(".board-wrap")?.classList.toggle("is-end", atEnd);
 }
 
 // Next task in the same column (to put a task back where it was).
@@ -120,6 +138,11 @@ export async function moveTask(id, status, beforeId, { undoable = true } = {}) {
 async function cardAction(button) {
   const id = Number(button.closest("[data-id]")?.dataset.id);
   const kind = button.dataset.card;
+  if (kind === "peek" || kind === "peek-back") {
+    const board = button.closest(".board-wrap").querySelector(".board");
+    return board.scrollTo({ left: kind === "peek" ? board.scrollWidth : 0, behavior: "smooth" });
+  }
+  if (kind === "to-todo") return moveTask(id, "todo", null);
   if (kind === "only") {
     store.filters.status = store.filters.status === button.dataset.status ? "" : button.dataset.status;
     return render();
@@ -237,6 +260,7 @@ function endDrag(commit) {
 
 export function bindBoard(root) {
   const view = root.querySelector(".view");
+  view.addEventListener("scroll", event => { if (event.target.classList?.contains("board")) updatePeek(view); }, true);
 
   view.addEventListener("pointerdown", event => {
     if (view.dataset.view !== "board" || event.button !== 0) return;

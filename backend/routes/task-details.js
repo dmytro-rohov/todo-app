@@ -57,7 +57,7 @@ module.exports = function createTaskDetailsRouter(pool) {
       await client.query("UPDATE task_time_entries SET ended_at = now() WHERE ended_at IS NULL AND task_id <> $1", [req.taskId]);
       await client.query(
         "INSERT INTO task_time_entries (task_id) VALUES ($1) ON CONFLICT (task_id) WHERE ended_at IS NULL DO NOTHING", [req.taskId]);
-      if (before.status === "todo") {
+      if (before.status === "todo" || before.status === "planned") {
         await client.query(`UPDATE tasks SET ${statusAssignmentsSql("$1").join(", ")}, updated_at = now() WHERE id = $2`, ["in_progress", req.taskId]);
       }
       const after = await loadTask(client, req.taskId);
