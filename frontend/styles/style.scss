@@ -522,6 +522,7 @@
         &__hint { color: var(--muted); font-size: 14px; }
         &__list { display: grid; gap: 8px; max-height: 46dvh; overflow-y: auto; }
         &__list li, &__add { display: flex; align-items: center; gap: 10px; }
+        &__list li { flex-wrap: wrap; }
         &__list input:not([type]), &__add input:not([type]) { flex: 1; min-width: 120px; min-height: 40px; }
         .select { min-width: 150px; }
         .badge { display: grid; place-items: center; width: 36px; height: 36px; color: var(--faint); }
@@ -655,6 +656,60 @@
         }
     }
 
+    // ---- meetings (connected Google Calendars) ------------------------------------------------------------------
+    .event--meeting {
+        border-left: 3px solid var(--c, var(--accent)); background: color-mix(in srgb, var(--c, #b7e34d) 16%, var(--surface-2)); color: #eef5ef;
+        b { font-weight: 800; }
+    }
+    .seg {
+        display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+        button { min-height: 32px; padding: 0 12px; border-radius: 8px; color: var(--muted); font-size: 14px; font-weight: 650;
+            &[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); } }
+    }
+    .calendar__bar .calendar__note { margin-left: auto; }
+    .calendar__spacer { flex: 1; }
+    .week {
+        border: 1px solid var(--border); border-radius: var(--radius-lg); background: #0f1611; overflow: hidden;
+        &__head, &__allday { display: grid; grid-template-columns: 58px repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+        &__head span { padding: 10px 8px; color: var(--muted); font-size: 13px; font-weight: 700; text-transform: uppercase;
+            b { margin-left: 4px; color: var(--text); font-size: 16px; } &.is-today b { color: var(--accent); } }
+        &__allday { min-height: 40px; }
+        &__label { align-self: center; padding: 0 6px; color: var(--faint); font-size: 11px; text-align: right; }
+        &__cell { min-height: 40px; padding: 4px; border-left: 1px solid #ffffff08; display: grid; gap: 3px; align-content: start; }
+        &__scroll { max-height: min(640px, 64vh); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2f3e31 transparent; }
+        &__body { position: relative; display: grid; grid-template-columns: 58px repeat(7, minmax(0, 1fr)); }
+        &__hours span { display: block; height: 48px; padding: 2px 8px 0 0; color: var(--faint); font-size: 11.5px; text-align: right; }
+        &__col { position: relative; border-left: 1px solid #ffffff08; &.is-today { background: #b7e34d08; } }
+        &__slot { display: block; width: 100%; height: 48px; border-top: 1px solid #ffffff08; &:hover { background: #b7e34d0d; } }
+        &__event {
+            position: absolute; left: 3px; right: 3px; z-index: 1; display: grid; align-content: start; gap: 1px; overflow: hidden;
+            padding: 4px 7px; border-left: 3px solid var(--c, var(--accent)); border-radius: 8px; text-align: left; font-size: 12.5px;
+            background: color-mix(in srgb, var(--c, #b7e34d) 22%, #18221a); color: #f1f7f1;
+            b { font-size: 11.5px; font-weight: 700; color: color-mix(in srgb, var(--c, #b7e34d) 70%, white); }
+            span { font-weight: 650; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+            &.is-short { display: block; padding: 3px 6px; line-height: 1.25; b { margin-right: 4px; } span { display: inline; } }
+            &:hover { filter: brightness(1.15); }
+        }
+    }
+    .cal-link {
+        display: flex; align-items: center; gap: 8px; flex: 1 1 100%; flex-wrap: wrap; margin: -2px 0 6px 46px; padding: 8px 10px;
+        border: 1px dashed var(--border-strong); border-radius: 10px; font-size: 13.5px;
+        > .i { color: var(--accent); }
+        > span { display: grid; flex: 1; min-width: 160px; small { font-size: 12.5px; } .is-error { color: var(--danger); } }
+    }
+    .meet-join { justify-self: start; }
+    .field-row--time { grid-template-columns: 1fr 1fr auto; align-items: end; .check { padding-bottom: 12px; } }
+    .guests { display: grid; gap: 6px; li { display: grid; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; } }
+    .agenda__actions { display: flex; gap: 6px; }
+    @media (max-width: 600px) { .agenda__actions { flex: 1 1 100%; .btn { flex: 1; } } }
+    .agenda__item--meeting { border-left: 3px solid var(--c, var(--accent)); background: color-mix(in srgb, var(--c, #b7e34d) 12%, var(--surface-2)); }
+    .mini__dot--meeting { background: #e7f5c8; }
+    .popover__item .is-meeting { color: var(--accent); }
+    @media (max-width: 600px) {
+        .field-row--time { grid-template-columns: 1fr 1fr; .check { grid-column: 1 / -1; padding: 0; } }
+        .cal-link { margin-left: 0; }
+    }
+
     // ---- calendar agenda (phones) ------------------------------------------------------------------------------
     .calendar--agenda .calendar__bar { h2 { flex: 1; min-width: 0; font-size: 19px; } }
     .mini {
@@ -673,7 +728,7 @@
     }
     .agenda {
         display: grid; gap: 8px; margin-top: 14px;
-        h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 16px; font-weight: 750; &::first-letter { text-transform: uppercase; } }
+        h3 { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; font-size: 16px; font-weight: 750; &::first-letter { text-transform: uppercase; } }
         &__item {
             display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--border); border-left: 3px solid var(--muted); border-radius: 12px;
             background: var(--surface-2); text-align: left;

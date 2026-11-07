@@ -43,6 +43,7 @@ function loadConfig(env = process.env) {
   }
 
   const sso = loadSso(env, errors);
+  const calendar = loadCalendar(env, errors, publicOrigin);
 
   if (errors.length > 0) {
     const error = new Error(`Invalid configuration:\n- ${errors.join("\n- ")}`);
@@ -76,6 +77,7 @@ function loadConfig(env = process.env) {
       authFailMax: toInt(env.AUTH_FAIL_MAX, 10)
     },
     // Archive after N days done; delete private / other archived tasks after N days in the archive. 0 = off.
+    calendar,
     retention: {
       archiveDays: toInt(env.RETENTION_ARCHIVE_DAYS, 7),
       deletePrivateDays: toInt(env.RETENTION_DELETE_PRIVATE_DAYS, 7),
@@ -107,6 +109,30 @@ function loadSso(env, errors) {
   const login = env.MYTKO_SSO_LOGIN || "";
   if (!login || login.length > 80) errors.push("MYTKO_SSO_LOGIN (the Mytko Workflow login let in, at most 80 characters) is required with MYTKO_SSO_ORIGIN");
   return { origin, clientSecret, clientId, login };
+}
+
+// Google Calendars per space (routes/calendar.js): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (an OAuth "Web application"
+// client) and TASKS_SECRET_KEY (encrypts the stored refresh tokens) together, or none.
+function loadCalendar(env, errors, publicOrigin) {
+  const names = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "TASKS_SECRET_KEY"];
+  const set = names.filter(name => env[name]);
+  if (!set.length) return null;
+  if (set.length !== names.length) {
+    errors.push(`${names.join(", ")} must be set together`);
+    return null;
+  }
+  let key = null;
+  try {
+    key = require("./secrets").parseKey(env.TASKS_SECRET_KEY);
+  } catch (error) {
+    errors.push(error.message);
+  }
+  const calendar = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, key, redirectUri: `${publicOrigin}/auth/google/callback` };
+  // Local testing only (e2e/fake-google.mjs): other Google endpoints are never accepted in production.
+  if (env.NODE_ENV !== "production" && env.GOOGLE_DEV_BASE) {
+    Object.assign(calendar, { authBase: env.GOOGLE_DEV_BASE, tokenUrl: `${env.GOOGLE_DEV_BASE}/token`, apiBase: `${env.GOOGLE_DEV_BASE}/cal` });
+  }
+  return calendar;
 }
 
 function toInt(value, fallback) {

@@ -3,13 +3,14 @@ import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { isoDay, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
-import { lookup, paint, reload, store, upsertTask } from "./app.js";
+import { lookup, paint, reload, render, store, upsertTask } from "./app.js";
+import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.js";
 import { openDrawer } from "./drawer.js";
 import { toast } from "./toast.js";
 
 const PALETTE = ["#b7e34d", "#84cc16", "#22c55e", "#14b8a6", "#38bdf8", "#818cf8", "#f2c463", "#fb923c", "#f87171", "#e879f9"];
 
-function dialog(className, html) {
+export function dialog(className, html) {
   const element = document.createElement("dialog");
   element.className = `dialog ${className}`;
   element.innerHTML = html;
@@ -123,7 +124,7 @@ export function openNewTask({ status = "todo", dueDate = null } = {}) {
 
 // ---- manage ------------------------------------------------------------------------------------------------
 const KINDS = {
-  spaces: { title: "Przestrzenie", placeholder: "Nowa przestrzeń…", list: () => store.spaces, hint: "Praca i Prywatne są wbudowane: można zmienić ich nazwę i kolor, nie można ich usunąć. Zadania z usuniętej przestrzeni trafiają do Prywatnych." },
+  spaces: { title: "Przestrzenie", placeholder: "Nowa przestrzeń…", list: () => store.spaces, hint: "Praca i Prywatne są wbudowane: można zmienić ich nazwę i kolor, nie można ich usunąć. Zadania z usuniętej przestrzeni trafiają do Prywatnych. Każda przestrzeń może mieć własny Kalendarz Google." },
   projects: { title: "Projekty", placeholder: "Nowy projekt…", list: () => store.projects, hint: "Projekt to folder klienta w jednej przestrzeni. Jego zadania dostają jego etykietę. Usunięcie projektu zostawia zadania bez projektu." },
   categories: { title: "Etykiety", placeholder: "Nowa etykieta…", list: () => store.labels, hint: "Etykiety można łączyć: zadanie może mieć kilka. Usunięcie etykiety zdejmuje ją ze wszystkich zadań." },
   assignees: { title: "Wykonawcy", placeholder: "Nowy wykonawca…", list: () => store.assignees, hint: "Osoby, którym przypisujesz zadania (to nie są konta logowania). Usunięcie zostawia zadania bez wykonawcy." }
@@ -137,11 +138,22 @@ function itemHtml(kind, item) {
     : kind === "spaces"
       ? `<label class="check" title="Tylko takie przestrzenie mogą kiedyś zobaczyć integracje i agenci AI"><input type="checkbox" name="agentVisible"${item.agentVisible ? " checked" : ""}${item.key === "private" ? " disabled" : ""}>Dla agentów</label>`
       : "";
+  const account = kind === "spaces" ? calendarState.accounts.find(a => a.spaceId === item.id) : null;
+  const calendarRow = kind !== "spaces" ? "" : !calendarState.configured
+    ? ""
+    : account
+      ? `<div class="cal-link">${icon("calendar", 16)}<span><strong>${escapeHtml(account.accountEmail)}</strong>
+          <small class="${account.lastError ? "is-error" : "muted"}">${account.lastError ? escapeHtml(account.lastError) : account.lastSyncAt ? `zsynchronizowano ${new Date(account.lastSyncAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}` : "synchronizacja…"}</small></span>
+          <button type="button" class="btn btn--ghost btn--sm" data-cal-action="sync" data-account="${account.id}">Synchronizuj</button>
+          <button type="button" class="btn btn--ghost btn--sm" data-cal-action="connect" data-space="${item.id}">Zmień konto</button>
+          <button type="button" class="icon-btn" data-cal-action="disconnect" data-account="${account.id}" aria-label="Odłącz kalendarz" title="Odłącz kalendarz">${icon("x", 18)}</button></div>`
+      : `<div class="cal-link"><button type="button" class="btn btn--ghost btn--sm" data-cal-action="connect" data-space="${item.id}">${icon("calendar", 16)}Podłącz Kalendarz Google</button></div>`;
   return `<li data-item="${item.id}">
     <input type="color" name="color" value="${escapeHtml(item.color)}" aria-label="Kolor">
     <input name="name" value="${escapeHtml(item.name)}" maxlength="${kind === "spaces" || kind === "categories" ? 50 : 80}" aria-label="Nazwa">
     ${extra}
     ${builtIn ? `<span class="badge" title="Wbudowana">${icon("layers", 16)}</span>` : `<button type="button" class="icon-btn" data-remove aria-label="Usuń ${escapeHtml(item.name)}">${icon("trash", 18)}</button>`}
+    ${calendarRow}
   </li>`;
 }
 
@@ -186,6 +198,30 @@ export function openManage(kind = "projects") {
 
   element.addEventListener("click", async event => {
     if (event.target.closest("[data-close]")) return element.close();
+    const calendarButton = event.target.closest("[data-cal-action]");
+    if (calendarButton) {
+      const kind = calendarButton.dataset.calAction;
+      try {
+        if (kind === "connect") {
+          const { url } = await api.calendarConnect(Number(calendarButton.dataset.space));
+          return window.location.assign(url);
+        }
+        if (kind === "sync") {
+          calendarButton.disabled = true;
+          const result = await api.calendarSync(Number(calendarButton.dataset.account));
+          toast(result.ok ? `Zsynchronizowano (${result.events} wydarzeń).` : result.error, { tone: result.ok ? "info" : "error" });
+        }
+        if (kind === "disconnect") {
+          if (!(await confirmDialog("Odłączyć kalendarz od tej przestrzeni? Spotkania znikną z Tasks (w Google zostają).", "Odłącz"))) return;
+          await api.calendarDisconnect(Number(calendarButton.dataset.account));
+        }
+        await loadCalendarAccounts();
+        refreshEvents();
+        draw();
+        render();
+      } catch (error) { fail(error); }
+      return;
+    }
     const tab = event.target.closest("[data-kind]");
     if (tab) { active = tab.dataset.kind; return draw(); }
     const remove = event.target.closest("[data-remove]");
@@ -223,4 +259,6 @@ export function openManage(kind = "projects") {
 
   draw();
   element.querySelector("[data-add] [name=name]").focus();
+  // The calendar rows need the connected accounts; refresh them (also right after returning from Google).
+  if (active === "spaces") loadCalendarAccounts().then(() => { if (element.open) draw(); });
 }

@@ -32,7 +32,7 @@ function basic(username, password) {
 const AUTH = basic(USERNAME, PASSWORD);
 
 // Starts the real Express app on an ephemeral port with the given pool.
-async function startApp({ pool, env = {}, migrationVersions = MIGRATIONS } = {}) {
+async function startApp({ pool, env = {}, migrationVersions = MIGRATIONS, appOptions = {} } = {}) {
   const config = loadConfig({
     NODE_ENV: "production",
     DATABASE_URL: "postgres://unused@127.0.0.1/unused",
@@ -41,7 +41,7 @@ async function startApp({ pool, env = {}, migrationVersions = MIGRATIONS } = {})
     PUBLIC_ORIGIN: ORIGIN,
     ...env
   });
-  const instance = createApp({ config, pool, migrationVersions });
+  const instance = createApp({ config, pool, migrationVersions, ...appOptions });
   const server = await new Promise(resolve => {
     const s = instance.app.listen(0, "127.0.0.1", () => resolve(s));
   });

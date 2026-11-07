@@ -6,7 +6,8 @@ import { icon } from "./icons.js";
 import { counters, filterTasks, initials, isOpen, isoDay, STATUS_LABELS } from "./logic.js";
 import { renderBoard, bindBoard, isDragging, updatePeek } from "./board.js";
 import { renderList, bindList } from "./list.js";
-import { renderCalendar, bindCalendar } from "./calendar.js";
+import { renderCalendar, bindCalendar, afterCalendarRender } from "./calendar.js";
+import { calendarState, eventTime, loadCalendarAccounts, loadToday, openMeeting } from "./meetings.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog } from "./dialogs.js";
@@ -25,6 +26,7 @@ export const store = {
   listSort: "position",
   month: isoDay(),
   calendarDay: isoDay(),
+  calendarMode: "month",
   sidebarCollapsed: false,
   filtersOpen: false,
   archive: null,
@@ -64,6 +66,7 @@ function loadPrefs() {
     if (Number.isInteger(saved.projectId)) store.filters.projectId = saved.projectId;
     if (saved.listSort) store.listSort = saved.listSort;
     if (typeof saved.sidebarCollapsed === "boolean") store.sidebarCollapsed = saved.sidebarCollapsed;
+    if (saved.calendarMode === "week") store.calendarMode = "week";
   } catch { /* preferences are a convenience only */ }
 }
 
@@ -71,7 +74,7 @@ function savePrefs() {
   try {
     const { spaceId, projectId, showDone } = store.filters;
     localStorage.setItem(PREFS, JSON.stringify({ view: store.view, showDone, spaceId, projectId, listSort: store.listSort,
-      sidebarCollapsed: store.sidebarCollapsed }));
+      sidebarCollapsed: store.sidebarCollapsed, calendarMode: store.calendarMode }));
   } catch { /* ignore */ }
 }
 
@@ -113,6 +116,7 @@ export async function reload({ quiet = false } = {}) {
     Object.assign(store, { tasks: tasks.map(t => ({ ...t, fetchedAt: now })), spaces, projects, labels, assignees, fetchedAt: now });
     if (store.filters.spaceId && !lookup.space(store.filters.spaceId)) store.filters.spaceId = null;
     if (store.filters.projectId && !lookup.project(store.filters.projectId)) store.filters.projectId = null;
+    calendarState.rangeKey = ""; // meetings are re-read with the tasks
     render();
     refreshDrawer();
     openLink();
@@ -253,10 +257,13 @@ function filtersHtml() {
 }
 
 function notificationsHtml() {
+  const meetings = calendarState.today.length ? `<p class="popover__title">Spotkania dziś</p>${calendarState.today.map(e => `
+    <button type="button" class="popover__item" data-action="open-meeting" data-id="${e.id}"><span class="is-meeting">${icon("users", 16)}</span>
+      <span>${escapeHtml(eventTime(e))} · ${escapeHtml(e.title)}</span></button>`).join("")}` : "";
   const due = store.tasks.filter(t => isOpen(t) && t.dueDate && t.dueDate <= isoDay())
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 8);
-  if (!due.length) return '<p class="popover__empty">Nic na dziś i nic po terminie.</p>';
-  return `<p class="popover__title">Na dziś i po terminie</p>${due.map(t => `
+  if (!due.length) return meetings || '<p class="popover__empty">Nic na dziś i nic po terminie.</p>';
+  return `${meetings}<p class="popover__title">Na dziś i po terminie</p>${due.map(t => `
     <button type="button" class="popover__item" data-action="open-task" data-id="${t.id}">
       <span class="${t.dueDate < isoDay() ? "is-overdue" : "is-today"}">${t.dueDate < isoDay() ? icon("warning", 16) : icon("sun", 16)}</span>
       <span>${escapeHtml(t.title)}</span></button>`).join("")}`;
@@ -278,7 +285,8 @@ export function render() {
   const filters = root.querySelector(".filters");
   if (!filters.contains(document.activeElement)) filters.innerHTML = filtersHtml();
   const hasDue = store.tasks.some(t => isOpen(t) && t.dueDate && t.dueDate <= isoDay());
-  root.querySelector(".bell").classList.toggle("has-dot", hasDue);
+  root.querySelector(".bell").classList.toggle("has-dot", hasDue || calendarState.today.length > 0);
+  root.querySelector('.menu [data-action="new-meeting"]').hidden = !(calendarState.configured && calendarState.accounts.length);
   for (const tab of root.querySelectorAll("[data-view]")) {
     tab.classList.toggle("is-active", tab.dataset.view === store.view);
     tab.setAttribute("aria-selected", String(tab.dataset.view === store.view));
@@ -298,6 +306,7 @@ export function render() {
     for (const zone of view.querySelectorAll("[data-drop]")) zone.scrollTop = keep.columns[zone.dataset.drop] || 0;
   }
   updatePeek(view);
+  if (store.view === "calendar") afterCalendarRender(view);
   paint(root);
 }
 
@@ -331,6 +340,7 @@ function shellHtml() {
         <button type="button" class="btn btn--primary btn--caret" data-action="new-menu" aria-label="Więcej: nowy projekt, etykieta, przestrzeń" aria-expanded="false">${icon("chevronDown")}</button>
         <div class="menu" hidden>
           <button type="button" data-action="new-task">${icon("checkSquare", 18)}Nowe zadanie</button>
+          <button type="button" data-action="new-meeting" hidden>${icon("calendar", 18)}Nowe spotkanie</button>
           <button type="button" data-action="manage" data-tab="projects">${icon("folder", 18)}Nowy projekt</button>
           <button type="button" data-action="manage" data-tab="spaces">${icon("layers", 18)}Nowa przestrzeń</button>
           <button type="button" data-action="manage" data-tab="categories" title="Etykiety">${icon("tag", 18)}Nowa etykieta</button>
@@ -383,6 +393,12 @@ async function handleAction(target, event) {
     closePopups();
     toggleSidebar(false);
     openManage(target.dataset.tab);
+  } else if (action === "new-meeting") {
+    closePopups();
+    openMeeting();
+  } else if (action === "open-meeting") {
+    closePopups();
+    openMeeting(calendarState.today.find(e => e.id === Number(target.dataset.id)));
   } else if (action === "open-task") {
     closePopups();
     openDrawer(Number(target.dataset.id));
@@ -417,7 +433,7 @@ async function handleAction(target, event) {
   return true;
 }
 
-export function startApp(element, session) {
+export function startApp(element, session, { notice = null } = {}) {
   root = element;
   store.session = session;
   loadPrefs();
@@ -468,6 +484,8 @@ export function startApp(element, session) {
   });
 
   window.matchMedia("(max-width: 600px)").addEventListener("change", () => render());
+  // Links (#calendar, #task-12, #manage-spaces…) also work in an open tab.
+  window.addEventListener("hashchange", () => { const view = store.view; readLink(); if (store.view !== view) render(); openLink(); });
   bindBoard(root);
   bindList(root);
   bindCalendar(root);
@@ -475,6 +493,8 @@ export function startApp(element, session) {
   render();
   reload();
   loadArchive();
+  loadCalendarAccounts().then(loadToday).then(render);
+  if (notice) toast(notice.text, { tone: notice.tone });
   // Running timers tick; other devices' changes arrive when the tab comes back.
   setInterval(() => !isDragging() && root.querySelector("[data-timer]") && render(), 30000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reload({ quiet: true }); });

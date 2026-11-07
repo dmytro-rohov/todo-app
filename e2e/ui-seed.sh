@@ -44,4 +44,11 @@ if [ -n "${PLANS:-}" ]; then
   P "Nauczyć się latać szybowcem" "\"$(D '+2 years')\""; P "Własny produkt SaaS dla klientów Mytko" "\"$(D '+5 years')\""
   P "Przeprowadzka do domu z ogrodem" null; P "Certyfikat AWS" "\"$(D '+1 year')\""
 fi
+if [ -n "${CALENDAR:-}" ]; then
+  # Connect the fake Google Calendar to Praca: the refresh token is sealed with the container's key, then one sync.
+  SEALED=$(docker exec -e K="$TASKS_SECRET_KEY" tasks-ui-run node -e 'const s=require("/app/backend/secrets.js");process.stdout.write(s.encrypt(s.parseKey(process.env.K),"fake-refresh"))')
+  [ -n "${TEST_MIGRATION_DATABASE_URL:-}" ] && psql "$TEST_MIGRATION_DATABASE_URL" -qc "INSERT INTO calendar_accounts (space_id, account_email, refresh_token_enc) VALUES ($WORK, 'hello@mytko.dev', '$SEALED')" >/dev/null
+  ACC=$(curl -s $U/calendar/accounts | python3 -c "import json,sys;print(json.load(sys.stdin)['accounts'][0]['id'])")
+  curl "${H[@]}" -X POST -d '{}' $U/calendar/accounts/$ACC/sync >/dev/null
+fi
 echo seeded

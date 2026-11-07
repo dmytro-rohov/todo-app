@@ -3,6 +3,7 @@ const { createPool } = require("./db");
 const { createApp } = require("./app");
 const { listMigrations } = require("./migrations");
 const { scheduleRetention } = require("./retention");
+const { scheduleCalendarSync } = require("./calendar-sync");
 
 let config;
 try {
@@ -15,13 +16,14 @@ try {
 const pool = createPool(config.database);
 
 const migrationVersions = listMigrations(config.migrationsDir).map(m => m.hash);
-const { app, markShuttingDown, stop } = createApp({ config, pool, migrationVersions });
+const { app, markShuttingDown, stop, calendar } = createApp({ config, pool, migrationVersions });
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`Server listening on ${config.host}:${config.port}`);
 });
 
 const retention = scheduleRetention(pool, config.retention);
+const calendarSync = scheduleCalendarSync(pool, calendar);
 
 // Startup DB probe is informational only; /readyz reports actual readiness.
 pool.query("SELECT 1").then(
@@ -49,6 +51,7 @@ function shutdown(signal) {
     if (error) console.error("HTTP server close error:", "operation failed");
     stop();
     retention.stop();
+    calendarSync.stop();
     try {
       await pool.end();
     } catch (poolError) {

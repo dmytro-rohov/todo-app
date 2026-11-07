@@ -30,10 +30,18 @@ async function start() {
       onAuthenticated: () => window.location.replace(window.location.pathname)
     });
   }
-  if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
+  // Back from Google after connecting a calendar (/auth/google/callback): say how it went.
+  const calendar = new URLSearchParams(window.location.search).get("calendar");
+  const CALENDAR_NOTICES = {
+    connected: { text: "Kalendarz Google podłączony. Spotkania pojawią się za chwilę.", tone: "info" },
+    denied: { text: "Nie udzielono dostępu do kalendarza.", tone: "error" },
+    failed: { text: "Podłączenie kalendarza nie powiodło się. Spróbuj ponownie.", tone: "error" },
+    login: { text: "Sesja wygasła w trakcie łączenia kalendarza. Zaloguj się i spróbuj ponownie.", tone: "error" }
+  };
+  if (window.location.search) window.history.replaceState(null, "", window.location.pathname + window.location.hash);
   window.addEventListener("mytko:session-ended", () => window.location.reload(), { once: true });
   appRoot.hidden = false;
-  startApp(appRoot, state);
+  startApp(appRoot, state, { notice: CALENDAR_NOTICES[calendar] || null });
 }
 
 start();
