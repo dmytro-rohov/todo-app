@@ -103,7 +103,7 @@ export function renderLogin(root, state, { notice = null, onAuthenticated }) {
         <p class="auth-card__lead">Masz aktywną sesję Mytko? Wejdziesz jednym kliknięciem. Sesja trwa ${hours(state.ttlSeconds)}.</p>
         ${notice ? `<p class="auth-notice" role="status">${escapeHtml(notice)}</p>` : ""}
         <button type="button" class="auth-quick" data-quick ${state.mytkoAvailable ? "" : `disabled title="${state.mytkoLogin ? "Mytko Workflow jest teraz niedostępny" : "Logowanie kontem Mytko nie jest skonfigurowane na serwerze"}" aria-describedby="auth-quick-off"`}>
-          <img src="./icons/icon-192.png" alt="" width="26" height="26"><span>Zaloguj kontem <strong>Mytko</strong></span>
+          <img src="./icons/mytko-account.png" alt="" width="26" height="26"><span>Zaloguj kontem <strong>Mytko</strong></span>
         </button>
         ${state.mytkoAvailable ? "" : `<span id="auth-quick-off" class="visually-hidden">Niedostępne: ${state.mytkoLogin ? "Mytko Workflow nie odpowiada" : "logowanie kontem Mytko nie jest skonfigurowane"}. Użyj loginu i hasła.</span>`}
         <p class="auth-divider"><span>albo loginem i hasłem</span></p>
