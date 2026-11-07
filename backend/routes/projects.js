@@ -3,7 +3,7 @@ const { withTransaction } = require("../db");
 const { recordTaskChanges } = require("../task-history");
 const { parseId, validateProject } = require("../validation");
 
-const PROJECT_COLUMNS = `id, space_id AS "spaceId", name, color, position, archived_at AS "archivedAt", created_at AS "createdAt"`;
+const PROJECT_COLUMNS = `id, space_id AS "spaceId", client_id AS "clientId", name, color, position, archived_at AS "archivedAt", created_at AS "createdAt"`;
 
 async function spaceExists(db, id) {
   return (await db.query("SELECT 1 FROM spaces WHERE id = $1", [id])).rowCount > 0;
@@ -33,8 +33,8 @@ module.exports = function createProjectsRouter(pool) {
     if (value.archived !== undefined) return res.status(400).json({ message: "Unknown or empty fields" });
     if (!(await spaceExists(pool, value.spaceId))) return res.status(400).json({ message: "Space does not exist" });
     const result = await pool.query(
-      `INSERT INTO projects (space_id, name, color, position) VALUES ($1, $2, $3, $4) RETURNING ${PROJECT_COLUMNS}`,
-      [value.spaceId, value.name, value.color, value.position ?? 0]
+      `INSERT INTO projects (space_id, name, color, position, client_id) VALUES ($1, $2, $3, $4, $5) RETURNING ${PROJECT_COLUMNS}`,
+      [value.spaceId, value.name, value.color, value.position ?? 0, value.clientId ?? null]
     );
     res.status(201).json(result.rows[0]);
   });
@@ -49,7 +49,7 @@ module.exports = function createProjectsRouter(pool) {
       const current = await client.query("SELECT space_id FROM projects WHERE id = $1 FOR UPDATE", [id]);
       if (!current.rowCount) return { status: 404 };
       if (value.spaceId !== undefined && !(await spaceExists(client, value.spaceId))) return { status: 400 };
-      const columns = { name: "name", color: "color", position: "position", spaceId: "space_id" };
+      const columns = { name: "name", color: "color", position: "position", spaceId: "space_id", clientId: "client_id" };
       const params = [];
       const assignments = Object.entries(value).filter(([key]) => key in columns).map(([key, val]) => {
         params.push(val); return `${columns[key]} = $${params.length}`;

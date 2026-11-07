@@ -2,9 +2,10 @@
 import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { addDays, isoDay } from "./logic.js";
-import { lookup, render, store } from "./app.js";
+import { addDays, isoDay, STATUS_LABELS } from "./logic.js";
+import { lookup, reload, render, store } from "./app.js";
 import { confirmDialog, dialog } from "./dialogs.js";
+import { openDrawer } from "./drawer.js";
 import { toast } from "./toast.js";
 
 export const calendarState = { configured: false, accounts: [], events: [], rangeKey: "", today: [] };
@@ -98,7 +99,8 @@ export function openMeeting(event = null, preset = {}) {
     <form class="dialog__body" novalidate>
       <header class="dialog__head"><h2>${editing ? "Spotkanie" : "Nowe spotkanie"}</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
       ${editing && event.meetUrl ? `<a class="btn btn--primary meet-join" href="${escapeHtml(event.meetUrl)}" target="_blank" rel="noopener noreferrer">${icon("users", 18)}Dołącz do Google Meet</a>` : ""}
-      <label class="field"><span>Tytuł</span><input name="title" maxlength="500" required value="${editing ? escapeHtml(event.title) : ""}" placeholder="Spotkanie z…"></label>
+      <label class="field"><span>Tytuł</span><input name="title" maxlength="500" required value="${escapeHtml(editing ? event.title : preset.title || "")}" placeholder="Spotkanie z…"></label>
+      <label class="field"><span>Klient</span><span class="select"><select name="clientId"><option value="">Bez klienta</option>${store.clients.filter(c => c.status !== "archived" || c.id === event?.clientId).map(c => `<option value="${c.id}"${c.id === (editing ? event.clientId : preset.clientId) ? " selected" : ""}>${escapeHtml(c.name)}${c.status === "lead" ? " (lead)" : ""}</option>`).join("")}</select>${icon("chevronDown", 16)}</span></label>
       <div class="field-row">
         <label class="field"><span>Przestrzeń</span><span class="select"><select name="spaceId"${editing ? " disabled" : ""}>${spaces.map(s => `<option value="${s.id}"${s.id === defaultSpace ? " selected" : ""}>${escapeHtml(s.name)} · ${escapeHtml(accountFor(s.id).accountEmail)}</option>`).join("")}</select>${icon("chevronDown", 16)}</span></label>
         <label class="field"><span>Dzień</span><input type="date" name="day" value="${day}" required></label>
@@ -108,11 +110,15 @@ export function openMeeting(event = null, preset = {}) {
         <label class="field"><span>Do</span><input type="time" name="end" value="${end}"></label>
         <label class="check"><input type="checkbox" name="allDay"${editing && event.allDay ? " checked" : ""}>Cały dzień</label>
       </div>
-      <label class="field"><span>Goście (e-maile, dostaną zaproszenie od Google)</span><input name="attendees" value="${editing ? escapeHtml((event.attendees || []).filter(a => !a.self).map(a => a.email).join(", ")) : ""}" placeholder="klient@firma.pl"></label>
+      <label class="field"><span>Goście (e-maile, dostaną zaproszenie od Google)</span><input name="attendees" value="${escapeHtml(editing ? (event.attendees || []).filter(a => !a.self).map(a => a.email).join(", ") : (preset.attendees || []).join(", "))}" placeholder="klient@firma.pl"></label>
       <label class="check"><input type="checkbox" name="meet"${editing ? (event.meetUrl ? " checked disabled" : "") : " checked"}>Dodaj link Google Meet</label>
       <label class="field"><span>Miejsce</span><input name="location" maxlength="500" value="${editing ? escapeHtml(event.location) : ""}"></label>
       <label class="field"><span>Opis</span><textarea class="textarea" name="description" rows="3" maxlength="8000">${editing ? escapeHtml(event.description) : ""}</textarea></label>
       ${editing && event.attendees?.length ? `<ul class="guests">${event.attendees.map(a => `<li><span>${escapeHtml(a.name || a.email)}</span><small class="muted">${escapeHtml(a.email)} · ${{ accepted: "przyjął", declined: "odrzucił", tentative: "może", needsAction: "bez odpowiedzi" }[a.response] || ""}</small></li>`).join("")}</ul>` : ""}
+      ${editing ? `<section class="client-section"><h3>${icon("checkSquare", 18)}Zadania do spotkania</h3>
+        ${store.tasks.filter(t => t.meetingId === event.id).map(t => `<button type="button" class="client-row" data-task="${t.id}"><span>${escapeHtml(t.title)}</span><small class="muted">${STATUS_LABELS[t.status] || ""}</small></button>`).join("")}
+        <div class="inline-add"><input name="newTask" maxlength="100" placeholder="Np. przygotować wycenę…" aria-label="Nowe zadanie do spotkania"><button type="button" class="icon-btn icon-btn--box" data-add-task aria-label="Dodaj zadanie do spotkania">${icon("plus")}</button></div>
+      </section>` : ""}
       <p class="field-error" data-error hidden></p>
       <div class="dialog__actions">
         ${editing ? `<button type="button" class="btn btn--ghost" data-delete>${icon("trash", 18)}Usuń</button>${event.htmlLink ? `<a class="btn btn--ghost" href="${escapeHtml(event.htmlLink)}" target="_blank" rel="noopener noreferrer">Google Calendar</a>` : ""}` : ""}
@@ -127,8 +133,27 @@ export function openMeeting(event = null, preset = {}) {
   form.allDay.addEventListener("change", syncAllDay);
   syncAllDay();
   form.title.focus();
+  form.newTask?.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    form.querySelector("[data-add-task]").click();
+  });
   element.addEventListener("click", async e => {
     if (e.target.closest("[data-close]")) return element.close();
+    const linked = e.target.closest("[data-task]");
+    if (linked) { element.close(); return openDrawer(Number(linked.dataset.task)); }
+    if (e.target.closest("[data-add-task]")) {
+      const title = form.newTask.value.trim();
+      if (title.length < 3) return fail("Tytuł zadania musi mieć co najmniej 3 znaki.");
+      try {
+        await api.createTask({ title, date: isoDay(), dueDate: eventDay(event), meetingId: event.id, spaceId: event.spaceId,
+          clientId: Number(form.clientId.value) || null });
+        element.close();
+        toast("Zadanie dodane do spotkania.");
+        await reload({ quiet: true });
+        return openMeeting({ ...event, ...(calendarState.events.find(x => x.id === event.id) || {}), taskCount: (event.taskCount || 0) + 1 });
+      } catch (error) { return fail(error.message || "Nie udało się dodać zadania."); }
+    }
     if (!e.target.closest("[data-delete]")) return;
     if (!(await confirmDialog(`Usunąć „${event.title}”? Goście dostaną odwołanie.`, "Usuń"))) return;
     try {
@@ -158,8 +183,9 @@ export function openMeeting(event = null, preset = {}) {
     const submit = form.querySelector('[type="submit"]');
     submit.disabled = true;
     try {
-      if (editing) await api.updateEvent(event.id, body);
-      else await api.createEvent({ ...body, spaceId: Number(form.spaceId.value) });
+      const clientId = Number(form.clientId.value) || null;
+      const saved = editing ? await api.updateEvent(event.id, body) : await api.createEvent({ ...body, spaceId: Number(form.spaceId.value) });
+      if ((saved.clientId ?? null) !== clientId) await api.setEventClient(saved.id, clientId);
       element.close();
       toast(editing ? "Spotkanie zapisane." : body.attendees.length ? "Spotkanie dodane, zaproszenia wysłane." : "Spotkanie dodane.");
       refreshEvents();

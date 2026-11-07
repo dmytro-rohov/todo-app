@@ -28,10 +28,11 @@ export const api = {
   calendarConnect: spaceId => request("/api/calendar/connect", json("POST", { spaceId })),
   calendarSync: id => request(`/api/calendar/accounts/${id}/sync`, json("POST", {})),
   calendarDisconnect: id => request(`/api/calendar/accounts/${id}`, { method: "DELETE" }),
-  events: (from, to) => request(`/api/calendar/events?from=${from}&to=${to}`),
+  events: (from, to, clientId) => request(`/api/calendar/events?from=${from}&to=${to}${clientId ? `&clientId=${clientId}` : ""}`),
   createEvent: body => request("/api/calendar/events", json("POST", body)),
   updateEvent: (id, body) => request(`/api/calendar/events/${id}`, json("PATCH", body)),
   deleteEvent: id => request(`/api/calendar/events/${id}`, { method: "DELETE" }),
+  setEventClient: (id, clientId) => request(`/api/calendar/events/${id}/client`, json("PUT", { clientId })),
 
   list: kind => request(`/api/${kind}`),
   create: (kind, body) => request(`/api/${kind}`, json("POST", body)),

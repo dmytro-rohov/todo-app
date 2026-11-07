@@ -8,6 +8,7 @@ import { renderBoard, bindBoard, isDragging, updatePeek } from "./board.js";
 import { renderList, bindList } from "./list.js";
 import { renderCalendar, bindCalendar, afterCalendarRender } from "./calendar.js";
 import { calendarState, eventTime, loadCalendarAccounts, loadToday, openMeeting } from "./meetings.js";
+import { openClient } from "./clients.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog } from "./dialogs.js";
@@ -21,7 +22,8 @@ export const store = {
   tasks: [],
   fetchedAt: Date.now(),
   spaces: [], projects: [], labels: [], assignees: [],
-  filters: { spaceId: null, projectId: null, labelId: null, assigneeId: null, status: "", search: "", showDone: true, quick: null },
+  filters: { spaceId: null, projectId: null, clientId: null, labelId: null, assigneeId: null, status: "", search: "", showDone: true, quick: null },
+  clients: [],
   view: "board",
   listSort: "position",
   month: isoDay(),
@@ -83,6 +85,9 @@ export const lookup = {
   project: id => store.projects.find(p => p.id === id),
   label: id => store.labels.find(l => l.id === id),
   assignee: id => store.assignees.find(a => a.id === id),
+  client: id => store.clients.find(c => c.id === id),
+  // a task's client: its own, else its project's
+  clientOf: task => task.clientId ?? store.projects.find(p => p.id === task.projectId)?.clientId ?? null,
   task: id => store.tasks.find(t => t.id === id),
   privateSpace: () => store.spaces.find(s => s.key === "private")
 };
@@ -90,7 +95,9 @@ export const lookup = {
 export function context() {
   return {
     privateSpaceId: lookup.privateSpace()?.id ?? null,
+    clientOf: lookup.clientOf,
     names: {
+      client: task => lookup.client(lookup.clientOf(task))?.name || "",
       project: id => lookup.project(id)?.name || "",
       assignee: id => lookup.assignee(id)?.name || "",
       label: id => lookup.label(id)?.name || ""
@@ -109,11 +116,13 @@ export function paint(element) {
 
 export async function reload({ quiet = false } = {}) {
   try {
-    const [tasks, spaces, projects, labels, assignees] = await Promise.all([
-      api.tasks(), api.list("spaces"), api.list("projects?archived=true"), api.list("categories"), api.list("assignees")
+    const [tasks, spaces, projects, labels, assignees, clients] = await Promise.all([
+      api.tasks(), api.list("spaces"), api.list("projects?archived=true"), api.list("categories"), api.list("assignees"),
+      api.list("clients?archived=true")
     ]);
     const now = Date.now();
-    Object.assign(store, { tasks: tasks.map(t => ({ ...t, fetchedAt: now })), spaces, projects, labels, assignees, fetchedAt: now });
+    Object.assign(store, { tasks: tasks.map(t => ({ ...t, fetchedAt: now })), spaces, projects, labels, assignees, clients, fetchedAt: now });
+    if (store.filters.clientId && !lookup.client(store.filters.clientId)) store.filters.clientId = null;
     if (store.filters.spaceId && !lookup.space(store.filters.spaceId)) store.filters.spaceId = null;
     if (store.filters.projectId && !lookup.project(store.filters.projectId)) store.filters.projectId = null;
     calendarState.rangeKey = ""; // meetings are re-read with the tasks
@@ -190,6 +199,11 @@ function sidebarHtml() {
         <button type="button" class="nav-item nav-item--sub${filters.projectId === project.id ? " is-active" : ""}" data-action="scope" data-space="${project.spaceId}" data-project="${project.id}" title="${escapeHtml(project.name)}">
           <span class="folder" data-c="${escapeHtml(project.color)}">${icon("folder", 16)}</span><span>${escapeHtml(project.name)}</span><em>${projectCount(project.id)}</em>
         </button>`).join("") : '<p class="nav-empty">Brak projektów w tej przestrzeni.</p>'}
+      <p class="nav-heading"><span>Klienci</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="clients" aria-label="Zarządzaj klientami">${icon("plus", 16)}</button></p>
+      ${store.clients.filter(c => c.status !== "archived").map(client => `
+        <button type="button" class="nav-item nav-item--sub${filters.clientId === client.id ? " is-active" : ""}" data-action="client-scope" data-client="${client.id}" title="${escapeHtml(client.name)}">
+          <span class="folder" data-c="${escapeHtml(client.color)}">${icon("user", 16)}</span><span>${escapeHtml(client.name)}</span>${client.status === "lead" ? '<i class="lead-badge">lead</i>' : `<em>${client.openTasks}</em>`}
+        </button>`).join("") || '<p class="nav-empty">Brak klientów.</p>'}
       <p class="nav-heading"><span>Porządek</span></p>
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="categories" title="Etykiety">${icon("tag", 18)}<span>Etykiety</span><em>${store.labels.length}</em></button>
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees" title="Wykonawcy">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
@@ -205,9 +219,10 @@ function sidebarHtml() {
 
 function headHtml() {
   const { project, space } = scopeTitle();
+  const client = lookup.client(store.filters.clientId);
   const count = counters(store.tasks, store.filters, context());
-  const title = project ? project.name : space ? space.name : "Tasks";
-  const subtitle = project ? `Zadania, prace i działania w projekcie ${project.name}`
+  const title = client ? client.name : project ? project.name : space ? space.name : "Tasks";
+  const subtitle = client ? `${{ lead: "Lead", client: "Klient", archived: "Archiwum" }[client.status]}${client.company ? ` · ${client.company}` : ""}${client.email ? ` · ${client.email}` : ""}` : project ? `Zadania, prace i działania w projekcie ${project.name}`
     : space ? `Zadania w przestrzeni ${space.name}` : "Wszystkie zadania, prace i działania";
   const tile = (key, iconName, value, label, tone = "") => `
     <button type="button" class="tile${tone ? ` tile--${tone}` : ""}${store.filters.quick === key ? " is-active" : ""}" data-action="quick" data-quick="${key}" aria-pressed="${store.filters.quick === key}">
@@ -217,6 +232,7 @@ function headHtml() {
     <div class="page-head__title">
       <span class="page-head__icon">${icon("checkSquare", 30)}</span>
       <div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div>
+      ${client ? `<button type="button" class="btn btn--ghost btn--sm" data-action="client-card" data-client="${client.id}">${icon("user", 16)}Karta klienta</button>` : ""}
     </div>
     <div class="tiles" role="group" aria-label="Szybkie filtry terminów">
       ${tile("all", "calendar", count.all, "Otwarte")}
@@ -244,6 +260,9 @@ function filtersHtml() {
     </select>${icon("chevronDown", 18)}</label>
     <label class="select"><span class="visually-hidden">Projekt</span><select data-filter="projectId">
       ${option("", "Wszystkie projekty", !f.projectId)}${projects.map(p => option(p.id, p.name, f.projectId === p.id)).join("")}
+    </select>${icon("chevronDown", 18)}</label>
+    <label class="select"><span class="visually-hidden">Klient</span><select data-filter="clientId">
+      ${option("", "Wszyscy klienci", !f.clientId)}${store.clients.filter(c => c.status !== "archived").map(c => option(c.id, c.name, f.clientId === c.id)).join("")}
     </select>${icon("chevronDown", 18)}</label>
     <label class="select"><span class="visually-hidden">Etykieta</span><select data-filter="labelId">
       ${option("", "Wszystkie etykiety", !f.labelId)}${store.labels.map(l => option(l.id, l.name, f.labelId === l.id)).join("")}
@@ -277,7 +296,7 @@ export function render() {
   root.classList.toggle("sidebar-collapsed", store.sidebarCollapsed);
   root.classList.toggle("filters-open", store.filtersOpen);
   const f = store.filters;
-  const active = [f.status, f.projectId, f.labelId, f.assigneeId, f.quick, !f.showDone].filter(Boolean).length;
+  const active = [f.status, f.projectId, f.clientId, f.labelId, f.assigneeId, f.quick, !f.showDone].filter(Boolean).length;
   const badge = root.querySelector(".filters-toggle .count");
   badge.hidden = !active;
   badge.textContent = String(active);
@@ -372,7 +391,7 @@ async function handleAction(target, event) {
   const action = target.dataset.action;
   if (action === "scope") {
     toggleSidebar(false);
-    setFilter({ spaceId: Number(target.dataset.space) || null, projectId: Number(target.dataset.project) || null });
+    setFilter({ spaceId: Number(target.dataset.space) || null, projectId: Number(target.dataset.project) || null, clientId: null });
   } else if (action === "quick") {
     setFilter({ quick: store.filters.quick === target.dataset.quick || target.dataset.quick === "all" ? null : target.dataset.quick });
   } else if (action === "new-task") {
@@ -393,6 +412,11 @@ async function handleAction(target, event) {
     closePopups();
     toggleSidebar(false);
     openManage(target.dataset.tab);
+  } else if (action === "client-scope") {
+    toggleSidebar(false);
+    setFilter({ clientId: Number(target.dataset.client), spaceId: null, projectId: null });
+  } else if (action === "client-card") {
+    openClient(Number(target.dataset.client));
   } else if (action === "new-meeting") {
     closePopups();
     openMeeting();

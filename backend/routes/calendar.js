@@ -6,7 +6,8 @@ const { syncAccount, toRow, upsertEvent } = require("../calendar-sync");
 const { parseId, isValidDate } = require("../validation");
 
 const EVENT_COLUMNS = `e.id, a.space_id AS "spaceId", e.title, e.description, e.location, e.start_at AS "startAt", e.end_at AS "endAt",
-  e.all_day AS "allDay", e.meet_url AS "meetUrl", e.html_link AS "htmlLink", e.attendees, e.status`;
+  e.all_day AS "allDay", e.meet_url AS "meetUrl", e.html_link AS "htmlLink", e.attendees, e.status, e.client_id AS "clientId",
+  (SELECT count(*)::int FROM tasks t WHERE t.meeting_id = e.id AND t.archived_at IS NULL) AS "taskCount"`;
 const EMAIL = /^[^\s@<>()",;]{1,64}@[^\s@<>()",;]{1,190}\.[A-Za-z]{2,}$/;
 const MAX_RANGE_DAYS = 120;
 
@@ -120,7 +121,7 @@ function createCalendarRouter(pool, { google, key, cookie }) {
     res.json({ message: "Calendar disconnected" });
   });
 
-  // ?from=YYYY-MM-DD&to=YYYY-MM-DD (at most 120 days), optionally &spaceId=
+  // ?from=YYYY-MM-DD&to=YYYY-MM-DD (at most 120 days), optionally &spaceId= and &clientId=
   router.get("/events", async (req, res) => {
     const { from, to } = req.query;
     if (!isValidDate(from) || !isValidDate(to) || to < from || (Date.parse(to) - Date.parse(from)) / 86400000 > MAX_RANGE_DAYS) {
@@ -128,11 +129,12 @@ function createCalendarRouter(pool, { google, key, cookie }) {
     }
     const params = [`${from}T00:00:00Z`, `${to}T23:59:59Z`];
     let space = "";
-    if (req.query.spaceId !== undefined) {
-      const spaceId = parseId(req.query.spaceId);
-      if (spaceId === null) return res.status(400).json({ message: "Invalid filter" });
-      params.push(spaceId);
-      space = ` AND a.space_id = $3`;
+    for (const [key, column] of [["spaceId", "a.space_id"], ["clientId", "e.client_id"]]) {
+      if (req.query[key] === undefined) continue;
+      const value = parseId(req.query[key]);
+      if (value === null) return res.status(400).json({ message: "Invalid filter" });
+      params.push(value);
+      space += ` AND ${column} = $${params.length}`;
     }
     // A day of margin each side: the client places events by its local time zone.
     const { rows } = await pool.query(
@@ -172,6 +174,21 @@ function createCalendarRouter(pool, { google, key, cookie }) {
       res.json(await readEvent(id));
     } catch (failure) {
       return googleFailure(res, failure);
+    }
+  });
+
+  // Links a meeting to a client in Tasks only (nothing changes in Google).
+  router.put("/events/:id/client", async (req, res) => {
+    const id = parseId(req.params.id);
+    const clientId = req.body?.clientId === null ? null : parseId(req.body?.clientId);
+    if (id === null || (req.body?.clientId !== null && clientId === null)) return res.status(400).json({ message: "Invalid request" });
+    try {
+      const result = await pool.query("UPDATE calendar_events SET client_id = $1 WHERE id = $2", [clientId, id]);
+      if (!result.rowCount) return res.status(404).json({ message: "Event not found" });
+      res.json(await readEvent(id));
+    } catch (error) {
+      if (error.code === "23503") return res.status(400).json({ message: "Client does not exist" });
+      throw error;
     }
   });
 

@@ -79,7 +79,7 @@ describe("Google Calendars per space", { skip, concurrency: false }, () => {
   before(async () => {
     owner = createPool({ connectionString: OWNER_URL, max: 2, statementTimeoutMs: 0 });
     appPool = createPool({ connectionString: APP_URL, max: 5 });
-    await owner.query(`DROP TABLE IF EXISTS public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history,
+    await owner.query(`DROP TABLE IF EXISTS public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history,
       public.task_time_entries, public.task_subtasks, public.task_notes, public.task_labels, public.tasks, public.projects, public.spaces,
       public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
@@ -190,6 +190,56 @@ describe("Google Calendars per space", { skip, concurrency: false }, () => {
     const result = (await call(`/api/calendar/accounts/${account.id}/sync`, "POST", {})).body;
     assert.equal(result.ok, false);
     assert.match((await call("/api/calendar/accounts")).body.accounts[0].lastError, /połącz go ponownie|ponownie/);
+  });
+
+  test("clients: CRUD, company domain, task filter through projects, meetings matched by guest, tasks per meeting", async () => {
+    google.state.fail = 0; // the previous test simulates a revoked connection
+    const work = (await call("/api/spaces")).body.find(s => s.key === "work");
+    assert.equal((await call("/api/clients", "POST", { name: "K", color: "#22c55e" })).status, 400);
+    assert.equal((await call("/api/clients", "POST", { name: "Kwiaciarnia", color: "#22c55e", email: "not-mail" })).status, 400);
+    const lead = (await call("/api/clients", "POST", { name: "Kwiaciarnia Róża", color: "#22c55e", email: "Anna@Kwiaciarnia.pl" })).body;
+    assert.deepEqual([lead.status, lead.email, lead.domain, lead.openTasks], ["lead", "anna@kwiaciarnia.pl", "kwiaciarnia.pl", 0]);
+    const gmail = (await call("/api/clients", "POST", { name: "Jan z Gmaila", color: "#22c55e", email: "jan@gmail.com" })).body;
+    assert.equal(gmail.domain, null); // a public mailbox never identifies a company
+    const uncoloured = (await call("/api/clients", "POST", { name: "Lead bez koloru", email: "x@lead.pl" })).body;
+    assert.match(uncoloured.color, /^#[0-9a-f]{6}$/); // booking and mail leads get a palette colour
+    assert.equal((await call(`/api/clients/${uncoloured.id}`, "PATCH", { color: "red" })).status, 400);
+    assert.equal((await call(`/api/clients/${uncoloured.id}`, "DELETE")).status, 200);
+
+    const project = (await call("/api/projects", "POST", { name: "Strona Róży", color: "#22c55e", spaceId: work.id, clientId: lead.id })).body;
+    assert.equal(project.clientId, lead.id);
+    const viaProject = (await call("/api/tasks", "POST", { title: "Makieta", date: "2026-11-07", projectId: project.id })).body;
+    const direct = (await call("/api/tasks", "POST", { title: "Wycena", date: "2026-11-07", clientId: lead.id })).body;
+    await call("/api/tasks", "POST", { title: "Inne", date: "2026-11-07" });
+    assert.deepEqual((await call(`/api/tasks?clientId=${lead.id}`)).body.map(t => t.id).sort(), [viaProject.id, direct.id].sort());
+    assert.equal((await call(`/api/clients/${lead.id}`)).body.openTasks, 2);
+    assert.equal((await call("/api/tasks", "POST", { title: "Zła", date: "2026-11-07", clientId: 999999 })).body.message, "Client does not exist");
+
+    // a guest from the client's domain links the meeting at the next sync
+    google.state.events.push({ id: "g9", summary: "Druga rozmowa", status: "confirmed", start: { dateTime: new Date(Date.now() + 2 * 86400000).toISOString() },
+      end: { dateTime: new Date(Date.now() + 2 * 86400000 + 3600000).toISOString() }, attendees: [{ email: "szef@kwiaciarnia.pl" }] });
+    const account = (await call("/api/calendar/accounts")).body.accounts[0];
+    await call(`/api/calendar/accounts/${account.id}/sync`, "POST", {});
+    const today = new Date().toISOString().slice(0, 10);
+    const meeting = (await call(`/api/calendar/events?from=${today}&to=${new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10)}`)).body.find(e => e.title === "Druga rozmowa");
+    assert.equal(meeting.clientId, lead.id);
+    assert.ok((await call(`/api/clients/${lead.id}`)).body.nextMeetingAt);
+    const range = `from=${today}&to=${new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10)}`;
+    assert.deepEqual((await call(`/api/calendar/events?${range}&clientId=${lead.id}`)).body.map(e => e.id), [meeting.id]); // the client card
+    assert.equal((await call(`/api/calendar/events?${range}&clientId=x`)).status, 400);
+    // preparation task attached to the meeting
+    const prep = (await call("/api/tasks", "POST", { title: "Przygotować się", date: "2026-11-07", meetingId: meeting.id, clientId: lead.id })).body;
+    assert.deepEqual((await call(`/api/tasks?meetingId=${meeting.id}`)).body.map(t => t.id), [prep.id]);
+    assert.equal((await call(`/api/calendar/events?from=${today}&to=${new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10)}`)).body.find(e => e.id === meeting.id).taskCount, 1);
+    // manual link / unlink
+    assert.equal((await call(`/api/calendar/events/${meeting.id}/client`, "PUT", { clientId: gmail.id })).body.clientId, gmail.id);
+    assert.equal((await call(`/api/calendar/events/${meeting.id}/client`, "PUT", { clientId: null })).body.clientId, null);
+
+    const promoted = (await call(`/api/clients/${lead.id}`, "PATCH", { status: "client", phone: "+48 600 000 000" })).body;
+    assert.deepEqual([promoted.status, promoted.phone], ["client", "+48 600 000 000"]);
+    assert.equal((await call(`/api/clients/${lead.id}`, "DELETE")).status, 200);
+    assert.equal((await call("/api/tasks")).body.find(t => t.id === direct.id).clientId, null);
+    assert.equal((await call("/api/projects")).body.find(p => p.id === project.id).clientId, null);
   });
 
   test("ranges are bounded and disconnecting removes the copies", async () => {

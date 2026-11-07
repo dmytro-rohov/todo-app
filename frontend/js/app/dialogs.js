@@ -5,6 +5,7 @@ import { icon } from "./icons.js";
 import { isoDay, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
 import { lookup, paint, reload, render, store, upsertTask } from "./app.js";
 import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.js";
+import { openClient } from "./clients.js";
 import { openDrawer } from "./drawer.js";
 import { toast } from "./toast.js";
 
@@ -42,15 +43,16 @@ function choices(list, selected, empty) {
     `<option value="${item.id}"${item.id === selected ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}`;
 }
 
-export function openNewTask({ status = "todo", dueDate = null } = {}) {
+export function openNewTask({ status = "todo", dueDate = null, clientId = null, meetingId = null, spaceId = null, title = "" } = {}) {
   const privateSpace = lookup.privateSpace();
   const project = lookup.project(store.filters.projectId);
-  const spaceId = project?.spaceId || store.filters.spaceId || privateSpace?.id;
+  spaceId = spaceId || project?.spaceId || store.filters.spaceId || privateSpace?.id;
+  clientId = clientId ?? store.filters.clientId ?? null;
   const projectsFor = id => store.projects.filter(p => !p.archivedAt && p.spaceId === id);
   const element = dialog("dialog--task", `
     <form class="dialog__body" novalidate>
       <header class="dialog__head"><h2>Nowe zadanie</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
-      <label class="field"><span>Tytuł</span><input name="title" maxlength="100" required placeholder="Co jest do zrobienia?" autocomplete="off"></label>
+      <label class="field"><span>Tytuł</span><input name="title" maxlength="100" required placeholder="Co jest do zrobienia?" autocomplete="off" value="${escapeHtml(title)}"></label>
       <p class="field-error" data-error hidden></p>
       <div class="field-row">
         <label class="field"><span>Status</span><span class="select"><select name="status">${Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}"${k === status ? " selected" : ""}>${v}</option>`).join("")}</select>${icon("chevronDown", 16)}</span></label>
@@ -63,7 +65,10 @@ export function openNewTask({ status = "todo", dueDate = null } = {}) {
         <label class="field"><span>Przestrzeń</span><span class="select"><select name="spaceId">${choices(store.spaces, spaceId)}</select>${icon("chevronDown", 16)}</span></label>
         <label class="field"><span>Projekt</span><span class="select"><select name="projectId">${choices(projectsFor(spaceId), project?.id, "Bez projektu")}</select>${icon("chevronDown", 16)}</span></label>
       </div>
-      <label class="field"><span>Wykonawca</span><span class="select"><select name="assigneeId">${choices(store.assignees, null, "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</span></label>
+      <div class="field-row">
+        <label class="field"><span>Klient</span><span class="select"><select name="clientId">${choices(store.clients.filter(c => c.status !== "archived"), clientId, "Bez klienta")}</select>${icon("chevronDown", 16)}</span></label>
+        <label class="field"><span>Wykonawca</span><span class="select"><select name="assigneeId">${choices(store.assignees, null, "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</span></label>
+      </div>
       ${store.labels.length ? `<fieldset class="label-picker"><legend>Etykiety</legend>${store.labels.map(label => `<label class="chip chip--label chip--toggle" data-c="${escapeHtml(label.color)}"><input type="checkbox" name="labelIds" value="${label.id}"${store.filters.labelId === label.id ? " checked" : ""}><i class="dot"></i>${escapeHtml(label.name)}</label>`).join("")}</fieldset>` : ""}
       <label class="field"><span>Opis</span><textarea class="textarea" name="description" rows="3" maxlength="5000" placeholder="Szczegóły, linki, kontekst…"></textarea></label>
       <div class="dialog__actions">
@@ -106,6 +111,8 @@ export function openNewTask({ status = "todo", dueDate = null } = {}) {
         spaceId: Number(form.spaceId.value) || null,
         projectId: Number(form.projectId.value) || null,
         assigneeId: Number(form.assigneeId.value) || null,
+        clientId: Number(form.clientId.value) || null,
+        meetingId: meetingId || null,
         labelIds: [...form.querySelectorAll('[name="labelIds"]:checked')].map(input => Number(input.value)),
         description: form.description.value
       });
@@ -127,13 +134,18 @@ const KINDS = {
   spaces: { title: "Przestrzenie", placeholder: "Nowa przestrzeń…", list: () => store.spaces, hint: "Praca i Prywatne są wbudowane: można zmienić ich nazwę i kolor, nie można ich usunąć. Zadania z usuniętej przestrzeni trafiają do Prywatnych. Każda przestrzeń może mieć własny Kalendarz Google." },
   projects: { title: "Projekty", placeholder: "Nowy projekt…", list: () => store.projects, hint: "Projekt to folder klienta w jednej przestrzeni. Jego zadania dostają jego etykietę. Usunięcie projektu zostawia zadania bez projektu." },
   categories: { title: "Etykiety", placeholder: "Nowa etykieta…", list: () => store.labels, hint: "Etykiety można łączyć: zadanie może mieć kilka. Usunięcie etykiety zdejmuje ją ze wszystkich zadań." },
+  clients: { title: "Klienci", placeholder: "Nowy klient lub lead…", list: () => store.clients, hint: "Lead to ktoś przed współpracą (np. po rezerwacji spotkania), klient to stała współpraca. Spotkania z gośćmi z jego adresu lub domeny same się do niego przypinają. Usunięcie zostawia zadania i projekty bez klienta." },
   assignees: { title: "Wykonawcy", placeholder: "Nowy wykonawca…", list: () => store.assignees, hint: "Osoby, którym przypisujesz zadania (to nie są konta logowania). Usunięcie zostawia zadania bez wykonawcy." }
 };
 
 function itemHtml(kind, item) {
   const builtIn = kind === "spaces" && item.key;
-  const extra = kind === "projects"
+  const extra = kind === "clients"
+    ? `<span class="select select--sm"><select name="status" aria-label="Status">${[["lead", "Lead"], ["client", "Klient"], ["archived", "Archiwum"]].map(([v, l]) => `<option value="${v}"${item.status === v ? " selected" : ""}>${l}</option>`).join("")}</select>${icon("chevronDown", 16)}</span>
+       <button type="button" class="btn btn--ghost btn--sm" data-client-card="${item.id}">Karta</button>`
+    : kind === "projects"
     ? `<span class="select select--sm"><select name="spaceId" aria-label="Przestrzeń">${choices(store.spaces, item.spaceId)}</select>${icon("chevronDown", 16)}</span>
+       <span class="select select--sm"><select name="clientId" aria-label="Klient">${choices(store.clients.filter(c => c.status !== "archived" || c.id === item.clientId), item.clientId, "Bez klienta")}</select>${icon("chevronDown", 16)}</span>
        <label class="check" title="Zarchiwizowany projekt znika z list, jego zadania zostają"><input type="checkbox" name="archived"${item.archivedAt ? " checked" : ""}>Archiwum</label>`
     : kind === "spaces"
       ? `<label class="check" title="Tylko takie przestrzenie mogą kiedyś zobaczyć integracje i agenci AI"><input type="checkbox" name="agentVisible"${item.agentVisible ? " checked" : ""}${item.key === "private" ? " disabled" : ""}>Dla agentów</label>`
@@ -224,6 +236,8 @@ export function openManage(kind = "projects") {
     }
     const tab = event.target.closest("[data-kind]");
     if (tab) { active = tab.dataset.kind; return draw(); }
+    const card = event.target.closest("[data-client-card]");
+    if (card) { element.close(); return openClient(Number(card.dataset.clientCard)); }
     const remove = event.target.closest("[data-remove]");
     if (!remove) return;
     const row = remove.closest("[data-item]");
@@ -239,7 +253,11 @@ export function openManage(kind = "projects") {
     const field = event.target.name;
     if (active === "projects") {
       body.spaceId = Number(row.querySelector('[name="spaceId"]').value);
+      body.clientId = Number(row.querySelector('[name="clientId"]').value) || null;
       if (field === "archived") { Object.keys(body).forEach(key => delete body[key]); body.archived = event.target.checked; }
+    }
+    if (active === "clients") {
+      body.status = row.querySelector('[name="status"]').value;
     }
     if (active === "spaces" && field === "agentVisible") { Object.keys(body).forEach(key => delete body[key]); body.agentVisible = event.target.checked; }
     try { await api.update(active, row.dataset.item, body); await afterChange(); } catch (error) { fail(error); await afterChange(); }

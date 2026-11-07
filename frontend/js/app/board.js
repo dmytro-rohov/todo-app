@@ -19,10 +19,12 @@ export const isDragging = () => drag?.active === true;
 
 export function chipsHtml(task) {
   const project = lookup.project(task.projectId);
+  const client = lookup.client(lookup.clientOf(task));
+  const clientChip = client ? `<span class="chip chip--client" data-c="${escapeHtml(client.color)}">${icon("user", 14)}${escapeHtml(client.name)}</span>` : "";
   const projectChip = project ? `<span class="chip chip--project" data-c="${escapeHtml(project.color)}">${icon("folder", 15)}${escapeHtml(project.name)}</span>` : "";
   const labels = (task.labelIds || []).map(lookup.label).filter(Boolean).map(label =>
     `<span class="chip chip--label" data-c="${escapeHtml(label.color)}"><i class="dot"></i>${escapeHtml(label.name)}</span>`).join("");
-  return projectChip || labels ? `<div class="chips">${projectChip}${labels}</div>` : "";
+  return clientChip || projectChip || labels ? `<div class="chips">${clientChip}${projectChip}${labels}</div>` : "";
 }
 
 export function avatarHtml(task) {

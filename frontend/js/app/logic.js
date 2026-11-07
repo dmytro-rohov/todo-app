@@ -74,7 +74,7 @@ export function effectiveSpace(task, privateSpaceId) {
 
 function matchesSearch(task, query, names) {
   if (!query) return true;
-  const haystack = [task.title, task.description, names.project(task.projectId), names.assignee(task.assigneeId),
+  const haystack = [task.title, task.description, names.project(task.projectId), names.assignee(task.assigneeId), names.client?.(task) || "",
     ...(task.labelIds || []).map(names.label)].join(" ").toLocaleLowerCase("pl");
   return query.toLocaleLowerCase("pl").split(/\s+/).filter(Boolean).every(word => haystack.includes(word));
 }
@@ -84,6 +84,7 @@ function matchesSearch(task, query, names) {
 export function inScope(task, filters, ctx) {
   if (filters.spaceId && effectiveSpace(task, ctx.privateSpaceId) !== filters.spaceId) return false;
   if (filters.projectId && task.projectId !== filters.projectId) return false;
+  if (filters.clientId && ctx.clientOf?.(task) !== filters.clientId) return false;
   if (filters.labelId && !(task.labelIds || []).includes(filters.labelId)) return false;
   if (filters.assigneeId === "none" ? task.assigneeId !== null : filters.assigneeId && task.assigneeId !== filters.assigneeId) return false;
   return matchesSearch(task, filters.search, ctx.names);

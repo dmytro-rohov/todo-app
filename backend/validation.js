@@ -117,7 +117,7 @@ function validateSpace(data, { partial = false } = {}) {
 }
 
 function validateProject(data, { partial = false } = {}) {
-  const result = validateNamed(data, { partial, maxName: 80, extra: { spaceId: asId, archived: asBoolean } });
+  const result = validateNamed(data, { partial, maxName: 80, extra: { spaceId: asId, archived: asBoolean, clientId: value => (value === null ? null : asId(value)) } });
   if (!result.error && !partial && result.value.spaceId === undefined) return { error: "Space is required" };
   return result;
 }
