@@ -51,8 +51,9 @@ export function renderArchive() {
   ].filter(([, list]) => list.length);
   const rule = days => days ? `usuwane na zawsze po ${days} dniach w archiwum` : "nie są usuwane";
   return `<div class="list archive">
-    <p class="archive__rules">${icon("history", 18)}<span>Zakończone zadania trafiają tu po ${settings.archiveDays || "—"} dniach.
-      Prywatne są ${rule(settings.deletePrivateDays)}, praca i projekty klientów ${rule(settings.deleteWorkDays)} — razem z notatkami, podzadaniami i historią.</span></p>
+    <details class="archive__rules"${window.matchMedia("(max-width: 600px)").matches ? "" : " open"}><summary>${icon("history", 18)}Zasady archiwum</summary>
+      <p>Zakończone zadania trafiają tu po ${settings.archiveDays || "—"} dniach.
+      Prywatne są ${rule(settings.deletePrivateDays)}, praca i projekty klientów ${rule(settings.deleteWorkDays)} — razem z notatkami, podzadaniami i historią.</p></details>
     ${groups.length ? groups.map(([title, list, days]) => `
       <section class="list__group list__group--archive">
         <h2>${icon(title === "Prywatne" ? "user" : "folder", 20)}${title}<span class="count">${list.length}</span><small class="muted">${rule(days)}</small></h2>

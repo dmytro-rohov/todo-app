@@ -34,6 +34,12 @@ try {
   await send("Page.navigate", { url: BASE + "/#board" }); await sleep(2500);
   const pwa = await evaluate("(async () => { const reg = await navigator.serviceWorker.ready; const m = await fetch('/manifest.webmanifest'); return { active: Boolean(reg.active), scope: reg.scope, type: m.headers.get('content-type'), name: (await m.json()).name }; })()");
   check("installable app: manifest served and the service worker active", pwa?.active && pwa.scope === BASE + "/" && /manifest\+json/.test(pwa.type) && pwa.name === "Mytko Tasks", JSON.stringify(pwa));
+  // collapsible sidebar: a rail of icons, remembered after a reload
+  await click('[data-action="sidebar-collapse"]'); await sleep(400);
+  check("the sidebar collapses to a rail", await evaluate("Math.round(document.querySelector('.sidebar').getBoundingClientRect().width)") === 76);
+  await send("Page.reload"); await sleep(2500);
+  check("the collapsed sidebar is remembered", await evaluate("document.querySelector('#app').classList.contains('sidebar-collapsed')"));
+  await click('[data-action="sidebar-collapse"]'); await sleep(400);
   check("the sidebar never scrolls sideways", await evaluate("(() => { const s = document.querySelector('.sidebar'); return s.scrollWidth <= s.clientWidth; })()"));
   check("board renders 5 columns", await evaluate("document.querySelectorAll('.column').length") === 5);
   const layout = await evaluate("(() => { const b = document.querySelector('.board').getBoundingClientRect(); const cols = [...document.querySelectorAll('.column')].map(c => c.getBoundingClientRect()); return { visible: cols.filter(c => c.right <= b.right + 1).length, planLeft: Math.round(cols[4].left), boardRight: Math.round(b.right) }; })()");

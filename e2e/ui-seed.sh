@@ -32,4 +32,16 @@ curl "${H[@]}" -X POST -d '{}' $U/tasks/$I2/timer/stop >/dev/null; curl "${H[@]}
 [ -n "${TEST_MIGRATION_DATABASE_URL:-}" ] && psql "$TEST_MIGRATION_DATABASE_URL" -qc "UPDATE task_time_entries SET started_at = started_at - CASE task_id WHEN $I1 THEN interval '200 minutes' WHEN $I2 THEN interval '105 minutes' ELSE interval '130 minutes' END" >/dev/null
 post tasks/$I1/subtasks '{"title":"Kafelek: usługi"}' >/dev/null; post tasks/$I1/subtasks '{"title":"Kafelek: realizacje"}' >/dev/null
 post tasks/$I1/notes '{"body":"Klient prosi o większe ikony na mobile."}' >/dev/null
+# EXTRA=1: a long Done column and three archived tasks; PLANS=1: long-term plans.
+if [ -n "${EXTRA:-}" ]; then
+  for i in $(seq 1 12); do post tasks "{\"title\":\"Zakończone zadanie numer $i\",\"date\":\"$(date +%F)\",\"status\":\"done\",\"spaceId\":$WORK}" >/dev/null; done
+  for t in "Stary prywatny wpis" "Odebrać paczkę"; do post tasks "{\"title\":\"$t\",\"date\":\"$(date +%F)\",\"status\":\"done\"}" >/dev/null; done
+  post tasks "{\"title\":\"Raport miesięczny dla klienta\",\"date\":\"$(date +%F)\",\"status\":\"done\",\"spaceId\":$WORK}" >/dev/null
+  [ -n "${TEST_MIGRATION_DATABASE_URL:-}" ] && psql "$TEST_MIGRATION_DATABASE_URL" -qc "UPDATE tasks SET archived_at = now() - interval '5 days', completed_at = now() - interval '12 days' WHERE title IN ('Stary prywatny wpis','Odebrać paczkę','Raport miesięczny dla klienta')" >/dev/null
+fi
+if [ -n "${PLANS:-}" ]; then
+  P() { post tasks "{\"title\":\"$1\",\"date\":\"$(date +%F)\",\"status\":\"planned\",\"dueDate\":$2}" >/dev/null; }
+  P "Nauczyć się latać szybowcem" "\"$(D '+2 years')\""; P "Własny produkt SaaS dla klientów Mytko" "\"$(D '+5 years')\""
+  P "Przeprowadzka do domu z ogrodem" null; P "Certyfikat AWS" "\"$(D '+1 year')\""
+fi
 echo seeded

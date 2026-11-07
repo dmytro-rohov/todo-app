@@ -37,4 +37,13 @@ await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); a
 const status = (await api("/api/tasks")).find(t => t.id === id).status;
 console.log((status !== "todo" ? "PASS" : "FAIL") + ` hold and drag moves the card across columns on a phone (marker in ${over}, now ${status})`);
 console.log((errors.length ? "FAIL" : "PASS") + " no exceptions " + errors.join(" | "));
+// Phone layout: nothing scrolls sideways in any view; the FAB opens a bottom sheet; filters fold away.
+for (const view of ["board", "list", "calendar", "archive"]) {
+  await ev(`location.hash = "${view}"; document.querySelector('[data-view="${view}"]').click()`); await sleep(600);
+  const wide = await ev("document.scrollingElement.scrollWidth - innerWidth");
+  console.log((wide <= 0 ? "PASS" : "FAIL") + ` phone ${view}: no sideways page scroll (${wide})`);
+}
+console.log((await ev("getComputedStyle(document.querySelector('.filters')).display === 'none' && getComputedStyle(document.querySelector('.fab')).display !== 'none'") ? "PASS" : "FAIL") + " phone: filters folded, FAB shown");
+await ev("document.querySelector('.fab').click()"); await sleep(500);
+console.log((await ev("(() => { const d = document.querySelector('dialog[open]'); const r = d?.getBoundingClientRect(); const a = d?.querySelector('.dialog__actions')?.getBoundingClientRect(); return Boolean(d) && Math.round(r.width) === innerWidth && a.bottom <= innerHeight + 1; })()") ? "PASS" : "FAIL") + " phone: new task opens as a full-width sheet with its buttons in reach");
 chrome.kill(); process.exit(0); // results are the PASS/FAIL lines

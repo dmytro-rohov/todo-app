@@ -1,0 +1,37 @@
+#!/bin/bash
+# Runs a Tasks image on 127.0.0.1:3197 against a disposable test database, seeds it, then takes headless Chrome
+# screenshots or runs a browser test; the container is removed on exit. Loopback only; test databases only.
+#
+#   TEST_MIGRATION_DATABASE_URL=postgres://tasks_owner:…@127.0.0.1:55440/tasks_test \
+#   TEST_DATABASE_URL=postgres://tasks_app:…@127.0.0.1:55440/tasks_test \
+#   e2e/ui-run.sh <image> <app|login> <out-prefix> [WxH ...]
+#
+#   SEED=0 skips seeding (EXTRA=1 / PLANS=1 are passed to ui-seed.sh); LINKS="list calendar task-4" adds one
+#   screenshot per #link at the first size; TEST=e2e/ui-smoke.mjs runs that test instead of screenshots.
+set -euo pipefail
+IMG=$1; MODE=$2; OUT=$3; shift 3
+SIZES=${*:-1672x941}
+HERE=$(cd "$(dirname "$0")" && pwd)
+: "${TEST_MIGRATION_DATABASE_URL:?}" "${TEST_DATABASE_URL:?}"
+case "$TEST_MIGRATION_DATABASE_URL$TEST_DATABASE_URL" in *test*) ;; *) echo "refusing: not a test database" >&2; exit 2;; esac
+psql "$TEST_MIGRATION_DATABASE_URL" -qc "DROP TABLE IF EXISTS auth_sessions, task_history, task_time_entries, task_subtasks, task_notes, task_labels, tasks, projects, spaces, assignees, categories CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;" 2>&1 | grep -v NOTICE || true
+docker run --rm --network host --read-only -e MIGRATION_DATABASE_URL="$TEST_MIGRATION_DATABASE_URL" -e APP_DB_ROLE=tasks_app "$IMG" node backend/migrate.js >/dev/null
+AUTH=(-e AUTH_DISABLED=true)
+[ "$MODE" = login ] && AUTH=(-e AUTH_USERNAME=owner -e "AUTH_PASSWORD_HASH=scrypt:1024:8:1:c2FsdHNhbHQ=:aGFzaGhhc2g=")
+docker rm -f tasks-ui-run >/dev/null 2>&1 || true
+docker run -d --name tasks-ui-run --network host --read-only --tmpfs /tmp -e NODE_ENV=development -e HOST=127.0.0.1 -e PORT=3197 \
+  -e DATABASE_URL="$TEST_DATABASE_URL" -e PUBLIC_ORIGIN=http://127.0.0.1:3197 "${AUTH[@]}" "$IMG" >/dev/null
+trap 'docker rm -f tasks-ui-run >/dev/null 2>&1' EXIT
+for _ in $(seq 1 30); do curl -fs http://127.0.0.1:3197/readyz >/dev/null 2>&1 && break; sleep 1; done
+[ "$MODE" = app ] && [ "${SEED:-1}" != 0 ] && bash "$HERE/ui-seed.sh" >/dev/null
+if [ -n "${TEST:-}" ]; then rm -rf /tmp/tasks-e2e-profile; node "$TEST"; exit $?; fi
+for size in $SIZES; do
+  google-chrome --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size="${size/x/,}" \
+    --virtual-time-budget=4000 --screenshot="$OUT-$size.png" http://127.0.0.1:3197/ >/dev/null 2>&1
+done
+first=${SIZES%% *}
+for link in ${LINKS:-}; do
+  google-chrome --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size="${first/x/,}" \
+    --virtual-time-budget=4000 --screenshot="$OUT-$link.png" "http://127.0.0.1:3197/#$link" >/dev/null 2>&1
+done
+ls "$OUT"-*.png

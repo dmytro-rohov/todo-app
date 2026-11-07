@@ -59,7 +59,7 @@ function bodyHtml(task) {
     </header>
     <div class="drawer__scroll">
       <label class="visually-hidden" for="drawer-title">Tytuł</label>
-      <textarea id="drawer-title" class="drawer__title" data-field="title" rows="1" maxlength="255">${escapeHtml(task.title)}</textarea>
+      <div class="title-wrap" data-value="${escapeHtml(task.title)}"><textarea id="drawer-title" class="drawer__title" data-field="title" rows="1" maxlength="255">${escapeHtml(task.title)}</textarea></div>
       <p class="field-error" data-error="title" hidden></p>
       <dl class="props">
         <dt>${icon(task.status === "planned" ? "target" : "calendar", 18)}${task.status === "planned" ? "Cel" : "Termin"}</dt>
@@ -135,9 +135,6 @@ function draw() {
   for (const [selector, value] of typed) { const field = panel.querySelector(selector); if (field) field.value = value; }
   paint(panel);
   panel.querySelector(".drawer__scroll").scrollTop = scroll;
-  const title = panel.querySelector(".drawer__title");
-  title.style.height = "auto";
-  title.style.height = `${title.scrollHeight}px`;
   if (keep) {
     const field = panel.querySelector(keep);
     field?.focus();
@@ -260,7 +257,8 @@ export function openDrawer(id) {
     panel.addEventListener("change", onChange);
     panel.addEventListener("submit", onSubmit);
     panel.addEventListener("input", event => {
-      if (event.target.classList.contains("drawer__title")) { event.target.style.height = "auto"; event.target.style.height = `${event.target.scrollHeight}px`; }
+      // the hidden copy behind the title gives it its height (see .title-wrap)
+      if (event.target.classList.contains("drawer__title")) event.target.parentElement.dataset.value = event.target.value;
     });
     panel.addEventListener("keydown", event => {
       if (event.key === "Escape") { event.stopPropagation(); closeDrawer(); }

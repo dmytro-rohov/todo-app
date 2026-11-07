@@ -207,6 +207,7 @@
             small { display: block; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .22em; text-transform: uppercase; }
         }
         &__close { display: none; margin-left: auto; }
+        &__collapse { margin-left: auto; color: var(--faint); }
         // One track that never grows past the sidebar: long names are cut with an ellipsis, nothing scrolls sideways.
         &__nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; align-content: start; }
         &__foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
@@ -416,7 +417,7 @@
     }
 
     // ---- archive ----------------------------------------------------------------------------------------------
-    .archive__rules { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--muted); font-size: 14px; .i { margin-top: 2px; } }
+    .archive__rules { display: block; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--muted); font-size: 14px; .i { margin-top: 2px; } }
     .list__group--archive h2 small { margin-left: auto; font-size: 13px; font-weight: 500; }
     .row--archived {
         grid-template-columns: 40px minmax(0, 1fr) 170px 120px auto;
@@ -460,8 +461,8 @@
         &__spacer { flex: 1; }
         &__scroll { flex: 1; overflow-y: auto; padding: 20px 22px 32px; display: grid; gap: 22px; align-content: start; }
         &__title {
-            width: 100%; padding: 4px 6px; margin: -4px -6px; border: 1px solid transparent; border-radius: 8px; background: transparent;
-            font-size: 24px; line-height: 1.3; font-weight: 800; resize: none; overflow: hidden;
+            width: 100%; border-radius: 8px; background: transparent; overflow-wrap: anywhere;
+            resize: none; overflow: hidden;
             &:hover { border-color: var(--border); } &:focus { border-color: #79bf55; outline: none; }
         }
         &__foot { font-size: 13px; }
@@ -554,7 +555,7 @@
         .row--archived { .row__when { grid-column: 2; } .row__actions { grid-column: 2 / -1; justify-content: flex-end; } }
         .calendar__grid .day { min-height: 84px; padding: 4px; }
         .event { padding: 3px 5px; font-size: 11.5px; }
-        .props { grid-template-columns: 1fr; gap: 6px; dd { margin-bottom: 8px; } }
+        .props { grid-template-columns: 112px minmax(0, 1fr); gap: 8px 10px; }
         .field-row { grid-template-columns: 1fr; }
         .manage__list li { flex-wrap: wrap; }
     }
@@ -564,6 +565,135 @@
         .calendar__note { display: none; }
         .calendar__weekday { padding: 6px 4px; font-size: 11px; text-align: center; }
     }
+    // ---- collapsible sidebar (desktop): a rail of icons, the names as tooltips -----------------------------------
+    .fab, .topbar__search, .filters-toggle { display: none; }
+    @media (min-width: 901px) {
+        .app.sidebar-collapsed {
+            grid-template-columns: 76px minmax(0, 1fr);
+            .sidebar { padding: 18px 10px 14px; }
+            .sidebar__brand { flex-direction: column; gap: 10px; padding: 0 0 18px; > span { display: none; } }
+            .sidebar__collapse { margin: 0; }
+            .nav-item { justify-content: center; padding: 0; > span:not(.folder), > em { display: none; } }
+            .nav-item--space .dot { margin: 0; }
+            .nav-heading { display: block; height: 1px; margin: 12px 10px; padding: 0; background: var(--border); font-size: 0; .icon-btn { display: none; } }
+            .nav-empty { display: none; }
+            .profile { flex-direction: column; gap: 8px; &__text { display: none; } }
+        }
+    }
+
+    // ---- phones and small tablets -------------------------------------------------------------------------------
+    @media (max-width: 900px) {
+        // 16 px keeps iOS from zooming into a field on focus.
+        input:not([type=checkbox], [type=color]), select, .textarea, .select select { font-size: 16px; }
+        .sidebar__collapse { display: none; }
+        .sidebar { padding-top: calc(22px + env(safe-area-inset-top)); padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+        .main { padding: 0 max(16px, env(safe-area-inset-right)) calc(100px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+        .topbar {
+            position: sticky; top: 0; z-index: 30; margin: 0 -16px; padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
+            background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); flex-wrap: nowrap;
+        }
+        .crumbs { flex: 1; min-width: 0; }
+        .topbar__search { display: inline-grid; }
+        .search { display: none; kbd { display: none; } input { padding-right: 16px; } }
+        .search-open {
+            .topbar { flex-wrap: wrap; }
+            .search { display: flex; order: 3; width: 100%; }
+        }
+        .page-head { margin: 8px 0 14px; gap: 14px; }
+        .page-head__title { gap: 12px; h1 { font-size: 23px; } p { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+        .page-head__title > div { min-width: 0; }
+        .page-head__icon { width: 42px; height: 42px; border-radius: 12px; .i { width: 22px; height: 22px; } }
+        .filters-toggle { display: inline-flex; min-height: 44px; padding: 0 14px; .count { min-width: 22px; height: 22px; background: var(--accent); color: var(--accent-contrast); } }
+        .filters { display: none; }
+        .filters-open .filters { display: flex; flex-wrap: wrap; overflow: visible; .select { flex: 1 1 calc(50% - 6px); min-width: 0; max-width: none; } .filters__spacer { display: none; } }
+        .board__bar { margin: 0 0 10px; }
+        .row__title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .icon-btn { width: 40px; height: 40px; }
+        .icon-btn--sm { width: 30px; height: 30px; }
+        .drawer__panel { width: 100vw; padding-top: env(safe-area-inset-top); }
+        .drawer__scroll { padding: 16px 16px calc(32px + env(safe-area-inset-bottom)); }
+        .title-wrap::after, .title-wrap > .drawer__title { font-size: 21px; }
+    }
+    @media (max-width: 600px) {
+        .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+        .tile {
+            flex-direction: column; justify-content: center; gap: 2px; min-height: 64px; padding: 8px 4px; text-align: center;
+            strong { font-size: 19px; } small { font-size: 11.5px; line-height: 1.2; }
+            &__icon { display: none; }
+        }
+        .toolbar { gap: 10px; .split-btn { display: none; } .tabs { flex: 1 1 100%; } }
+        .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+        .tab { flex-direction: column; justify-content: center; gap: 3px; min-height: 54px; padding: 4px 2px; font-size: 12.5px; }
+        .toolbar .filters-toggle { width: 100%; justify-content: center; }
+        .fab {
+            position: fixed; z-index: 40; right: max(16px, env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom));
+            display: grid; place-items: center; width: 58px; height: 58px; border-radius: 18px; color: var(--accent-contrast);
+            background: linear-gradient(135deg, #c9f27a, #a9e25b); box-shadow: 0 12px 30px #0009, 0 0 0 1px #b7e34d66;
+        }
+        body.drawer-open .fab, body:has(dialog[open]) .fab, .sidebar-open .fab { display: none; }
+        .toasts { bottom: calc(92px + env(safe-area-inset-bottom)); }
+        .list__bar { flex-wrap: wrap; }
+        .row { padding: 10px 12px; }
+        .archive__rules p { font-size: 13.5px; }
+        // dialogs become bottom sheets with the actions always in reach
+        .dialog {
+            width: 100vw; max-width: 100vw; margin: auto 0 0; max-height: 92dvh; border-radius: 20px 20px 0 0; border-bottom: 0;
+            &__body { padding: 18px 16px 0; gap: 14px; }
+            &__actions {
+                position: sticky; bottom: 0; z-index: 2; margin: 0 -16px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+                border-top: 1px solid var(--border); background: #111913;
+                .check { width: 100%; margin: 0 0 4px; }
+                .btn { flex: 1; }
+            }
+            &--confirm .dialog__actions { position: static; }
+        }
+        .manage {
+            &__list li, &__add { flex-wrap: wrap; }
+            &__list input:not([type]), &__add input:not([type]) { flex: 1 1 calc(100% - 52px); min-width: 0; }
+            .select { flex: 1 1 140px; min-width: 0; }
+            &__add .btn { flex: 1 1 100%; }
+        }
+    }
+
+    // ---- calendar agenda (phones) ------------------------------------------------------------------------------
+    .calendar--agenda .calendar__bar { h2 { flex: 1; min-width: 0; font-size: 19px; } }
+    .mini {
+        display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 10px; border: 1px solid var(--border);
+        border-radius: var(--radius-lg); background: #0f1611;
+        &__weekday { padding: 4px 0; color: var(--faint); font-size: 11.5px; font-weight: 700; text-align: center; text-transform: uppercase; }
+        &__day {
+            display: grid; justify-items: center; align-content: center; gap: 3px; min-height: 46px; border-radius: 11px; font-size: 15px; font-weight: 650;
+            &.is-out { color: var(--faint); }
+            &.is-today > span:first-child { color: var(--accent); }
+            &.is-selected { background: var(--accent); color: var(--accent-contrast); .mini__dot { background: var(--accent-contrast); } }
+        }
+        &__dots { display: flex; gap: 3px; min-height: 5px; }
+        &__dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted);
+            &--in_progress { background: var(--accent); } &--needs_review { background: var(--warning); } &--done { background: var(--success); } &--planned { background: #7d9a5a; } }
+    }
+    .agenda {
+        display: grid; gap: 8px; margin-top: 14px;
+        h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 16px; font-weight: 750; &::first-letter { text-transform: uppercase; } }
+        &__item {
+            display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--border); border-left: 3px solid var(--muted); border-radius: 12px;
+            background: var(--surface-2); text-align: left;
+            &.event--in_progress { border-left-color: var(--accent); } &.event--needs_review { border-left-color: var(--warning); }
+            &.event--done { border-left-color: var(--success); .agenda__title { text-decoration: line-through; color: var(--muted); } }
+            &.event--planned { border-left: 3px dashed #7d9a5a; }
+        }
+        &__title { font-weight: 650; }
+    }
+    .archive__rules {
+        summary { display: flex; align-items: center; gap: 10px; cursor: pointer; color: #cfd8d0; font-weight: 650; list-style: none; &::-webkit-details-marker { display: none; } }
+        p { margin-top: 8px; }
+    }
+    // The title grows with its text: an invisible copy in the same grid cell sets the height, no measuring.
+    .title-wrap {
+        display: grid; margin: -4px -6px;
+        &::after { content: attr(data-value) " "; visibility: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+        &::after, > .drawer__title { grid-area: 1 / 1 / 2 / 2; padding: 4px 6px; border: 1px solid transparent; font-size: 24px; line-height: 1.3; font-weight: 800; }
+    }
+
     // Snapping would pull every small programmatic scroll back while a card is dragged to an off-screen column.
     body.is-dragging .board { scroll-snap-type: none; }
     @media (prefers-reduced-motion: reduce) {
