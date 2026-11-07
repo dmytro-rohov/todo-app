@@ -279,6 +279,27 @@ const mailMessages = pgTable("mail_messages", {
   index("mail_messages_client").on(table.clientId),
 ]);
 
+// What was said at a meeting: the notes (Gemini's e-mail "Notes: …" picked up from Poczta, or pasted) and Claude's
+// brief from them (JSON: summary, decisions, open questions, a site brief in Website Factory's brief.json terms,
+// proposed tasks, the next meeting). A meeting may have several (the newest counts); a brief without a meeting
+// waits in Poczta to be assigned.
+const meetingBriefs = pgTable("meeting_briefs", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").references(() => calendarEvents.id, { onDelete: "set null" }),
+  clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+  mailId: integer("mail_id").references(() => mailMessages.id, { onDelete: "set null" }),
+  source: varchar("source", { length: 20 }).default("paste").notNull(),
+  notes: text("notes").notNull(),
+  result: text("result").default("").notNull(),
+  error: varchar("error", { length: 300 }),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("meeting_briefs_source_check", sql`${table.source} IN ('paste', 'gemini-mail')`),
+  index("meeting_briefs_event").on(table.eventId),
+  index("meeting_briefs_mail").on(table.mailId),
+]);
+
 // Browser sessions of the single owner (password login or "Zaloguj kontem Mytko"). Only the SHA-256 of the random
 // cookie token is stored, so a database read never yields a usable session.
 const authSessions = pgTable("auth_sessions", {
@@ -297,6 +318,7 @@ const authSessions = pgTable("auth_sessions", {
 ]);
 
 module.exports = {
+  meetingBriefs,
   mailMessages,
   users,
   clients,

@@ -63,7 +63,21 @@ try {
   check("the invitation is in the Praca calendar", (await api(`/api/calendar/events?from=${from}&to=${to}`)).some(e => e.title === "Warsztat UX"));
   await click('[data-mail-view="handled"]'); await sleep(1200);
   check("handled messages have their own view", await ev("[...document.querySelectorAll('.mail-row')].some(r => r.textContent.includes('Anna Róża'))"));
+  // Gemini's notes were handled by the sync and became the brief of today's meeting with the lead
+  await openFrom("Gemini");
+  check("Gemini's notes point to the brief", await ev("document.querySelector('[data-mail=\"brief\"]') && document.querySelector('.mail__reader').textContent.includes('przypisał je do spotkania')"));
+  await click('[data-mail="brief"]'); await sleep(1500);
+  check("the brief shows the summary, decisions and the site brief", await ev("(() => { const d = document.querySelector('dialog[open] .brief'); return d && d.textContent.includes('Kwiaciarnia chce sklepu') && d.textContent.includes('Płatności BLIK') && d.textContent.includes('Zamówienia bukietów online'); })()"));
+  await shot("brief");
+  await click('dialog[open] [data-brief="add-all"]'); await sleep(2000);
+  check("all proposed tasks are added to the meeting", await ev("[...document.querySelectorAll('dialog[open] [data-brief-task]')].length") === 2);
+  const meetingTasks = (await api("/api/tasks")).filter(t => t.meetingId && ["Przygotować makietę sklepu", "Wysłać wycenę"].includes(t.title));
+  check("…linked to the meeting and its client", meetingTasks.length === 2 && meetingTasks.every(t => t.clientId), JSON.stringify(meetingTasks.map(t => [t.meetingId, t.clientId])));
+  await click('dialog[open] [data-brief="schedule"]'); await sleep(800);
+  check("the next meeting opens prefilled", await ev("(() => { const f = document.querySelector('dialog[open] form'); return f?.title.value === 'Prezentacja makiety sklepu' && f.attendees.value.includes('roza@kwiaciarnia.pl'); })()"));
+  await ev("document.querySelector('dialog[open]')?.close()"); await sleep(300);
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }); await sleep(1000);
+  await ev(`document.querySelector('[data-mail="back"]')?.click()`); await sleep(400); // the phone shows the list or the reader
   await click('[data-mail-view="inbox"]'); await sleep(1200);
   check("phone: the five view tabs fit one row", await ev("new Set([...document.querySelectorAll('.tabs .tab:not([hidden])')].map(t => Math.round(t.getBoundingClientRect().top))).size") === 1);
   check("Poczta has its own head, without task filters", await ev("document.querySelector('.page-head h1').textContent === 'Poczta' && getComputedStyle(document.querySelector('.filters-toggle')).display === 'none'"));

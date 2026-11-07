@@ -48,6 +48,10 @@ test("a fetched message becomes a row: text, snippet, attachments by name, the i
   assert.equal(row.snippet, "Dzień dobry, prosimy o wycenę sklepu.");
   assert.deepEqual(JSON.parse(row.attachments).map(a => a.name), ["brief.pdf"]);
   assert.match(row.invite, /SUMMARY:Call/);
+  // raw UTF-8 headers (RFC 6532) are read from the source even when the server's envelope mangled them
+  const raw = Buffer.from("From: Gemini <gemini-notes@google.com>\r\nSubject: Notes: “Spotkanie z Różą”\r\nDate: Sat, 07 Nov 2026 11:05:00 +0100\r\n\r\nSummary\r\n", "utf8");
+  const mangled = await toRow({ uid: 9, seen: false, envelope: { subject: "Notes: ?Spotkanie z R??\u0105?", from: [{ address: "gemini-notes@google.com" }] }, source: raw });
+  assert.deepEqual([mangled.subject, mangled.fromName, mangled.sentAt], ["Notes: “Spotkanie z Różą”", "Gemini", "2026-11-07T10:05:00.000Z"]);
   const big = await toRow({ uid: 8, seen: true, envelope, source: null });
   assert.match(big.bodyText, /za duża/);
 });

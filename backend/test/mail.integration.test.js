@@ -24,8 +24,8 @@ const KEY = crypto.randomBytes(32).toString("base64");
 const skip = !OWNER_URL || !APP_URL || !IMAP_PORT ? "TEST_* database URLs / TEST_IMAP_PORT not set" : false;
 const IMAP = { host: "127.0.0.1", port: IMAP_PORT, secure: false, auth: { user: "hello@mytko.dev", pass: "imap-test-only" }, logger: false };
 
-const message = ({ from, subject, body, id, extra = [] }) => [`From: ${from}`, "To: hello@mytko.dev", `Subject: ${subject}`,
-  "Date: Sat, 07 Nov 2026 10:00:00 +0100", `Message-ID: <${id}@test>`, ...extra, "", body, ""].join("\r\n");
+const message = ({ from, subject, body, id, extra = [], date = "Sat, 07 Nov 2026 10:00:00 +0100" }) => [`From: ${from}`, "To: hello@mytko.dev", `Subject: ${subject}`,
+  `Date: ${date}`, `Message-ID: <${id}@test>`, ...extra, "", body, ""].join("\r\n");
 const INVITE = message({ from: "Organizator <biuro@agencja-partner.pl>", subject: "Zaproszenie: warsztat", id: "inv", extra: ["MIME-Version: 1.0", 'Content-Type: multipart/mixed; boundary="b"'],
   body: ["--b", "Content-Type: text/plain; charset=utf-8", "", "Zapraszamy na warsztat.", "--b", "Content-Type: text/calendar; method=REQUEST; charset=utf-8", "",
     "BEGIN:VCALENDAR", "METHOD:REQUEST", "BEGIN:VEVENT", "UID:warsztat-1@agencja-partner.pl", "DTSTART:20261120T090000Z", "DTEND:20261120T110000Z",
@@ -41,6 +41,12 @@ function fakeApis() {
       if (req.url === "/v1/messages") {
         state.claude++;
         assert.equal(req.headers["x-api-key"], "sk-test");
+        if (JSON.parse(body).tool_choice.name === "meeting_brief") {
+          state.briefNotes = JSON.parse(body).messages[0].content;
+          return send(200, { content: [{ type: "tool_use", name: "meeting_brief", input: { summary: "Ustalono zakres sklepu.", decisions: ["30 produktów na start"],
+            openQuestions: ["Budżet"], siteBrief: { business: { name: "Kwiaciarnia Róża" }, goal: "Zamówienia online" },
+            tasks: [{ title: "Przygotować makietę sklepu", priority: "P1", coding: true }], nextMeeting: { needed: true, title: "Prezentacja makiety", date: "2026-11-14" } } }] });
+        }
         return send(200, { content: [{ type: "tool_use", name: "propose_tasks", input: { summary: "Prośba o wycenę.", needsReply: true,
           tasks: [{ title: "Przygotować wycenę sklepu", priority: "P1", coding: false }, { title: "Postawić demo sklepu", priority: "P2", coding: true }] } }] });
       }
@@ -66,7 +72,7 @@ describe("Poczta", { skip, concurrency: false }, () => {
   before(async () => {
     owner = createPool({ connectionString: OWNER_URL, max: 2, statementTimeoutMs: 0 });
     appPool = createPool({ connectionString: APP_URL, max: 5 });
-    await owner.query(`DROP TABLE IF EXISTS public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions,
+    await owner.query(`DROP TABLE IF EXISTS public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions,
       public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes, public.task_labels, public.tasks, public.projects, public.spaces,
       public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
@@ -91,7 +97,11 @@ describe("Poczta", { skip, concurrency: false }, () => {
     const work = (await call("/api/spaces")).body.find(s => s.key === "work");
     await owner.query("INSERT INTO calendar_accounts (space_id, account_email, refresh_token_enc) VALUES ($1, 'hello@mytko.dev', $2)",
       [work.id, encrypt(parseKey(KEY), "refresh")]);
-    await call("/api/clients", "POST", { name: "Kwiaciarnia Róża", email: "anna@kwiaciarnia.pl" });
+    const kwiaciarnia = (await call("/api/clients", "POST", { name: "Kwiaciarnia Róża", email: "anna@kwiaciarnia.pl" })).body;
+    // a Meet meeting with the client that has just ended
+    const account = (await owner.query("SELECT id FROM calendar_accounts")).rows[0].id;
+    await owner.query(`INSERT INTO calendar_events (account_id, external_id, title, start_at, end_at, meet_url, client_id)
+      VALUES ($1, 'meet-1', 'Omówienie sklepu', now() - interval '90 minutes', now() - interval '30 minutes', 'https://meet.google.com/abc', $2)`, [account, kwiaciarnia.id]);
   });
 
   after(async () => {
@@ -171,6 +181,33 @@ describe("Poczta", { skip, concurrency: false }, () => {
     assert.deepEqual([apis.state.imported[0].iCalUID, apis.state.imported[0].organizer.email], ["warsztat-1@agencja-partner.pl", "biuro@agencja-partner.pl"]);
     const event = (await call("/api/calendar/events?from=2026-11-19&to=2026-11-21")).body.find(e => e.id === added.body.eventId);
     assert.equal(event.title, "Warsztat UX");
+  });
+
+  test("Gemini's notes e-mail becomes the meeting's brief; pasted notes make one too", async () => {
+    await imap.append("INBOX", message({ from: "Gemini <gemini-notes@google.com>", subject: "Notes: “Omówienie sklepu”", id: "g1", date: new Date().toUTCString(), // Gemini mails right after the meeting
+      body: "Summary\r\nKlientka chce sklep z dostawą.\r\nNext steps\r\nMakieta do piątku." }));
+    const sync = (await call("/api/mail/sync", "POST", {})).body;
+    assert.deepEqual([sync.added, sync.briefs], [1, 1]);
+    const event = (await owner.query("SELECT id, client_id FROM calendar_events WHERE external_id = 'meet-1'")).rows[0];
+    const listed = (await call(`/api/briefs?eventId=${event.id}`)).body.briefs;
+    assert.equal(listed.length, 1);
+    const brief = (await call(`/api/briefs/${listed[0].id}`)).body;
+    assert.deepEqual([brief.source, brief.clientId, brief.event.title, brief.result.summary, brief.result.nextMeeting.title],
+      ["gemini-mail", event.client_id, "Omówienie sklepu", "Ustalono zakres sklepu.", "Prezentacja makiety"]);
+    assert.match(apis.state.briefNotes, /Spotkanie: „Omówienie sklepu”[\s\S]*Klient: Kwiaciarnia Róża[\s\S]*Makieta do piątku/);
+    const mail = (await call("/api/mail?view=handled")).body.messages.find(m => m.fromAddress === "gemini-notes@google.com");
+    assert.equal(mail.clientId, event.client_id); // handled, with the meeting's client
+    assert.equal((await call(`/api/mail/${mail.id}`)).body.brief.eventId, event.id);
+    assert.equal((await call("/api/mail/sync", "POST", {})).body.briefs, 0); // once only
+
+    assert.equal((await call("/api/briefs", "POST", { eventId: event.id, notes: "krótko" })).status, 400);
+    const pasted = await call("/api/briefs", "POST", { notes: "Rozmowa telefoniczna z Anną: chce zmienić termin makiety na poniedziałek." });
+    assert.deepEqual([pasted.status, pasted.body.source, pasted.body.event, Boolean(pasted.body.result)], [201, "paste", null, true]);
+    assert.equal((await call("/api/briefs?unassigned=true")).body.briefs.length, 1);
+    assert.equal((await call(`/api/briefs/${pasted.body.id}`, "PATCH", { eventId: event.id })).body.event.id, event.id);
+    assert.equal((await call(`/api/briefs?eventId=${event.id}`)).body.briefs.length, 2);
+    assert.equal((await call(`/api/briefs/${pasted.body.id}/run`, "POST", {})).body.result.decisions[0], "30 produktów na start");
+    assert.equal((await call(`/api/briefs/${pasted.body.id}`, "DELETE")).status, 200);
   });
 
   test("messages deleted on the server disappear; tasks made from them stay", async () => {

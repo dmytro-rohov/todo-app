@@ -10,6 +10,7 @@ import { openNewTask } from "./dialogs.js";
 import { openDrawer } from "./drawer.js";
 import { openClient } from "./clients.js";
 import { calendarState } from "./meetings.js";
+import { openBrief } from "./brief.js";
 import { toast } from "./toast.js";
 
 export const mailState = { data: null, view: "inbox", q: "", openId: null, message: null, busy: "" };
@@ -136,6 +137,9 @@ function readerHtml(data) {
       <button type="button" class="btn btn--ghost btn--sm" data-mail="handled">${icon(m.handledAt ? "undo" : "check", 15)}${m.handledAt ? "Przywróć do skrzynki" : "Załatwione"}</button>
     </div>
     ${m.tasks.length ? `<ul class="mail__tasks">${m.tasks.map(t => `<li><button type="button" class="client-row" data-mail-task="${t.id}"><span>${escapeHtml(t.title)}</span><small class="muted">${STATUS_LABELS[t.status] || ""}</small></button></li>`).join("")}</ul>` : ""}
+    ${m.brief ? `<section class="mail-card mail-card--ai"><h3>${icon("note", 18)}Notatki ze spotkania → brief</h3>
+      <p>${m.brief.eventId ? "Tasks przypisał je do spotkania i przygotował brief." : "Nie znaleziono spotkania: brief czeka bez przypisania."}</p>
+      <div class="mail-card__actions"><button type="button" class="btn btn--primary btn--sm" data-mail="brief">Otwórz brief</button></div></section>` : ""}
     ${inviteHtml(m.invite)}
     ${suggestionHtml(m, data.ai)}
     <pre class="mail__body">${bodyHtml(m.bodyText)}</pre>
@@ -177,6 +181,7 @@ async function act(kind, m) {
   }
   if (!m) return;
   if (kind === "client-card") return openClient(m.clientId);
+  if (kind === "brief") return openBrief({ briefId: m.brief.id });
   if (kind === "handled") return markHandled(m, !m.handledAt);
   if (kind === "task") {
     return openNewTask({ title: m.subject.slice(0, 100), description: taskDescription(m), clientId: m.clientId, mailId: m.id, spaceId: workSpace(),

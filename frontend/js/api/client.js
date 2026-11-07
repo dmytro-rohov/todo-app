@@ -43,6 +43,12 @@ export const api = {
   mailSuggest: id => request(`/api/mail/${id}/suggest`, json("POST", {})),
   mailInvite: id => request(`/api/mail/${id}/invite`, json("POST", {})),
 
+  briefs: ({ eventId, clientId, unassigned } = {}) => request(`/api/briefs?${new URLSearchParams(Object.entries({ eventId, clientId, unassigned }).filter(([, v]) => v != null))}`),
+  brief: id => request(`/api/briefs/${id}`),
+  createBrief: body => request("/api/briefs", json("POST", body)),
+  runBrief: id => request(`/api/briefs/${id}/run`, json("POST", {})),
+  assignBrief: (id, eventId) => request(`/api/briefs/${id}`, json("PATCH", { eventId })),
+
   changePassword: (current, next) => request("/api/auth/password", json("POST", { current, next })),
 
   list: kind => request(`/api/${kind}`),

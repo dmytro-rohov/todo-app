@@ -1,10 +1,20 @@
-// A fake Anthropic Messages API on 127.0.0.1:3298 for browser tests (ANTHROPIC_DEV_BASE): always proposes two tasks.
+// A fake Anthropic Messages API on 127.0.0.1:3298 for browser tests (ANTHROPIC_DEV_BASE): tasks from an e-mail, or a
+// meeting brief.
 import http from "node:http";
 http.createServer((req, res) => {
   let body = "";
   req.on("data", c => { body += c; });
   req.on("end", () => {
     res.writeHead(req.url === "/v1/messages" ? 200 : 404, { "content-type": "application/json" });
+    if (JSON.parse(body || "{}").tool_choice?.name === "meeting_brief") {
+      return res.end(JSON.stringify({ content: [{ type: "tool_use", name: "meeting_brief", input: {
+        summary: "Kwiaciarnia chce sklepu internetowego z dostawą na terenie Krakowa.", decisions: ["Start z 30 produktami", "Płatności BLIK i karty"],
+        openQuestions: ["Budżet", "Kto robi zdjęcia produktów"],
+        siteBrief: { business: { name: "Kwiaciarnia Róża", industry: "kwiaciarnia", city: "Kraków" }, goal: "Zamówienia bukietów online",
+          offer: [{ name: "Bukiety", price: "od 80 zł" }, { name: "Dekoracje ślubne" }], tone: ["ciepło"], style: { likes: "pastele" } },
+        tasks: [{ title: "Przygotować makietę sklepu", priority: "P1", coding: true }, { title: "Wysłać wycenę", priority: "P1", coding: false }],
+        nextMeeting: { needed: true, title: "Prezentacja makiety sklepu", date: null, durationMinutes: 45, agenda: "Makieta i wycena" } } }] }));
+    }
     res.end(JSON.stringify({ content: [{ type: "tool_use", name: "propose_tasks", input: {
       summary: "Klientka prosi o wycenę sklepu internetowego do piątku.", needsReply: true,
       tasks: [{ title: "Przygotować wycenę sklepu", description: "Zakres: katalog, płatności, dostawa.", dueDate: null, priority: "P1", coding: false },

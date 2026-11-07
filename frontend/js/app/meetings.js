@@ -6,6 +6,7 @@ import { addDays, isoDay, STATUS_LABELS } from "./logic.js";
 import { lookup, reload, render, store } from "./app.js";
 import { confirmDialog, dialog } from "./dialogs.js";
 import { openDrawer } from "./drawer.js";
+import { openBrief } from "./brief.js";
 import { toast } from "./toast.js";
 
 export const calendarState = { configured: false, accounts: [], events: [], rangeKey: "", today: [] };
@@ -98,6 +99,7 @@ export function openMeeting(event = null, preset = {}) {
   const element = dialog("dialog--meeting", `
     <form class="dialog__body" novalidate>
       <header class="dialog__head"><h2>${editing ? "Spotkanie" : "Nowe spotkanie"}</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
+      ${editing ? `<button type="button" class="btn btn--ghost btn--sm meet-brief" data-brief-open>${icon("note", 16)}Brief ze spotkania</button>` : ""}
       ${editing && event.meetUrl ? `<a class="btn btn--primary meet-join" href="${escapeHtml(event.meetUrl)}" target="_blank" rel="noopener noreferrer">${icon("users", 18)}Dołącz do Google Meet</a>` : ""}
       <label class="field"><span>Tytuł</span><input name="title" maxlength="500" required value="${escapeHtml(editing ? event.title : preset.title || "")}" placeholder="Spotkanie z…"></label>
       <label class="field"><span>Klient</span><span class="select"><select name="clientId"><option value="">Bez klienta</option>${store.clients.filter(c => c.status !== "archived" || c.id === event?.clientId).map(c => `<option value="${c.id}"${c.id === (editing ? event.clientId : preset.clientId) ? " selected" : ""}>${escapeHtml(c.name)}${c.status === "lead" ? " (lead)" : ""}</option>`).join("")}</select>${icon("chevronDown", 16)}</span></label>
@@ -140,6 +142,7 @@ export function openMeeting(event = null, preset = {}) {
   });
   element.addEventListener("click", async e => {
     if (e.target.closest("[data-close]")) return element.close();
+    if (e.target.closest("[data-brief-open]")) { element.close(); return openBrief({ event }); }
     const linked = e.target.closest("[data-task]");
     if (linked) { element.close(); return openDrawer(Number(linked.dataset.task)); }
     if (e.target.closest("[data-add-task]")) {
