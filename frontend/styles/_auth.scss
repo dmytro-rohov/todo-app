@@ -93,3 +93,29 @@
 // Zero-specificity reset: wins over older layers, loses to every .auth-* rule above.
 :where(.auth) :where(p, h1, span, strong, label, footer, ul, li, a, input, button) { color: inherit; font-family: inherit; }
 :where(.auth) :where(footer, p, ul, li) { background: none; }
+
+/* Start-up screen (preloader), as in Mytko Workflow (StartupScreen): shown at load and after signing in. The bar
+   fills by real steps (data-done), the screen stays for a minimum time (js/startup.js), then fades out. */
+.startup{--auth-deep:#07110b;--auth-lime:#b6ef74;position:fixed;inset:0;z-index:100;display:grid;place-items:center;overflow:hidden;color:#f3f7f2;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:radial-gradient(ellipse 52% 46% at 50% 34%,#173a24 0%,#0f2518 42%,transparent 75%),radial-gradient(ellipse at 50% 50%,#0c1b12 0%,var(--auth-deep) 100%)}
+.startup[hidden]{display:none}
+.orbits--startup .orbits__ring--outer{--d:max(560px,min(67vw,119vh));width:var(--d);height:var(--d);left:calc(50% - var(--d) / 2);top:calc(49% - var(--d) / 2);border-color:#b6ef741c}
+.orbits--startup .orbits__ring--inner{--d:max(460px,min(55.5vw,99vh));width:var(--d);height:var(--d);left:calc(50% - var(--d) / 2);top:calc(49% - var(--d) / 2)}
+.orbits--startup .orbits__ring--outer i:first-child{--a:80deg}.orbits--startup .orbits__ring--outer i:last-child{--a:200deg;opacity:0}
+.orbits--startup .orbits__ring--inner i:first-child{--a:-53deg}.orbits--startup .orbits__ring--inner i:last-child{--a:229deg}
+.orbits--startup .orbits__sphere--a{--d:max(520px,58vw);width:var(--d);height:var(--d);left:calc(var(--d) * -.52);bottom:calc(var(--d) * -.62);background:radial-gradient(circle at 62% 22%,#74d75e 0%,#3f9a3c 18%,#1b4f26 40%,#0d2616 62%,transparent 72%);box-shadow:inset 0 2px 0 #a8f07a55;filter:saturate(1.05)}
+.orbits--startup .orbits__sphere--b{--d:max(380px,42vw);width:var(--d);height:var(--d);right:calc(var(--d) * -.38);top:calc(var(--d) * -.45);background:radial-gradient(circle at 30% 78%,#74d75e 0%,#3f9a3c 18%,#1b4f26 42%,#0d2616 64%,transparent 72%)}
+.startup__content{position:relative;display:flex;flex-direction:column;align-items:center;width:min(552px,calc(100vw - 48px));text-align:center}
+.startup__tile{position:relative;width:196px;height:196px}
+.startup__tile::before{content:"";position:absolute;inset:-70px -60px -40px;border-radius:50%;background:radial-gradient(circle,#5fc24e40 0%,transparent 65%);filter:blur(6px)}
+/* the Tasks logo is a tile with its own glow on transparency: no extra frame */
+.startup__tile img{position:relative;display:block;width:100%;height:100%}
+.startup__wordmark{margin:26px 0 0;color:#f3f7f2;font:700 17px/1 Manrope,Inter,sans-serif;letter-spacing:.32em;text-transform:lowercase}.startup__wordmark span{color:#8d9a91;font-weight:600}
+.startup__title{margin:44px 0 0;font:800 clamp(34px,3.1vw,54px)/1.1 Manrope,Inter,sans-serif;letter-spacing:-.01em}.startup__title span{color:var(--auth-lime)}
+.startup__bar{position:relative;width:100%;height:9px;margin-top:44px;overflow:hidden;border-radius:99px;background:#ffffff1c}
+.startup__bar span{position:absolute;inset:0 auto 0 0;width:0;border-radius:inherit;background:linear-gradient(90deg,#8fdc5a,#c9f78f);box-shadow:0 0 14px #a6e45b99;transition:width .35s ease}
+.startup__bar[data-done="1"] span{width:34%}.startup__bar[data-done="2"] span{width:67%}.startup__bar[data-done="3"] span{width:100%}
+.startup__status{min-height:1.4em;margin:32px 0 0;color:#e3ebe4;font-size:17px}
+.startup--leaving{pointer-events:none;animation:startup-leave .45s ease forwards}
+@keyframes startup-leave{to{opacity:0;visibility:hidden}}
+@media(max-width:480px){.startup__tile{width:150px;height:150px}.startup__title{margin-top:30px}.startup__bar{margin-top:32px}}
+@media(prefers-reduced-motion:reduce){.orbits__ring,.auth-spinner{animation:none}.startup__bar span{transition:none}.startup--leaving{display:none}}
