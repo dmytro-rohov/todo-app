@@ -87,6 +87,12 @@ function createGoogle({ clientId, clientSecret, redirectUri, fetchImpl = fetch,
       if (!response.ok && response.status !== 404 && response.status !== 410) throw new GoogleError(`Google ${response.status}`, response.status);
     },
 
+    // An invitation received by e-mail (Poczta): a copy with the organizer's iCalUID, without notifying anyone.
+    async importEvent(token, calendarId, event) {
+      return call(`${apiBase}/calendars/${encodeURIComponent(calendarId)}/events/import`,
+        { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(event) });
+    },
+
     // Busy intervals of the calendars, for the booking page (C3).
     async freeBusy(token, calendarIds, timeMin, timeMax) {
       const data = await call(`${apiBase}/freeBusy`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },

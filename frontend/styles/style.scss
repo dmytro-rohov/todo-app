@@ -176,7 +176,9 @@
         .i { color: var(--muted); }
         &:hover { background: var(--surface-3); }
         &.is-active { border-color: #b7e34d80; background: var(--accent-soft); color: var(--accent); font-weight: 700; .i { color: var(--accent); } }
+        &[hidden] { display: none; }
     }
+
 
     .toasts { position: fixed; z-index: 90; left: 50%; bottom: 24px; display: grid; gap: 8px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); }
     .toast {
@@ -623,7 +625,8 @@
             &__icon { display: none; }
         }
         .toolbar { gap: 10px; .split-btn { display: none; } .tabs { flex: 1 1 100%; } }
-        .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+        .tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+        .tab { position: relative; .count { position: absolute; top: 4px; right: 6px; min-width: 20px; height: 18px; padding: 0 5px; font-size: 11px; } }
         .tab { flex-direction: column; justify-content: center; gap: 3px; min-height: 54px; padding: 4px 2px; font-size: 12.5px; }
         .toolbar .filters-toggle { width: 100%; justify-content: center; }
         .fab {
@@ -698,6 +701,61 @@
         > span { display: grid; flex: 1; min-width: 160px; small { font-size: 12.5px; } .is-error { color: var(--danger); } }
     }
     .meet-join { justify-self: start; }
+
+    // ---- Poczta -------------------------------------------------------------------------------------------------
+    .tab .count { margin-left: 2px; background: var(--accent); color: var(--accent-contrast); }
+    .mail { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+    .mail__list, .mail__reader { min-width: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+    .mail__list { display: grid; grid-template-rows: auto 1fr; max-height: calc(100dvh - 220px); position: sticky; top: 12px; overflow: hidden; }
+    .mail__bar { display: grid; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); }
+    .mail__views { display: flex; flex-wrap: wrap; gap: 6px; .chip { cursor: pointer; } .chip.is-active { border-color: var(--accent); color: var(--accent); } b { color: var(--accent); } }
+    .mail__search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+        input { flex: 1; min-width: 0; min-height: 36px; border: 0; background: transparent; color: inherit; font: inherit; outline: none; } }
+    .mail__sync { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+    .mail__status { display: inline-flex; align-items: center; gap: 6px; &.is-error { color: var(--danger); } }
+    .mail__rows { margin: 0; padding: 4px; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+    .mail-row {
+        display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px;
+        background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer;
+        &:hover { background: var(--surface-2); } &.is-open { background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); }
+        &:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+        &.is-unread .mail-row__from, &.is-unread .mail-row__subject { font-weight: 750; color: #f3f7f2; }
+        &.is-unread .mail-row__from::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--accent); vertical-align: 1px; }
+    }
+    .mail-row__from, .mail-row__subject, .mail-row__snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mail-row__from { font-weight: 600; } .mail-row__when { color: var(--muted); font-size: 12.5px; }
+    .mail-row__subject { grid-column: 1 / -1; font-size: 14px; } .mail-row__snippet { grid-column: 1 / -1; color: var(--muted); font-size: 13px; }
+    .mail-row__meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 12px;
+        &:empty { display: none; } i { display: inline-flex; align-items: center; gap: 3px; font-style: normal; } .chip { min-height: 22px; padding: 0 8px; font-size: 12px; } }
+    .mail__reader { display: grid; gap: 14px; padding: 20px 22px; h2 { margin: 0; font-size: 21px; line-height: 1.3; overflow-wrap: anywhere; } }
+    .mail__reader--empty { place-items: center; min-height: 320px; text-align: center; }
+    .mail__back { display: none; justify-self: start; }
+    .mail__from { margin: 0; overflow-wrap: anywhere; }
+    .mail__client, .mail__actions, .mail-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .mail__actions a.btn, .mail-card__actions a.btn { color: inherit; text-decoration: none; }
+    .mail__tasks { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .mail__body { margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); white-space: pre-wrap;
+        overflow-wrap: anywhere; font: 14.5px/1.6 inherit; font-family: inherit; max-height: 60vh; overflow-y: auto; a { color: var(--accent); } }
+    .mail__files { margin: 0; display: flex; gap: 6px; align-items: center; font-size: 13px; }
+    .mail__ai { justify-self: start; }
+    .mail-card { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--border-strong); border-radius: 12px;
+        h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; .i { color: var(--accent); } .btn { margin-left: auto; } } p { margin: 0; } }
+    .mail-card--ai { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+    .mail-proposals { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none;
+        li { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+        li > span { display: grid; flex: 1; gap: 2px; min-width: 0; small { font-size: 12.5px; } } }
+    .badge--warn { color: var(--warning); }
+    .mail-off { max-width: 560px; margin: 40px auto; text-align: center; h2 { margin: 6px 0; } }
+    // Poczta has its own head and no task filters (also over the phone toolbar rules).
+    .app.view-mail .toolbar .filters-toggle, .app.view-mail .filters { display: none; }
+    @media (max-width: 900px) {
+        .mail { grid-template-columns: 1fr; }
+        .mail__list { position: static; max-height: none; }
+        .mail.is-reading .mail__list { display: none; }
+        .mail:not(.is-reading) .mail__reader { display: none; }
+        .mail__back { display: inline-flex; }
+        .mail__reader { padding: 16px; }
+    }
 
     // ---- accounts and shared spaces -----------------------------------------------------------------------------
     .shared-mark { display: inline-flex; margin-left: 2px; color: var(--muted); font-style: normal; .i { width: 14px; height: 14px; } }

@@ -72,6 +72,7 @@ function bodyHtml(task) {
         <dd><label class="select select--sm"><select data-field="projectId" aria-label="Projekt">${options(projects, task.projectId, "Bez projektu")}</select>${icon("chevronDown", 16)}</label></dd>
         ${isMember() ? "" : `<dt>${icon("users", 18)}Klient</dt>
         <dd><label class="select select--sm"><select data-field="clientId" aria-label="Klient">${options(store.clients.filter(c => c.status !== "archived" || c.id === task.clientId), task.clientId, lookup.clientOf(task) && !task.clientId ? `Z projektu: ${escapeHtml(lookup.client(lookup.clientOf(task))?.name || "")}` : "Bez klienta")}</select>${icon("chevronDown", 16)}</label></dd>`}
+        ${task.mailId && !isMember() ? `<dt>${icon("mail", 18)}E-mail</dt><dd><a class="btn btn--ghost btn--sm" href="#mail-${task.mailId}">Otwórz wiadomość</a></dd>` : ""}
         <dt>${icon("user", 18)}Wykonawca</dt>
         <dd><label class="select select--sm"><select data-field="assigneeId" aria-label="Wykonawca">${options(store.assignees, task.assigneeId, "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</label></dd>
         <dt>${icon("flag", 18)}Priorytet</dt>
