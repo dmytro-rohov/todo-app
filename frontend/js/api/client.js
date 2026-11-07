@@ -24,6 +24,15 @@ export const api = {
   updateSubtask: (id, subId, body) => request(`/api/tasks/${id}/subtasks/${subId}`, json("PATCH", body)),
   deleteSubtask: (id, subId) => request(`/api/tasks/${id}/subtasks/${subId}`, { method: "DELETE" }),
 
+  calendarAccounts: () => request("/api/calendar/accounts"),
+  calendarConnect: spaceId => request("/api/calendar/connect", json("POST", { spaceId })),
+  calendarSync: id => request(`/api/calendar/accounts/${id}/sync`, json("POST", {})),
+  calendarDisconnect: id => request(`/api/calendar/accounts/${id}`, { method: "DELETE" }),
+  events: (from, to) => request(`/api/calendar/events?from=${from}&to=${to}`),
+  createEvent: body => request("/api/calendar/events", json("POST", body)),
+  updateEvent: (id, body) => request(`/api/calendar/events/${id}`, json("PATCH", body)),
+  deleteEvent: id => request(`/api/calendar/events/${id}`, { method: "DELETE" }),
+
   list: kind => request(`/api/${kind}`),
   create: (kind, body) => request(`/api/${kind}`, json("POST", body)),
   update: (kind, id, body) => request(`/api/${kind}/${id}`, json(kind === "categories" ? "PUT" : "PATCH", body)),

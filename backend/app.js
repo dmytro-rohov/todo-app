@@ -9,6 +9,8 @@ const createArchiveRouter = require("./routes/archive");
 const createTaskDetailsRouter = require("./routes/task-details");
 const { createAuthRouter } = require("./routes/auth");
 const { createSsoRouter, createWorkflowHealth } = require("./routes/sso");
+const { createCalendarRouter, createGoogleCallback } = require("./routes/calendar");
+const { createGoogle } = require("./google");
 const { createSessionStore, cookieSettings } = require("./sessions");
 const { checkSchema } = require("./migrations");
 const {
@@ -80,6 +82,9 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   // refused before any other processing.
   const sso = config.auth.disabled ? null : config.auth.sso;
   const ssoLogin = sso ? sso.login : "";
+  const calendarConfig = config.calendar && config.calendar.key ? config.calendar : null;
+  const google = calendarConfig ? createGoogle({ ...calendarConfig, fetchImpl: options.fetchImpl, ...(options.googleUrls || {}) }) : null;
+  const calendarRouter = createCalendarRouter(pool, { google, key: calendarConfig?.key, cookie });
   const workflowUp = sso ? createWorkflowHealth(sso, options.fetchImpl) : null;
   const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso), ssoLogin, workflowUp });
   api.use("/auth", csrf, json, authRouter);
@@ -93,10 +98,19 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use("/projects", createProjectsRouter(pool));
   api.use("/assignees", createAssigneesRouter(pool));
   api.use("/archive", createArchiveRouter(pool, config.retention));
+  api.use("/calendar", calendarRouter);
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });
   app.use("/api", api);
+
+  if (google) {
+    const { ownerSession } = require("./security");
+    const { readCookie } = require("./sessions");
+    const isOwner = async req => config.auth.disabled ||
+      ownerSession(await sessions.verify(readCookie(req, cookie.name)), { username: config.auth.username, ssoLogin });
+    app.use("/auth/google", createGoogleCallback(pool, { google, key: calendarConfig.key, cookie, pendingCookie: calendarRouter.pendingCookie, isOwner }));
+  }
 
   if (sso) {
     app.use("/auth/mytko", createSsoRouter({ sso, publicOrigin: config.publicOrigin, cookie, startSession: authRouter.startSession, fetchImpl: options.fetchImpl, workflowUp }));
@@ -127,6 +141,7 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
 
   return {
     app,
+    calendar: google ? { google, key: calendarConfig.key } : null,
     markShuttingDown() {
       state.shuttingDown = true;
     },

@@ -148,6 +148,45 @@ const taskHistory = pgTable("task_history", {
   index("task_history_task").on(table.taskId),
 ]);
 
+// A Google Calendar connected to a space (one per space). The refresh token is AES-256-GCM encrypted with
+// TASKS_SECRET_KEY; a database read alone never yields access to the calendar.
+const calendarAccounts = pgTable("calendar_accounts", {
+  id: serial("id").primaryKey(),
+  spaceId: integer("space_id").notNull().references(() => spaces.id, { onDelete: "cascade" }),
+  provider: varchar("provider", { length: 20 }).default("google").notNull(),
+  accountEmail: varchar("account_email", { length: 200 }).notNull(),
+  calendarId: varchar("calendar_id", { length: 300 }).default("primary").notNull(),
+  refreshTokenEnc: text("refresh_token_enc").notNull(),
+  lastSyncAt: timestamptz("last_sync_at"),
+  lastError: varchar("last_error", { length: 300 }),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+}, (table) => [
+  check("calendar_accounts_provider_check", sql`${table.provider} IN ('google')`),
+  uniqueIndex("calendar_accounts_space").on(table.spaceId),
+]);
+
+// Local copy of the connected calendars' events (a window around today), refreshed by the sync job.
+const calendarEvents = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => calendarAccounts.id, { onDelete: "cascade" }),
+  externalId: varchar("external_id", { length: 300 }).notNull(),
+  title: varchar("title", { length: 500 }).default("").notNull(),
+  description: text("description").default("").notNull(),
+  location: varchar("location", { length: 500 }).default("").notNull(),
+  startAt: timestamptz("start_at").notNull(),
+  endAt: timestamptz("end_at").notNull(),
+  allDay: boolean("all_day").default(false).notNull(),
+  meetUrl: varchar("meet_url", { length: 300 }),
+  htmlLink: varchar("html_link", { length: 600 }),
+  // JSON array of {email, name, response}; empty text = none (the migration grammar admits no "[]" default)
+  attendees: text("attendees").default("").notNull(),
+  status: varchar("status", { length: 20 }).default("confirmed").notNull(),
+  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("calendar_events_account_external").on(table.accountId, table.externalId),
+  index("calendar_events_start").on(table.startAt),
+]);
+
 // Browser sessions of the single owner (password login or "Zaloguj kontem Mytko"). Only the SHA-256 of the random
 // cookie token is stored, so a database read never yields a usable session.
 const authSessions = pgTable("auth_sessions", {
@@ -164,6 +203,8 @@ const authSessions = pgTable("auth_sessions", {
 ]);
 
 module.exports = {
+  calendarAccounts,
+  calendarEvents,
   authSessions,
   categories, spaces, projects, assignees, tasks, taskLabels, taskNotes, taskSubtasks, taskTimeEntries, taskHistory
 };
