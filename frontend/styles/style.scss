@@ -699,6 +699,16 @@
     }
     .meet-join { justify-self: start; }
 
+    // ---- accounts and shared spaces -----------------------------------------------------------------------------
+    .shared-mark { display: inline-flex; margin-left: 2px; color: var(--muted); font-style: normal; .i { width: 14px; height: 14px; } }
+    .manage__list li.is-shared { display: flex; align-items: center; gap: 10px; color: var(--muted);
+        .badge { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 12.5px; } }
+    .accounts { .account { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; } .is-disabled { opacity: .6; } }
+    .account__text { display: grid; flex: 1; min-width: 200px; small { font-size: 12.5px; } }
+    .account__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .accounts__add { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); h3 { margin: 0; font-size: 15px; } }
+    .accounts__password { display: flex; gap: 8px; input { flex: 1; min-width: 0; } }
+
     // ---- clients (CRM-lite) ------------------------------------------------------------------------------------
     .chip--client { border-color: color-mix(in srgb, var(--c, var(--accent)) 45%, transparent); color: color-mix(in srgb, var(--c, var(--accent)) 55%, white); .i { color: var(--c, var(--accent)); } }
     .lead-badge {

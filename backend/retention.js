@@ -2,11 +2,11 @@
 //
 // 1. A task "done" for RETENTION_ARCHIVE_DAYS moves to the archive (archived_at), recorded in its history.
 // 2. Archived tasks are deleted for good, with their notes, subtasks, timers and history (FK cascade):
-//    private ones (the built-in private space, or no space) after RETENTION_DELETE_PRIVATE_DAYS in the archive,
+//    private ones (the owner's or a member's private space, or no space) after RETENTION_DELETE_PRIVATE_DAYS in the archive,
 //    all others (Praca, clients' projects, own spaces) after RETENTION_DELETE_WORK_DAYS.
 // A value of 0 switches that step off.
 const { withTransaction } = require("./db");
-const { defaultSpaces } = require("./spaces");
+const { PRIVATE_SPACES } = require("./spaces");
 const { recordTaskChanges } = require("./task-history");
 
 const RETENTION_LOCK_ID = 7243917463;
@@ -22,7 +22,6 @@ async function runRetention(pool, settings) {
   return withTransaction(pool, async client => {
     const { rows: [lock] } = await client.query("SELECT pg_try_advisory_xact_lock($1) AS ok", [RETENTION_LOCK_ID]);
     if (!lock.ok) return { archived: 0, deleted: 0, skipped: true };
-    const privateId = (await defaultSpaces(client)).private ?? null;
     let archived = [];
     if (settings.archiveDays) {
       ({ rows: archived } = await client.query(
@@ -36,13 +35,13 @@ async function runRetention(pool, settings) {
     let deleted = 0;
     if (settings.deletePrivateDays) {
       deleted += (await client.query(
-        `DELETE FROM tasks WHERE archived_at <= now() - make_interval(days => $1) AND (space_id IS NULL OR space_id = $2)`,
-        [settings.deletePrivateDays, privateId])).rowCount;
+        `DELETE FROM tasks WHERE archived_at <= now() - make_interval(days => $1) AND (space_id IS NULL OR space_id IN ${PRIVATE_SPACES})`,
+        [settings.deletePrivateDays])).rowCount;
     }
     if (settings.deleteWorkDays) {
       deleted += (await client.query(
-        `DELETE FROM tasks WHERE archived_at <= now() - make_interval(days => $1) AND space_id IS NOT NULL AND space_id IS DISTINCT FROM $2`,
-        [settings.deleteWorkDays, privateId])).rowCount;
+        `DELETE FROM tasks WHERE archived_at <= now() - make_interval(days => $1) AND space_id IS NOT NULL AND space_id NOT IN ${PRIVATE_SPACES}`,
+        [settings.deleteWorkDays])).rowCount;
     }
     return { archived: archived.length, deleted, skipped: false };
   });

@@ -43,6 +43,13 @@
       "when": 1794048864392,
       "tag": "0005_clients",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794052255845,
+      "tag": "0006_accounts",
+      "breakpoints": true
     }
   ]
 }

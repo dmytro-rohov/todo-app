@@ -12,11 +12,31 @@ const {
 
 const timestamptz = name => timestamp(name, { withTimezone: true });
 
+// Accounts besides the owner (e.g. a partner), created by the owner in the app. The owner is not a row: the owner is
+// AUTH_USERNAME / the Mytko login, and every row with user_id NULL is the owner's. A member sees their own rows and
+// the spaces marked shared; clients, calendars, booking and accounts stay the owner's. Logins are stored lowercase.
+const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  login: varchar("login", { length: 40 }).notNull(),
+  name: varchar("name", { length: 80 }).notNull(),
+  passwordHash: text("password_hash").notNull(),
+  role: varchar("role", { length: 20 }).default("member").notNull(),
+  disabledAt: timestamptz("disabled_at"),
+  lastLoginAt: timestamptz("last_login_at"),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+}, (table) => [
+  check("users_role_check", sql`${table.role} IN ('member')`),
+  uniqueIndex("users_login").on(table.login),
+]);
+
+const ownerColumn = () => integer("user_id").references(() => users.id, { onDelete: "cascade" });
+
 // Labels. The table keeps its original name; the API and UI call them labels/categories.
 const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 50 }).notNull(),
   color: varchar("color", { length: 7 }).notNull(),
+  userId: ownerColumn(),
 });
 
 // Top-level split of all tasks: the built-in "work" and "private" spaces (key set) plus the owner's own (key null).
@@ -29,6 +49,10 @@ const spaces = pgTable("spaces", {
   agentVisible: boolean("agent_visible").default(false).notNull(),
   position: integer("position").default(0).notNull(),
   createdAt: timestamptz("created_at").defaultNow().notNull(),
+  // A member's own spaces carry user_id; a member's built-in private space has key "private:<user id>".
+  userId: ownerColumn(),
+  // Shared spaces (e.g. "Dom") are seen and edited by every account.
+  shared: boolean("shared").default(false).notNull(),
 }, (table) => [
   check("spaces_position_check", sql`${table.position} >= 0`),
   uniqueIndex("spaces_key").on(table.key).where(sql`${table.key} IS NOT NULL`),
@@ -67,6 +91,7 @@ const projects = pgTable("projects", {
   position: integer("position").default(0).notNull(),
   archivedAt: timestamptz("archived_at"),
   createdAt: timestamptz("created_at").defaultNow().notNull(),
+  userId: ownerColumn(),
 }, (table) => [
   check("projects_position_check", sql`${table.position} >= 0`),
   index("projects_space").on(table.spaceId),
@@ -78,6 +103,7 @@ const assignees = pgTable("assignees", {
   name: varchar("name", { length: 80 }).notNull(),
   color: varchar("color", { length: 7 }).notNull(),
   createdAt: timestamptz("created_at").defaultNow().notNull(),
+  userId: ownerColumn(),
 });
 
 const tasks = pgTable("tasks", {
@@ -109,6 +135,8 @@ const tasks = pgTable("tasks", {
   clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
   // The meeting the task was created for (preparation, follow-up, from a brief).
   meetingId: integer("meeting_id").references(() => calendarEvents.id, { onDelete: "set null" }),
+  // Who created the task (NULL = the owner). Seen by its creator, and by everyone while it is in a shared space.
+  userId: ownerColumn(),
 }, (table) => [
   check("tasks_status_check", sql`${table.status} IN ('todo', 'in_progress', 'done')`),
   check("tasks_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2', 'P3')`),
@@ -119,6 +147,7 @@ const tasks = pgTable("tasks", {
   index("tasks_assignee").on(table.assigneeId),
   index("tasks_client").on(table.clientId),
   index("tasks_meeting").on(table.meetingId),
+  index("tasks_user").on(table.userId),
 ]);
 
 const taskLabels = pgTable("task_labels", {
@@ -227,6 +256,8 @@ const authSessions = pgTable("auth_sessions", {
   method: varchar("method", { length: 10 }).notNull(),
   createdAt: timestamptz("created_at").defaultNow().notNull(),
   expiresAt: timestamptz("expires_at").notNull(),
+  // A member's session (method "password"); NULL for the owner's.
+  userId: ownerColumn(),
 }, (table) => [
   check("auth_sessions_method_check", sql`${table.method} IN ('password', 'mytko')`),
   uniqueIndex("auth_sessions_token").on(table.tokenHash),
@@ -234,6 +265,7 @@ const authSessions = pgTable("auth_sessions", {
 ]);
 
 module.exports = {
+  users,
   clients,
   calendarAccounts,
   calendarEvents,

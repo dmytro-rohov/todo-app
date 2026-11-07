@@ -2,27 +2,31 @@ const express = require("express");
 const { withTransaction } = require("../db");
 const { recordTaskChanges } = require("../task-history");
 const { parseId, validateProject } = require("../validation");
+const { isOwner, userId, own, visibleProject, visibleSpace } = require("../access");
 
-const PROJECT_COLUMNS = `id, space_id AS "spaceId", client_id AS "clientId", name, color, position, archived_at AS "archivedAt", created_at AS "createdAt"`;
+const PROJECT_COLUMNS = `id, space_id AS "spaceId", client_id AS "clientId", name, color, position, archived_at AS "archivedAt", created_at AS "createdAt",
+  (user_id IS NOT DISTINCT FROM $1::integer) AS "mine"`;
 
-async function spaceExists(db, id) {
-  return (await db.query("SELECT 1 FROM spaces WHERE id = $1", [id])).rowCount > 0;
+// Projects go into spaces the account can see (its own or shared); clients are the owner's only.
+async function spaceExists(db, id, user) {
+  return (await db.query(`SELECT 1 FROM spaces s WHERE s.id = $1 AND ${visibleSpace("s", "$2::integer")}`, [id, userId(user)])).rowCount > 0;
 }
+const clientRefused = (user, value) => !isOwner(user) && (value.clientId ?? null) !== null;
 
 module.exports = function createProjectsRouter(pool) {
   const router = express.Router();
 
   // ?spaceId=<id> narrows to one space; archived projects are listed only with ?archived=true.
   router.get("/", async (req, res) => {
-    const conditions = [];
-    const params = [];
+    const params = [userId(req.user)];
+    const conditions = [visibleProject("projects", "$1::integer")];
     if (req.query.spaceId !== undefined) {
       const id = parseId(req.query.spaceId);
       if (id === null) return res.status(400).json({ message: "Invalid filter" });
       params.push(id); conditions.push(`space_id = $${params.length}`);
     }
     if (req.query.archived !== "true") conditions.push("archived_at IS NULL");
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const where = `WHERE ${conditions.join(" AND ")}`;
     const result = await pool.query(`SELECT ${PROJECT_COLUMNS} FROM projects ${where} ORDER BY position ASC, id ASC`, params);
     res.json(result.rows);
   });
@@ -31,10 +35,11 @@ module.exports = function createProjectsRouter(pool) {
     const { error, value } = validateProject(req.body);
     if (error) return res.status(400).json({ message: error });
     if (value.archived !== undefined) return res.status(400).json({ message: "Unknown or empty fields" });
-    if (!(await spaceExists(pool, value.spaceId))) return res.status(400).json({ message: "Space does not exist" });
+    if (clientRefused(req.user, value)) return res.status(400).json({ message: "Clients are not available for this account" });
+    if (!(await spaceExists(pool, value.spaceId, req.user))) return res.status(400).json({ message: "Space does not exist" });
     const result = await pool.query(
-      `INSERT INTO projects (space_id, name, color, position, client_id) VALUES ($1, $2, $3, $4, $5) RETURNING ${PROJECT_COLUMNS}`,
-      [value.spaceId, value.name, value.color, value.position ?? 0, value.clientId ?? null]
+      `INSERT INTO projects (space_id, name, color, position, client_id, user_id) VALUES ($2, $3, $4, $5, $6, $1) RETURNING ${PROJECT_COLUMNS}`,
+      [userId(req.user), value.spaceId, value.name, value.color, value.position ?? 0, value.clientId ?? null]
     );
     res.status(201).json(result.rows[0]);
   });
@@ -45,12 +50,13 @@ module.exports = function createProjectsRouter(pool) {
     if (id === null) return res.status(400).json({ message: "Invalid project id" });
     const { error, value } = validateProject(req.body, { partial: true });
     if (error) return res.status(400).json({ message: error });
+    if (clientRefused(req.user, value)) return res.status(400).json({ message: "Clients are not available for this account" });
     const project = await withTransaction(pool, async client => {
-      const current = await client.query("SELECT space_id FROM projects WHERE id = $1 FOR UPDATE", [id]);
+      const current = await client.query(`SELECT space_id FROM projects p WHERE p.id = $1 AND ${own("p", "$2::integer")} FOR UPDATE`, [id, userId(req.user)]);
       if (!current.rowCount) return { status: 404 };
-      if (value.spaceId !== undefined && !(await spaceExists(client, value.spaceId))) return { status: 400 };
+      if (value.spaceId !== undefined && !(await spaceExists(client, value.spaceId, req.user))) return { status: 400 };
       const columns = { name: "name", color: "color", position: "position", spaceId: "space_id", clientId: "client_id" };
-      const params = [];
+      const params = [userId(req.user)];
       const assignments = Object.entries(value).filter(([key]) => key in columns).map(([key, val]) => {
         params.push(val); return `${columns[key]} = $${params.length}`;
       });
@@ -63,7 +69,7 @@ module.exports = function createProjectsRouter(pool) {
           "UPDATE tasks SET space_id = $1, updated_at = now() WHERE project_id = $2 AND space_id IS DISTINCT FROM $1 RETURNING id, space_id",
           [value.spaceId, id]);
         for (const row of moved.rows) {
-          await recordTaskChanges(client, row.id, [{ field: "space_id", oldValue: String(oldSpace), newValue: String(value.spaceId) }]);
+          await recordTaskChanges(client, row.id, [{ field: "space_id", oldValue: String(oldSpace), newValue: String(value.spaceId) }], req.user.actor);
         }
       }
       return { status: 200, body: updated.rows[0] };
@@ -78,10 +84,11 @@ module.exports = function createProjectsRouter(pool) {
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ message: "Invalid project id" });
     const deleted = await withTransaction(pool, async client => {
+      if (!(await client.query(`SELECT 1 FROM projects p WHERE p.id = $1 AND ${own("p", "$2::integer")}`, [id, userId(req.user)])).rowCount) return 0;
       const released = await client.query(
         "UPDATE tasks SET project_id = NULL, updated_at = now() WHERE project_id = $1 RETURNING id", [id]);
       for (const row of released.rows) {
-        await recordTaskChanges(client, row.id, [{ field: "project_id", oldValue: String(id), newValue: null }]);
+        await recordTaskChanges(client, row.id, [{ field: "project_id", oldValue: String(id), newValue: null }], req.user.actor);
       }
       return (await client.query("DELETE FROM projects WHERE id = $1", [id])).rowCount;
     });

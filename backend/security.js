@@ -119,8 +119,18 @@ function ownerCredentials({ username, passwordHash, failWindowMs, failMax }) {
   const expectedUser = sha256(username);
   const failures = createWindowCounter({ windowMs: failWindowMs });
 
+  const matches = async (user, password) => {
+    const userOk = crypto.timingSafeEqual(sha256(String(user)), expectedUser);
+    const passwordOk = await verifyPassword(String(password), parsedHash);
+    return userOk && passwordOk;
+  };
   return {
     username,
+    // Without counting a failure: the login screen tries member accounts before it counts one (fail()).
+    matches,
+    fail(req) {
+      failures.hit(clientAddress(req));
+    },
     // Returns the seconds to wait when this client is locked out after too many failures, else 0.
     lockedFor(req) {
       if (failMax === 0) return 0;
@@ -128,9 +138,7 @@ function ownerCredentials({ username, passwordHash, failWindowMs, failMax }) {
       return entry.count >= failMax ? Math.ceil((entry.resetAt - Date.now()) / 1000) : 0;
     },
     async check(req, user, password) {
-      const userOk = crypto.timingSafeEqual(sha256(String(user)), expectedUser);
-      const passwordOk = await verifyPassword(String(password), parsedHash);
-      if (userOk && passwordOk) return true;
+      if (await matches(user, password)) return true;
       failures.hit(clientAddress(req));
       return false;
     },
@@ -141,12 +149,14 @@ function ownerCredentials({ username, passwordHash, failWindowMs, failMax }) {
 // A session belongs to the owner only while it still matches the configuration: password sessions the owner login,
 // Mytko sessions the one allowed Workflow login (so changing either cuts older sessions).
 function ownerSession(session, { username, ssoLogin }) {
-  if (!session) return false;
+  if (!session || session.userId) return false;
   if (session.method === "password") return session.login === username;
   return session.method === "mytko" && Boolean(ssoLogin) && session.login === ssoLogin;
 }
 
-function ownerAuth({ credentials, sessions, cookieName, ssoLogin = "" }) {
+// Sets req.user: the owner (OWNER in access.js) or a member account (users.js) whose session is still valid.
+function ownerAuth({ credentials, sessions, cookieName, ssoLogin = "", users = null }) {
+  const { OWNER } = require("./access");
   // Successful Basic credentials are remembered (as a keyed digest, never in plain
   // text) so each request does not cost a full scrypt run.
   const cacheKey = crypto.randomBytes(32);
@@ -161,6 +171,13 @@ function ownerAuth({ credentials, sessions, cookieName, ssoLogin = "" }) {
       const session = await sessions.verify(readCookieValue(req, cookieName));
       if (ownerSession(session, { username: credentials.username, ssoLogin })) {
         req.auth = session;
+        req.user = OWNER;
+        return next();
+      }
+      const member = users && await users.forSession(session);
+      if (member) {
+        req.auth = session;
+        req.user = member;
         return next();
       }
     } catch (error) {
@@ -180,6 +197,7 @@ function ownerAuth({ credentials, sessions, cookieName, ssoLogin = "" }) {
     const cachedUntil = verified.get(digest);
     if (cachedUntil && cachedUntil > Date.now()) {
       req.auth = { login: credentials.username, method: "basic" };
+      req.user = OWNER;
       return next();
     }
 
@@ -192,6 +210,7 @@ function ownerAuth({ credentials, sessions, cookieName, ssoLogin = "" }) {
         if (verified.size > 1000) verified.clear();
         verified.set(digest, Date.now() + VERIFIED_TTL_MS);
         req.auth = { login: credentials.username, method: "basic" };
+        req.user = OWNER;
         return next();
       }
     } catch (error) {

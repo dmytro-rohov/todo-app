@@ -113,7 +113,7 @@ const asBoolean = value => (typeof value === "boolean" ? value : undefined);
 const asId = value => (parseId(value) === null ? undefined : Number(value));
 
 function validateSpace(data, { partial = false } = {}) {
-  return validateNamed(data, { partial, maxName: 50, extra: { agentVisible: asBoolean } });
+  return validateNamed(data, { partial, maxName: 50, extra: { agentVisible: asBoolean, shared: asBoolean } });
 }
 
 function validateProject(data, { partial = false } = {}) {

@@ -8,6 +8,9 @@ const createAssigneesRouter = require("./routes/assignees");
 const createArchiveRouter = require("./routes/archive");
 const createClientsRouter = require("./routes/clients");
 const createBookingRouter = require("./routes/booking");
+const createUsersRouter = require("./routes/users");
+const { createUserStore } = require("./users");
+const { OWNER, ownerOnly } = require("./access");
 const createTaskDetailsRouter = require("./routes/task-details");
 const { createAuthRouter } = require("./routes/auth");
 const { createSsoRouter, createWorkflowHealth } = require("./routes/sso");
@@ -88,9 +91,13 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   const google = calendarConfig ? createGoogle({ ...calendarConfig, fetchImpl: options.fetchImpl, ...(options.googleUrls || {}) }) : null;
   const calendarRouter = createCalendarRouter(pool, { google, key: calendarConfig?.key, cookie });
   const workflowUp = sso ? createWorkflowHealth(sso, options.fetchImpl) : null;
-  const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso), ssoLogin, workflowUp });
+  const users = createUserStore(pool);
+  const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso), ssoLogin, workflowUp,
+    users, pool });
   api.use("/auth", csrf, json, authRouter);
-  if (credentials) api.use(ownerAuth({ credentials, sessions, cookieName: cookie.name, ssoLogin }));
+  if (credentials) api.use(ownerAuth({ credentials, sessions, cookieName: cookie.name, ssoLogin, users }));
+  // With AUTH_DISABLED (local development only) every request is the owner's.
+  api.use((req, res, next) => { req.user ??= OWNER; next(); });
   api.use(csrf);
   api.use(json);
   api.use("/tasks", createTasksRouter(pool));
@@ -100,8 +107,10 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use("/projects", createProjectsRouter(pool));
   api.use("/assignees", createAssigneesRouter(pool));
   api.use("/archive", createArchiveRouter(pool, config.retention));
-  api.use("/calendar", calendarRouter);
-  api.use("/clients", createClientsRouter(pool));
+  // The owner's business tools; member accounts have the task app only.
+  api.use("/calendar", ownerOnly, calendarRouter);
+  api.use("/clients", ownerOnly, createClientsRouter(pool));
+  api.use("/users", ownerOnly, createUsersRouter(pool, { sessions, reserved: [config.auth.username, ssoLogin, "dev", "owner"].filter(Boolean) }));
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });

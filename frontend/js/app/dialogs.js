@@ -3,7 +3,7 @@ import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { isoDay, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
-import { lookup, paint, reload, render, store, upsertTask } from "./app.js";
+import { isMember, lookup, paint, reload, render, store, upsertTask } from "./app.js";
 import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.js";
 import { openClient } from "./clients.js";
 import { openDrawer } from "./drawer.js";
@@ -66,7 +66,7 @@ export function openNewTask({ status = "todo", dueDate = null, clientId = null, 
         <label class="field"><span>Projekt</span><span class="select"><select name="projectId">${choices(projectsFor(spaceId), project?.id, "Bez projektu")}</select>${icon("chevronDown", 16)}</span></label>
       </div>
       <div class="field-row">
-        <label class="field"><span>Klient</span><span class="select"><select name="clientId">${choices(store.clients.filter(c => c.status !== "archived"), clientId, "Bez klienta")}</select>${icon("chevronDown", 16)}</span></label>
+        ${isMember() ? "" : `<label class="field"><span>Klient</span><span class="select"><select name="clientId">${choices(store.clients.filter(c => c.status !== "archived"), clientId, "Bez klienta")}</select>${icon("chevronDown", 16)}</span></label>`}
         <label class="field"><span>Wykonawca</span><span class="select"><select name="assigneeId">${choices(store.assignees, null, "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</span></label>
       </div>
       ${store.labels.length ? `<fieldset class="label-picker"><legend>Etykiety</legend>${store.labels.map(label => `<label class="chip chip--label chip--toggle" data-c="${escapeHtml(label.color)}"><input type="checkbox" name="labelIds" value="${label.id}"${store.filters.labelId === label.id ? " checked" : ""}><i class="dot"></i>${escapeHtml(label.name)}</label>`).join("")}</fieldset>` : ""}
@@ -111,7 +111,7 @@ export function openNewTask({ status = "todo", dueDate = null, clientId = null, 
         spaceId: Number(form.spaceId.value) || null,
         projectId: Number(form.projectId.value) || null,
         assigneeId: Number(form.assigneeId.value) || null,
-        clientId: Number(form.clientId.value) || null,
+        clientId: Number(form.clientId?.value) || null,
         meetingId: meetingId || null,
         labelIds: [...form.querySelectorAll('[name="labelIds"]:checked')].map(input => Number(input.value)),
         description: form.description.value
@@ -138,17 +138,25 @@ const KINDS = {
   assignees: { title: "Wykonawcy", placeholder: "Nowy wykonawca…", list: () => store.assignees, hint: "Osoby, którym przypisujesz zadania (to nie są konta logowania). Usunięcie zostawia zadania bez wykonawcy." }
 };
 
+// Spaces, labels, assignees and projects of another account (seen through a shared space): shown, not editable.
+function sharedItemHtml(item) {
+  return `<li data-item="${item.id}" class="is-shared"><i class="dot" data-c="${escapeHtml(item.color)}"></i>
+    <span>${escapeHtml(item.name)}</span><span class="badge" title="Należy do innego konta, widoczna przez wspólną przestrzeń">${icon("users", 16)}wspólne</span></li>`;
+}
+
 function itemHtml(kind, item) {
+  if (item.mine === false) return sharedItemHtml(item);
   const builtIn = kind === "spaces" && item.key;
   const extra = kind === "clients"
     ? `<span class="select select--sm"><select name="status" aria-label="Status">${[["lead", "Lead"], ["client", "Klient"], ["archived", "Archiwum"]].map(([v, l]) => `<option value="${v}"${item.status === v ? " selected" : ""}>${l}</option>`).join("")}</select>${icon("chevronDown", 16)}</span>
        <button type="button" class="btn btn--ghost btn--sm" data-client-card="${item.id}">Karta</button>`
     : kind === "projects"
     ? `<span class="select select--sm"><select name="spaceId" aria-label="Przestrzeń">${choices(store.spaces, item.spaceId)}</select>${icon("chevronDown", 16)}</span>
-       <span class="select select--sm"><select name="clientId" aria-label="Klient">${choices(store.clients.filter(c => c.status !== "archived" || c.id === item.clientId), item.clientId, "Bez klienta")}</select>${icon("chevronDown", 16)}</span>
+       ${isMember() ? "" : `<span class="select select--sm"><select name="clientId" aria-label="Klient">${choices(store.clients.filter(c => c.status !== "archived" || c.id === item.clientId), item.clientId, "Bez klienta")}</select>${icon("chevronDown", 16)}</span>`}
        <label class="check" title="Zarchiwizowany projekt znika z list, jego zadania zostają"><input type="checkbox" name="archived"${item.archivedAt ? " checked" : ""}>Archiwum</label>`
     : kind === "spaces"
-      ? `<label class="check" title="Tylko takie przestrzenie mogą kiedyś zobaczyć integracje i agenci AI"><input type="checkbox" name="agentVisible"${item.agentVisible ? " checked" : ""}${item.key === "private" ? " disabled" : ""}>Dla agentów</label>`
+      ? `<label class="check" title="Wspólną przestrzeń widzą i edytują wszystkie konta (np. Dom, zakupy)"><input type="checkbox" name="shared"${item.shared ? " checked" : ""}${builtIn ? " disabled" : ""}>Wspólna</label>
+        ${isMember() ? "" : `<label class="check" title="Tylko takie przestrzenie mogą kiedyś zobaczyć integracje i agenci AI"><input type="checkbox" name="agentVisible"${item.agentVisible ? " checked" : ""}${item.key === "private" ? " disabled" : ""}>Dla agentów</label>`}`
       : "";
   const account = kind === "spaces" ? calendarState.accounts.find(a => a.spaceId === item.id) : null;
   const calendarRow = kind !== "spaces" ? "" : !calendarState.configured
@@ -172,7 +180,7 @@ function itemHtml(kind, item) {
 export function openManage(kind = "projects") {
   const element = dialog("dialog--manage", `<div class="dialog__body">
     <header class="dialog__head"><h2>Porządek</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
-    <div class="tabs tabs--sm" role="tablist">${Object.entries(KINDS).map(([key, k]) => `<button type="button" role="tab" class="tab" data-kind="${key}">${k.title}</button>`).join("")}</div>
+    <div class="tabs tabs--sm" role="tablist">${Object.entries(KINDS).filter(([key]) => key !== "clients" || !isMember()).map(([key, k]) => `<button type="button" role="tab" class="tab" data-kind="${key}">${k.title}</button>`).join("")}</div>
     <div class="manage" aria-live="polite"></div>
   </div>`);
   let active = kind;
@@ -186,7 +194,7 @@ export function openManage(kind = "projects") {
     const color = PALETTE[k.list().length % PALETTE.length];
     const defaultSpace = store.filters.spaceId || lookup.privateSpace()?.id;
     element.querySelector(".manage").innerHTML = `
-      <p class="manage__hint">${k.hint}</p>
+      <p class="manage__hint">${active === "spaces" && isMember() ? "Prywatne są wbudowane. Własne przestrzenie możesz oznaczyć jako wspólne: wtedy widzą je i edytują wszystkie konta. Przestrzenie oznaczone ikoną osób udostępnił ktoś inny." : k.hint}</p>
       <ul class="manage__list">${k.list().map(item => itemHtml(active, item)).join("") || `<li class="muted">Jeszcze nic tu nie ma.</li>`}</ul>
       <form class="manage__add" data-add>
         <input type="color" name="color" value="${color}" aria-label="Kolor">
@@ -253,13 +261,21 @@ export function openManage(kind = "projects") {
     const field = event.target.name;
     if (active === "projects") {
       body.spaceId = Number(row.querySelector('[name="spaceId"]').value);
-      body.clientId = Number(row.querySelector('[name="clientId"]').value) || null;
+      if (row.querySelector('[name="clientId"]')) body.clientId = Number(row.querySelector('[name="clientId"]').value) || null;
       if (field === "archived") { Object.keys(body).forEach(key => delete body[key]); body.archived = event.target.checked; }
     }
     if (active === "clients") {
       body.status = row.querySelector('[name="status"]').value;
     }
-    if (active === "spaces" && field === "agentVisible") { Object.keys(body).forEach(key => delete body[key]); body.agentVisible = event.target.checked; }
+    if (active === "spaces" && (field === "agentVisible" || field === "shared")) {
+      if (field === "shared" && !event.target.checked &&
+          !(await confirmDialog("Przestać udostępniać tę przestrzeń? Zadania innych kont z tej przestrzeni wrócą do ich Prywatnych.", "Przestań udostępniać"))) {
+        event.target.checked = true;
+        return;
+      }
+      Object.keys(body).forEach(key => delete body[key]);
+      body[field] = event.target.checked;
+    }
     try { await api.update(active, row.dataset.item, body); await afterChange(); } catch (error) { fail(error); await afterChange(); }
   });
 
@@ -278,5 +294,5 @@ export function openManage(kind = "projects") {
   draw();
   element.querySelector("[data-add] [name=name]").focus();
   // The calendar rows need the connected accounts; refresh them (also right after returning from Google).
-  if (active === "spaces") loadCalendarAccounts().then(() => { if (element.open) draw(); });
+  if (active === "spaces" && !isMember()) loadCalendarAccounts().then(() => { if (element.open) draw(); });
 }
