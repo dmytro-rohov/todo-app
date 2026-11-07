@@ -7,6 +7,7 @@
 #   e2e/ui-run.sh <image> <app|login> <out-prefix> [WxH ...]
 #
 #   CALENDAR=1 also turns on the booking API for a form served on 127.0.0.1:3198 (e2e/ui-booking.mjs).
+#   Modes: app (no login, seeded), login (login screen), accounts (owner / owner-test-password, not seeded).
 #   SEED=0 skips seeding (EXTRA=1 / PLANS=1 are passed to ui-seed.sh); LINKS="list calendar task-4" adds one
 #   screenshot per #link at the first size; TEST=e2e/ui-smoke.mjs runs that test instead of screenshots.
 set -euo pipefail
@@ -15,7 +16,7 @@ SIZES=${*:-1672x941}
 HERE=$(cd "$(dirname "$0")" && pwd)
 : "${TEST_MIGRATION_DATABASE_URL:?}" "${TEST_DATABASE_URL:?}"
 case "$TEST_MIGRATION_DATABASE_URL$TEST_DATABASE_URL" in *test*) ;; *) echo "refusing: not a test database" >&2; exit 2;; esac
-psql "$TEST_MIGRATION_DATABASE_URL" -qc "DROP TABLE IF EXISTS clients, calendar_events, calendar_accounts, auth_sessions, task_history, task_time_entries, task_subtasks, task_notes, task_labels, tasks, projects, spaces, assignees, categories CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;" 2>&1 | grep -v NOTICE || true
+psql "$TEST_MIGRATION_DATABASE_URL" -qc "DROP TABLE IF EXISTS users, clients, calendar_events, calendar_accounts, auth_sessions, task_history, task_time_entries, task_subtasks, task_notes, task_labels, tasks, projects, spaces, assignees, categories CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;" 2>&1 | grep -v NOTICE || true
 docker run --rm --network host --read-only -e MIGRATION_DATABASE_URL="$TEST_MIGRATION_DATABASE_URL" -e APP_DB_ROLE=tasks_app "$IMG" node backend/migrate.js >/dev/null
 AUTH=(-e AUTH_DISABLED=true)
 CAL=()
@@ -26,6 +27,11 @@ if [ -n "${CALENDAR:-}" ]; then
   export TASKS_SECRET_KEY
 fi
 [ "$MODE" = login ] && AUTH=(-e AUTH_USERNAME=owner -e "AUTH_PASSWORD_HASH=scrypt:1024:8:1:c2FsdHNhbHQ=:aGFzaGhhc2g=")
+# accounts: a real owner login (owner / owner-test-password) for tests that sign in, e.g. e2e/ui-accounts.mjs.
+if [ "$MODE" = accounts ]; then
+  HASH=$(printf '%s' owner-test-password | docker run --rm -i "$IMG" node backend/scripts/hash-password.js)
+  AUTH=(-e AUTH_USERNAME=owner -e "AUTH_PASSWORD_HASH=$HASH")
+fi
 docker rm -f tasks-ui-run >/dev/null 2>&1 || true
 docker run -d --name tasks-ui-run --network host --read-only --tmpfs /tmp -e NODE_ENV=development -e HOST=127.0.0.1 -e PORT=3197 \
   -e DATABASE_URL="$TEST_DATABASE_URL" -e PUBLIC_ORIGIN=http://127.0.0.1:3197 "${AUTH[@]}" "${CAL[@]}" "$IMG" >/dev/null

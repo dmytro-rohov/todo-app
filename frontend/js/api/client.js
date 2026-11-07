@@ -34,6 +34,8 @@ export const api = {
   deleteEvent: id => request(`/api/calendar/events/${id}`, { method: "DELETE" }),
   setEventClient: (id, clientId) => request(`/api/calendar/events/${id}/client`, json("PUT", { clientId })),
 
+  changePassword: (current, next) => request("/api/auth/password", json("POST", { current, next })),
+
   list: kind => request(`/api/${kind}`),
   create: (kind, body) => request(`/api/${kind}`, json("POST", body)),
   update: (kind, id, body) => request(`/api/${kind}/${id}`, json(kind === "categories" ? "PUT" : "PATCH", body)),

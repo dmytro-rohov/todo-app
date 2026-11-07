@@ -51,7 +51,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query(`DROP TABLE IF EXISTS public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
+    await owner.query(`DROP TABLE IF EXISTS public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
       public.task_labels, public.tasks, public.projects, public.spaces, public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
   });
@@ -146,7 +146,7 @@ describe("PostgreSQL integration", { skip, concurrency: false }, () => {
       WHERE conrelid = 'public.tasks'::regclass AND contype = 'f'`);
     assert.deepEqual(fks.rows.map(r => r.conname).sort(),
       ["tasks_assignee_id_assignees_id_fk", "tasks_category_id_categories_id_fk", "tasks_client_id_clients_id_fk",
-        "tasks_meeting_id_calendar_events_id_fk", "tasks_project_id_projects_id_fk", "tasks_space_id_spaces_id_fk"]);
+        "tasks_meeting_id_calendar_events_id_fk", "tasks_project_id_projects_id_fk", "tasks_space_id_spaces_id_fk", "tasks_user_id_users_id_fk"]);
     await assert.rejects(
       owner.query("INSERT INTO tasks (title, completed, date) VALUES ('x', NULL, '2026-10-30')"),
       /null value/);

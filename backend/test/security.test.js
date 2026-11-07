@@ -273,6 +273,8 @@ describe("input handling", () => {
       pool: fakePool({
         "UPDATE tasks": () => ({ rows: [], rowCount: 0 }),
         "DELETE FROM categories": () => ({ rows: [], rowCount: 0 }),
+        // labels the account can see: every id but 999
+        "FROM categories c WHERE c.id = ANY": (sql, params) => ({ rows: [{ n: params[0].filter(id => id !== 999).length }], rowCount: 1 }),
         "INSERT INTO tasks": (sql, params) => {
           lastQuery = params;
           if (params[3] === 999) {
@@ -312,7 +314,7 @@ describe("input handling", () => {
     const res = await post("/api/tasks", { title: "  Kupić mleko  ", date: "2026-10-30", categoryId: 2 });
     assert.equal(res.status, 201);
     // no space given and no built-in space in the fake database: the task is stored without one (= private)
-    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null, null, null, null, false, false, null, null]);
+    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null, null, null, null, false, false, null, null, null]);
   });
 
   test("unknown category -> 400 instead of 500", async () => {
@@ -514,6 +516,7 @@ describe("PATCH task contract", () => {
     const ctx = await startApp({ pool: fakePool({
       "UPDATE tasks SET": (sql, values) => { params = values; return { rows: [], rowCount: 1 }; },
       "INSERT INTO task_history": (sql, values) => { history.push(values); return { rows: [], rowCount: 2 }; },
+      "FROM tasks t WHERE t.id": () => ({ rows: [{}], rowCount: 1 }), // the owner sees the task
       "FROM tasks WHERE id": () => ({ rows: [reads++ === 0 ? before : returned], rowCount: 1 })
     }) });
     try {
@@ -544,7 +547,7 @@ describe("login screen API", () => {
   test("session state is readable anonymously and reveals nothing", async () => {
     const res = await ctx.request("/api/auth/session", { auth: null });
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { authenticated: false, login: null, method: null, expiresAt: null, ttlSeconds: 604800, mytkoLogin: false, mytkoAvailable: false });
+    assert.deepEqual(await res.json(), { authenticated: false, login: null, method: null, expiresAt: null, ttlSeconds: 604800, user: null, mytkoLogin: false, mytkoAvailable: false });
   });
 
   test("a correct login sets a host-only, HttpOnly, Secure, SameSite=Strict session cookie", async () => {

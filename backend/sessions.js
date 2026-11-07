@@ -30,14 +30,15 @@ function createSessionStore(pool, { ttlMs }) {
   return {
     ttlMs,
 
-    async create({ login, method }) {
+    // userId: a member's session (users.js); null for the owner's.
+    async create({ login, method, userId = null }) {
       const token = crypto.randomBytes(32).toString("base64url");
       const expiresAt = new Date(Date.now() + ttlMs);
       await withTransaction(pool, async client => {
         await client.query("DELETE FROM auth_sessions WHERE expires_at <= now()");
         await client.query(
-          "INSERT INTO auth_sessions (token_hash, login, method, expires_at) VALUES ($1, $2, $3, $4)",
-          [hashToken(token), login, method, expiresAt]);
+          "INSERT INTO auth_sessions (token_hash, login, method, expires_at, user_id) VALUES ($1, $2, $3, $4, $5)",
+          [hashToken(token), login, method, expiresAt, userId]);
         // Oldest sessions beyond the cap are dropped.
         await client.query(
           `DELETE FROM auth_sessions WHERE id IN (SELECT id FROM auth_sessions ORDER BY id DESC OFFSET ${MAX_SESSIONS})`);
@@ -48,7 +49,7 @@ function createSessionStore(pool, { ttlMs }) {
     async verify(token) {
       if (typeof token !== "string" || !TOKEN.test(token)) return null;
       const result = await pool.query(
-        `SELECT login, method, expires_at AS "expiresAt" FROM auth_sessions WHERE token_hash = $1 AND expires_at > now()`,
+        `SELECT login, method, expires_at AS "expiresAt", user_id AS "userId" FROM auth_sessions WHERE token_hash = $1 AND expires_at > now()`,
         [hashToken(token)]);
       return result.rows[0] || null;
     },
@@ -56,6 +57,11 @@ function createSessionStore(pool, { ttlMs }) {
     async revoke(token) {
       if (typeof token !== "string" || !TOKEN.test(token)) return;
       await pool.query("DELETE FROM auth_sessions WHERE token_hash = $1", [hashToken(token)]);
+    },
+
+    // Ends a member's sessions (password reset, account disabled).
+    async revokeUser(userId) {
+      await pool.query("DELETE FROM auth_sessions WHERE user_id = $1", [userId]);
     },
 
     async revokeAll() {

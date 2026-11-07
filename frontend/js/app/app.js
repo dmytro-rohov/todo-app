@@ -9,6 +9,7 @@ import { renderList, bindList } from "./list.js";
 import { renderCalendar, bindCalendar, afterCalendarRender } from "./calendar.js";
 import { calendarState, eventTime, loadCalendarAccounts, loadToday, openMeeting } from "./meetings.js";
 import { openClient } from "./clients.js";
+import { openAccounts, openPassword } from "./accounts.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog } from "./dialogs.js";
@@ -114,11 +115,14 @@ export function paint(element) {
   for (const node of element.querySelectorAll("[data-c]")) node.style.setProperty("--c", safeColor(node.dataset.c, "#7d8a80"));
 }
 
+// A member account (not the owner, the only administrator): the task app without clients, meetings and accounts.
+export const isMember = () => store.session?.user?.role === "member";
+
 export async function reload({ quiet = false } = {}) {
   try {
     const [tasks, spaces, projects, labels, assignees, clients] = await Promise.all([
       api.tasks(), api.list("spaces"), api.list("projects?archived=true"), api.list("categories"), api.list("assignees"),
-      api.list("clients?archived=true")
+      isMember() ? [] : api.list("clients?archived=true")
     ]);
     const now = Date.now();
     Object.assign(store, { tasks: tasks.map(t => ({ ...t, fetchedAt: now })), spaces, projects, labels, assignees, clients, fetchedAt: now });
@@ -176,7 +180,7 @@ function sidebarHtml() {
   const openCount = id => store.tasks.filter(t => isOpen(t) && (t.spaceId ?? lookup.privateSpace()?.id) === id).length;
   const projectCount = id => store.tasks.filter(t => isOpen(t) && t.projectId === id).length;
   const activeProjects = store.projects.filter(p => !p.archivedAt && (!filters.spaceId || p.spaceId === filters.spaceId));
-  const user = store.session?.login || "";
+  const user = store.session?.user?.name || store.session?.login || "";
   return `
     <div class="sidebar__brand">
       <img src="./icons/icon-192.png" alt="" width="44" height="44">
@@ -192,26 +196,28 @@ function sidebarHtml() {
       <p class="nav-heading"><span>Przestrzenie</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="spaces" aria-label="Zarządzaj przestrzeniami">${icon("plus", 16)}</button></p>
       ${store.spaces.map(space => `
         <button type="button" class="nav-item nav-item--space${filters.spaceId === space.id && !filters.projectId ? " is-active" : ""}" data-action="scope" data-space="${space.id}" data-project="" title="${escapeHtml(space.name)}">
-          <i class="dot" data-c="${escapeHtml(space.color)}"></i><span>${escapeHtml(space.name)}</span><em>${openCount(space.id)}</em>
+          <i class="dot" data-c="${escapeHtml(space.color)}"></i><span>${escapeHtml(space.name)}</span>${space.shared ? `<i class="shared-mark" title="Wspólna przestrzeń">${icon("users", 14)}</i>` : ""}<em>${openCount(space.id)}</em>
         </button>`).join("")}
       <p class="nav-heading"><span>Projekty</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="projects" aria-label="Zarządzaj projektami">${icon("plus", 16)}</button></p>
       ${activeProjects.length ? activeProjects.map(project => `
         <button type="button" class="nav-item nav-item--sub${filters.projectId === project.id ? " is-active" : ""}" data-action="scope" data-space="${project.spaceId}" data-project="${project.id}" title="${escapeHtml(project.name)}">
           <span class="folder" data-c="${escapeHtml(project.color)}">${icon("folder", 16)}</span><span>${escapeHtml(project.name)}</span><em>${projectCount(project.id)}</em>
         </button>`).join("") : '<p class="nav-empty">Brak projektów w tej przestrzeni.</p>'}
-      <p class="nav-heading"><span>Klienci</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="clients" aria-label="Zarządzaj klientami">${icon("plus", 16)}</button></p>
+      ${isMember() ? "" : `<p class="nav-heading"><span>Klienci</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="clients" aria-label="Zarządzaj klientami">${icon("plus", 16)}</button></p>
       ${store.clients.filter(c => c.status !== "archived").map(client => `
         <button type="button" class="nav-item nav-item--sub${filters.clientId === client.id ? " is-active" : ""}" data-action="client-scope" data-client="${client.id}" title="${escapeHtml(client.name)}">
           <span class="folder" data-c="${escapeHtml(client.color)}">${icon("user", 16)}</span><span>${escapeHtml(client.name)}</span>${client.status === "lead" ? '<i class="lead-badge">lead</i>' : `<em>${client.openTasks}</em>`}
-        </button>`).join("") || '<p class="nav-empty">Brak klientów.</p>'}
+        </button>`).join("") || '<p class="nav-empty">Brak klientów.</p>'}`}
       <p class="nav-heading"><span>Porządek</span></p>
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="categories" title="Etykiety">${icon("tag", 18)}<span>Etykiety</span><em>${store.labels.length}</em></button>
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees" title="Wykonawcy">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
+      ${isMember() ? "" : `<button type="button" class="nav-item nav-item--sub" data-action="accounts" title="Konta">${icon("lock", 18)}<span>Konta</span></button>`}
     </nav>
     <div class="sidebar__foot">
       <div class="profile">
         <span class="avatar avatar--lime">${escapeHtml(initials(user))}</span>
-        <span class="profile__text"><strong>${escapeHtml(user)}</strong><small>${store.session?.method === "mytko" ? "Konto Mytko" : "Mytko Tasks"}</small></span>
+        <span class="profile__text"><strong>${escapeHtml(user)}</strong><small>${isMember() ? escapeHtml(store.session.login) : store.session?.method === "mytko" ? "Administrator · konto Mytko" : "Administrator"}</small></span>
+        ${isMember() ? `<button type="button" class="icon-btn" data-action="password" aria-label="Zmień hasło" title="Zmień hasło">${icon("lock")}</button>` : ""}
         <button type="button" class="icon-btn" data-action="logout" aria-label="Wyloguj" title="Wyloguj">${icon("logout")}</button>
       </div>
     </div>`;
@@ -261,9 +267,9 @@ function filtersHtml() {
     <label class="select"><span class="visually-hidden">Projekt</span><select data-filter="projectId">
       ${option("", "Wszystkie projekty", !f.projectId)}${projects.map(p => option(p.id, p.name, f.projectId === p.id)).join("")}
     </select>${icon("chevronDown", 18)}</label>
-    <label class="select"><span class="visually-hidden">Klient</span><select data-filter="clientId">
+    ${isMember() ? "" : `<label class="select"><span class="visually-hidden">Klient</span><select data-filter="clientId">
       ${option("", "Wszyscy klienci", !f.clientId)}${store.clients.filter(c => c.status !== "archived").map(c => option(c.id, c.name, f.clientId === c.id)).join("")}
-    </select>${icon("chevronDown", 18)}</label>
+    </select>${icon("chevronDown", 18)}</label>`}
     <label class="select"><span class="visually-hidden">Etykieta</span><select data-filter="labelId">
       ${option("", "Wszystkie etykiety", !f.labelId)}${store.labels.map(l => option(l.id, l.name, f.labelId === l.id)).join("")}
     </select>${icon("chevronDown", 18)}</label>
@@ -415,6 +421,10 @@ async function handleAction(target, event) {
   } else if (action === "client-scope") {
     toggleSidebar(false);
     setFilter({ clientId: Number(target.dataset.client), spaceId: null, projectId: null });
+  } else if (action === "accounts") {
+    openAccounts();
+  } else if (action === "password") {
+    openPassword();
   } else if (action === "client-card") {
     openClient(Number(target.dataset.client));
   } else if (action === "new-meeting") {
@@ -517,7 +527,7 @@ export function startApp(element, session, { notice = null } = {}) {
   render();
   reload();
   loadArchive();
-  loadCalendarAccounts().then(loadToday).then(render);
+  if (!isMember()) loadCalendarAccounts().then(loadToday).then(render);
   if (notice) toast(notice.text, { tone: notice.tone });
   // Running timers tick; other devices' changes arrive when the tab comes back.
   setInterval(() => !isDragging() && root.querySelector("[data-timer]") && render(), 30000);

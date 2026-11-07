@@ -5,6 +5,7 @@ const { withTransaction } = require("../db");
 const { taskChanges, recordTaskChanges } = require("../task-history");
 const { statusAssignmentsSql } = require("../task-status");
 const { loadTask } = require("./tasks");
+const { userId, visibleTask } = require("../access");
 
 const NOTE_COLUMNS = `id, task_id AS "taskId", body, created_at AS "createdAt", updated_at AS "updatedAt"`;
 const SUBTASK_COLUMNS = `id, task_id AS "taskId", title, done, position, created_at AS "createdAt", completed_at AS "completedAt"`;
@@ -21,11 +22,11 @@ function isBody(data) {
 module.exports = function createTaskDetailsRouter(pool) {
   const router = express.Router();
 
-  // Resolves :id and makes sure the task exists; 400/404 otherwise.
+  // Resolves :id and makes sure the task exists and this account can see it; 400/404 otherwise.
   router.param("id", (req, res, next, raw) => {
     const id = parseId(raw);
     if (id === null) return res.status(400).json({ message: "Invalid task id" });
-    pool.query("SELECT 1 FROM tasks WHERE id = $1", [id]).then(result => {
+    pool.query(`SELECT 1 FROM tasks WHERE id = $1 AND ${visibleTask("tasks", "$2::integer")}`, [id, userId(req.user)]).then(result => {
       if (!result.rowCount) return res.status(404).json({ message: "Task not found" });
       req.taskId = id;
       next();
@@ -54,14 +55,17 @@ module.exports = function createTaskDetailsRouter(pool) {
       await client.query("SELECT pg_advisory_xact_lock($1)", [TIMER_LOCK_ID]);
       const before = await loadTask(client, req.taskId, { lock: true });
       if (before.status === "done" || before.status === "needs_review") return { conflict: true };
-      await client.query("UPDATE task_time_entries SET ended_at = now() WHERE ended_at IS NULL AND task_id <> $1", [req.taskId]);
+      // one running timer per account (its own tasks; the owner's are those without an account)
+      await client.query(
+        `UPDATE task_time_entries SET ended_at = now() WHERE ended_at IS NULL AND task_id <> $1
+           AND task_id IN (SELECT id FROM tasks WHERE user_id IS NOT DISTINCT FROM $2::integer)`, [req.taskId, userId(req.user)]);
       await client.query(
         "INSERT INTO task_time_entries (task_id) VALUES ($1) ON CONFLICT (task_id) WHERE ended_at IS NULL DO NOTHING", [req.taskId]);
       if (before.status === "todo" || before.status === "planned") {
         await client.query(`UPDATE tasks SET ${statusAssignmentsSql("$1").join(", ")}, updated_at = now() WHERE id = $2`, ["in_progress", req.taskId]);
       }
       const after = await loadTask(client, req.taskId);
-      await recordTaskChanges(client, req.taskId, taskChanges(before, after));
+      await recordTaskChanges(client, req.taskId, taskChanges(before, after), req.user.actor);
       return after;
     });
     if (task.conflict) return res.status(409).json({ message: "Only open tasks can be timed" });
