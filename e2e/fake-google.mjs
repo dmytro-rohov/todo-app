@@ -21,6 +21,11 @@ http.createServer((req, res) => {
     const url = new URL(req.url, "http://x");
     if (url.pathname === "/token") return send(200, { access_token: "fake-access", refresh_token: "fake-refresh", expires_in: 3600,
       id_token: ["e30", Buffer.from(JSON.stringify({ email: "hello@mytko.dev" })).toString("base64url"), "x"].join(".") });
+    if (url.pathname === "/cal/freeBusy") {
+      const { timeMin, timeMax } = JSON.parse(body);
+      const busy = events.filter(e => e.start?.dateTime && e.end.dateTime > timeMin && e.start.dateTime < timeMax).map(e => ({ start: e.start.dateTime, end: e.end.dateTime }));
+      return send(200, { calendars: { primary: { busy } } });
+    }
     const match = url.pathname.match(/^\/cal\/calendars\/[^/]+\/events(?:\/([^/]+))?$/);
     if (!match) return send(404, {});
     if (req.method === "GET") return send(200, { items: events });

@@ -6,6 +6,7 @@
 #   TEST_DATABASE_URL=postgres://tasks_app:…@127.0.0.1:55440/tasks_test \
 #   e2e/ui-run.sh <image> <app|login> <out-prefix> [WxH ...]
 #
+#   CALENDAR=1 also turns on the booking API for a form served on 127.0.0.1:3198 (e2e/ui-booking.mjs).
 #   SEED=0 skips seeding (EXTRA=1 / PLANS=1 are passed to ui-seed.sh); LINKS="list calendar task-4" adds one
 #   screenshot per #link at the first size; TEST=e2e/ui-smoke.mjs runs that test instead of screenshots.
 set -euo pipefail
@@ -21,7 +22,7 @@ CAL=()
 if [ -n "${CALENDAR:-}" ]; then
   # CALENDAR=1: a fake Google on 127.0.0.1:3299 and a connected calendar for the Praca space (see ui-seed.sh).
   node "$HERE/fake-google.mjs" & FAKE=$!
-  CAL=(-e GOOGLE_CLIENT_ID=dev -e GOOGLE_CLIENT_SECRET=dev -e "TASKS_SECRET_KEY=${TASKS_SECRET_KEY:=$(head -c 32 /dev/urandom | base64)}" -e GOOGLE_DEV_BASE=http://127.0.0.1:3299)
+  CAL=(-e GOOGLE_CLIENT_ID=dev -e GOOGLE_CLIENT_SECRET=dev -e "TASKS_SECRET_KEY=${TASKS_SECRET_KEY:=$(head -c 32 /dev/urandom | base64)}" -e GOOGLE_DEV_BASE=http://127.0.0.1:3299 -e BOOKING_ORIGINS=http://127.0.0.1:3198)
   export TASKS_SECRET_KEY
 fi
 [ "$MODE" = login ] && AUTH=(-e AUTH_USERNAME=owner -e "AUTH_PASSWORD_HASH=scrypt:1024:8:1:c2FsdHNhbHQ=:aGFzaGhhc2g=")

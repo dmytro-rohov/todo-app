@@ -44,6 +44,7 @@ function loadConfig(env = process.env) {
 
   const sso = loadSso(env, errors);
   const calendar = loadCalendar(env, errors, publicOrigin);
+  const booking = loadBooking(env, errors, { calendar, isProduction });
 
   if (errors.length > 0) {
     const error = new Error(`Invalid configuration:\n- ${errors.join("\n- ")}`);
@@ -78,6 +79,7 @@ function loadConfig(env = process.env) {
     },
     // Archive after N days done; delete private / other archived tasks after N days in the archive. 0 = off.
     calendar,
+    booking,
     retention: {
       archiveDays: toInt(env.RETENTION_ARCHIVE_DAYS, 7),
       deletePrivateDays: toInt(env.RETENTION_DELETE_PRIVATE_DAYS, 7),
@@ -133,6 +135,56 @@ function loadCalendar(env, errors, publicOrigin) {
     Object.assign(calendar, { authBase: env.GOOGLE_DEV_BASE, tokenUrl: `${env.GOOGLE_DEV_BASE}/token`, apiBase: `${env.GOOGLE_DEV_BASE}/cal` });
   }
   return calendar;
+}
+
+// The public booking API for the own form on mytko.dev (routes/booking.js): on when BOOKING_ORIGINS lists the sites
+// allowed to call it (CORS) and the Google Calendar settings are set. Slots come from the BOOKING_SPACE's calendar.
+function loadBooking(env, errors, { calendar, isProduction }) {
+  if (!env.BOOKING_ORIGINS) return null;
+  if (!calendar) {
+    errors.push("BOOKING_ORIGINS needs GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and TASKS_SECRET_KEY");
+    return null;
+  }
+  const origins = env.BOOKING_ORIGINS.split(",").map(item => item.trim()).filter(Boolean);
+  for (const origin of origins) {
+    const local = !isProduction && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    if (!/^https:\/\/[a-z0-9.-]+(:\d+)?$/.test(origin) && !local) errors.push(`BOOKING_ORIGINS: "${origin}" is not an https origin without path`);
+  }
+  const timeZone = env.BOOKING_TIME_ZONE || "Europe/Warsaw";
+  try { new Intl.DateTimeFormat("en-US", { timeZone }); } catch { errors.push("BOOKING_TIME_ZONE must be an IANA time zone, e.g. Europe/Warsaw"); }
+  const hours = (env.BOOKING_HOURS || "09:00-17:00").split("-");
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (hours.length !== 2 || !hours.every(h => time.test(h)) || hours[0] >= hours[1]) errors.push("BOOKING_HOURS must look like 09:00-17:00");
+  const days = parseDays(env.BOOKING_DAYS || "1-5");
+  if (!days) errors.push("BOOKING_DAYS must list weekdays 1 (Monday) to 7, e.g. 1-5 or 1,2,4");
+  const bounded = (name, fallback, min, max) => {
+    const value = toInt(env[name], fallback);
+    if (value < min || value > max) errors.push(`${name} must be between ${min} and ${max}`);
+    return value;
+  };
+  const spaceKey = env.BOOKING_SPACE || "work";
+  if (!/^[a-z0-9_-]{1,20}$/.test(spaceKey)) errors.push("BOOKING_SPACE must be a space key, e.g. work");
+  return {
+    origins, timeZone, hours, days: days || [], spaceKey,
+    slotMinutes: bounded("BOOKING_SLOT_MINUTES", 30, 15, 240),
+    bufferMinutes: bounded("BOOKING_BUFFER_MINUTES", 15, 0, 120),
+    noticeHours: bounded("BOOKING_NOTICE_HOURS", 24, 0, 336),
+    horizonDays: bounded("BOOKING_HORIZON_DAYS", 28, 1, 90),
+    perHour: bounded("BOOKING_IP_HOURLY_MAX", 5, 1, 100),
+    perDay: bounded("BOOKING_DAILY_MAX", 20, 1, 500)
+  };
+}
+
+function parseDays(value) {
+  const days = new Set();
+  for (const part of value.split(",").map(item => item.trim())) {
+    const match = /^([1-7])(?:-([1-7]))?$/.exec(part);
+    if (!match) return null;
+    const [from, to] = [Number(match[1]), Number(match[2] || match[1])];
+    if (from > to) return null;
+    for (let day = from; day <= to; day++) days.add(day);
+  }
+  return [...days];
 }
 
 function toInt(value, fallback) {

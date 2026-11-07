@@ -7,6 +7,7 @@ const createProjectsRouter = require("./routes/projects");
 const createAssigneesRouter = require("./routes/assignees");
 const createArchiveRouter = require("./routes/archive");
 const createClientsRouter = require("./routes/clients");
+const createBookingRouter = require("./routes/booking");
 const createTaskDetailsRouter = require("./routes/task-details");
 const { createAuthRouter } = require("./routes/auth");
 const { createSsoRouter, createWorkflowHealth } = require("./routes/sso");
@@ -104,6 +105,12 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });
+  // The booking form on mytko.dev: public, before the session-guarded API (routes/booking.js).
+  if (google && config.booking) {
+    const booking = createBookingRouter(pool, { google, key: calendarConfig.key, settings: config.booking });
+    stoppables.push(...booking.stoppables);
+    app.use("/api/public/booking", booking);
+  }
   app.use("/api", api);
 
   if (google) {

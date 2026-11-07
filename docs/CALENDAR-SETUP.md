@@ -26,6 +26,9 @@ GOOGLE_CLIENT_SECRET=<client secret>
 TASKS_SECRET_KEY=<openssl rand -base64 32>
 ```
 
+For the booking form on mytko.dev also `BOOKING_ORIGINS=https://mytko.dev,https://www.mytko.dev` (more settings in
+[BOOKING.md](BOOKING.md)).
+
 Check with `node check-env.cjs app.env migrate.env`, then recreate the `app` container (or release as usual).
 
 ## Each space: connect
