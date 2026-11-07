@@ -43,7 +43,9 @@ function choices(list, selected, empty) {
     `<option value="${item.id}"${item.id === selected ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}`;
 }
 
-export function openNewTask({ status = "todo", dueDate = null, clientId = null, meetingId = null, spaceId = null, title = "" } = {}) {
+// mailId / meetingId link the task to an e-mail / a meeting; onCreated(task) runs after it is saved.
+export function openNewTask({ status = "todo", dueDate = null, clientId = null, meetingId = null, mailId = null, spaceId = null, title = "", description = "",
+  onCreated = null } = {}) {
   const privateSpace = lookup.privateSpace();
   const project = lookup.project(store.filters.projectId);
   spaceId = spaceId || project?.spaceId || store.filters.spaceId || privateSpace?.id;
@@ -70,7 +72,7 @@ export function openNewTask({ status = "todo", dueDate = null, clientId = null, 
         <label class="field"><span>Wykonawca</span><span class="select"><select name="assigneeId">${choices(store.assignees, null, "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</span></label>
       </div>
       ${store.labels.length ? `<fieldset class="label-picker"><legend>Etykiety</legend>${store.labels.map(label => `<label class="chip chip--label chip--toggle" data-c="${escapeHtml(label.color)}"><input type="checkbox" name="labelIds" value="${label.id}"${store.filters.labelId === label.id ? " checked" : ""}><i class="dot"></i>${escapeHtml(label.name)}</label>`).join("")}</fieldset>` : ""}
-      <label class="field"><span>Opis</span><textarea class="textarea" name="description" rows="3" maxlength="5000" placeholder="Szczegóły, linki, kontekst…"></textarea></label>
+      <label class="field"><span>Opis</span><textarea class="textarea" name="description" rows="3" maxlength="5000" placeholder="Szczegóły, linki, kontekst…">${escapeHtml(description)}</textarea></label>
       <div class="dialog__actions">
         <label class="check"><input type="checkbox" name="open">Otwórz szczegóły po dodaniu</label>
         <button type="button" class="btn btn--ghost" data-close>Anuluj</button>
@@ -113,13 +115,15 @@ export function openNewTask({ status = "todo", dueDate = null, clientId = null, 
         assigneeId: Number(form.assigneeId.value) || null,
         clientId: Number(form.clientId?.value) || null,
         meetingId: meetingId || null,
+        mailId: mailId || null,
         labelIds: [...form.querySelectorAll('[name="labelIds"]:checked')].map(input => Number(input.value)),
         description: form.description.value
       });
       const open = form.open.checked;
       element.close();
       upsertTask(task);
-      toast(`Dodano „${task.title}”.`);
+      if (onCreated) await onCreated(task);
+      else toast(`Dodano „${task.title}”.`);
       if (open) openDrawer(task.id);
     } catch (failure) {
       submit.disabled = false;

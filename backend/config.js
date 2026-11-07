@@ -45,6 +45,8 @@ function loadConfig(env = process.env) {
   const sso = loadSso(env, errors);
   const calendar = loadCalendar(env, errors, publicOrigin);
   const booking = loadBooking(env, errors, { calendar, isProduction });
+  const mail = loadMail(env, errors, { isProduction });
+  const ai = loadAi(env, errors, { isProduction });
 
   if (errors.length > 0) {
     const error = new Error(`Invalid configuration:\n- ${errors.join("\n- ")}`);
@@ -80,6 +82,8 @@ function loadConfig(env = process.env) {
     // Archive after N days done; delete private / other archived tasks after N days in the archive. 0 = off.
     calendar,
     booking,
+    mail,
+    ai,
     retention: {
       archiveDays: toInt(env.RETENTION_ARCHIVE_DAYS, 7),
       deletePrivateDays: toInt(env.RETENTION_DELETE_PRIVATE_DAYS, 7),
@@ -173,6 +177,41 @@ function loadBooking(env, errors, { calendar, isProduction }) {
     perHour: bounded("BOOKING_IP_HOURLY_MAX", 5, 1, 100),
     perDay: bounded("BOOKING_DAILY_MAX", 20, 1, 500)
   };
+}
+
+// Poczta (routes/mail.js): the owner's mailbox over IMAP, e.g. OVH Zimbra. Host, user and password together, or none.
+// TLS always in production; MAIL_IMAP_TLS=false only for a local test server.
+function loadMail(env, errors, { isProduction }) {
+  const names = ["MAIL_IMAP_HOST", "MAIL_IMAP_USER", "MAIL_IMAP_PASSWORD"];
+  const set = names.filter(name => env[name]);
+  if (!set.length) return null;
+  if (set.length !== names.length) {
+    errors.push(`${names.join(", ")} must be set together`);
+    return null;
+  }
+  const tls = env.MAIL_IMAP_TLS !== "false";
+  if (!tls && isProduction) errors.push("MAIL_IMAP_TLS=false is not allowed in production");
+  if (!/^[A-Za-z0-9.-]{1,253}$/.test(env.MAIL_IMAP_HOST)) errors.push("MAIL_IMAP_HOST must be a host name, e.g. ssl0.ovh.net");
+  const port = toInt(env.MAIL_IMAP_PORT, tls ? 993 : 143);
+  if (port < 1 || port > 65535) errors.push("MAIL_IMAP_PORT must be a port number");
+  const limit = toInt(env.MAIL_FETCH_LIMIT, 200);
+  if (limit < 10 || limit > 2000) errors.push("MAIL_FETCH_LIMIT must be between 10 and 2000");
+  return {
+    host: env.MAIL_IMAP_HOST, port, tls, user: env.MAIL_IMAP_USER, password: env.MAIL_IMAP_PASSWORD,
+    address: (env.MAIL_ADDRESS || env.MAIL_IMAP_USER).toLowerCase(), mailbox: env.MAIL_MAILBOX || "INBOX",
+    limit, everyMs: toInt(env.MAIL_SYNC_MINUTES, 3) * 60000
+  };
+}
+
+// Claude (Anthropic API) for proposals from e-mails and meeting briefs; off without ANTHROPIC_API_KEY.
+function loadAi(env, errors, { isProduction }) {
+  if (!env.ANTHROPIC_API_KEY) return null;
+  const model = env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
+  if (!/^[a-z0-9.-]{3,80}$/.test(model)) errors.push("ANTHROPIC_MODEL must be a model id, e.g. claude-sonnet-5-5");
+  const ai = { apiKey: env.ANTHROPIC_API_KEY, model, apiBase: "https://api.anthropic.com" };
+  // Local testing only (a fake Anthropic API): never in production.
+  if (!isProduction && env.ANTHROPIC_DEV_BASE) ai.apiBase = env.ANTHROPIC_DEV_BASE;
+  return ai;
 }
 
 function parseDays(value) {

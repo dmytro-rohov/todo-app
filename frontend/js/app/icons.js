@@ -31,6 +31,7 @@ const PATHS = {
   sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
   x: '<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/>',
   lock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
   logout: '<path d="M14 5H6.5v14H14"/><path d="M10.5 12H20M16.5 8.5 20 12l-3.5 3.5"/>',
   trash: '<path d="M5 7h14M10 4h4M7 7l1 12.5h8L17 7"/>',

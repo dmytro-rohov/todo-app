@@ -16,7 +16,7 @@ SIZES=${*:-1672x941}
 HERE=$(cd "$(dirname "$0")" && pwd)
 : "${TEST_MIGRATION_DATABASE_URL:?}" "${TEST_DATABASE_URL:?}"
 case "$TEST_MIGRATION_DATABASE_URL$TEST_DATABASE_URL" in *test*) ;; *) echo "refusing: not a test database" >&2; exit 2;; esac
-psql "$TEST_MIGRATION_DATABASE_URL" -qc "DROP TABLE IF EXISTS users, clients, calendar_events, calendar_accounts, auth_sessions, task_history, task_time_entries, task_subtasks, task_notes, task_labels, tasks, projects, spaces, assignees, categories CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;" 2>&1 | grep -v NOTICE || true
+psql "$TEST_MIGRATION_DATABASE_URL" -qc "DROP TABLE IF EXISTS mail_messages, users, clients, calendar_events, calendar_accounts, auth_sessions, task_history, task_time_entries, task_subtasks, task_notes, task_labels, tasks, projects, spaces, assignees, categories CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;" 2>&1 | grep -v NOTICE || true
 docker run --rm --network host --read-only -e MIGRATION_DATABASE_URL="$TEST_MIGRATION_DATABASE_URL" -e APP_DB_ROLE=tasks_app "$IMG" node backend/migrate.js >/dev/null
 AUTH=(-e AUTH_DISABLED=true)
 CAL=()
@@ -26,6 +26,17 @@ if [ -n "${CALENDAR:-}" ]; then
   CAL=(-e GOOGLE_CLIENT_ID=dev -e GOOGLE_CLIENT_SECRET=dev -e "TASKS_SECRET_KEY=${TASKS_SECRET_KEY:=$(head -c 32 /dev/urandom | base64)}" -e GOOGLE_DEV_BASE=http://127.0.0.1:3299 -e BOOKING_ORIGINS=http://127.0.0.1:3198)
   export TASKS_SECRET_KEY
 fi
+MAILENV=()
+if [ -n "${MAIL:-}" ]; then
+  # MAIL=1: a GreenMail IMAP server on 127.0.0.1:3144 with test messages, and a fake Claude on 127.0.0.1:3298.
+  docker rm -f tasks-ui-greenmail >/dev/null 2>&1 || true
+  docker run -d --name tasks-ui-greenmail -p 127.0.0.1:3144:3143 -e GREENMAIL_OPTS="-Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=hello:imap-test-only@mytko.dev -Dgreenmail.users.login=email" greenmail/standalone:2.1.3 >/dev/null
+  for _ in $(seq 1 30); do (echo > /dev/tcp/127.0.0.1/3144) 2>/dev/null && break; sleep 1; done; sleep 2
+  node "$HERE/mail-seed.mjs"
+  node "$HERE/fake-claude.mjs" & CLAUDE=$!
+  MAILENV=(-e MAIL_IMAP_HOST=127.0.0.1 -e MAIL_IMAP_PORT=3144 -e MAIL_IMAP_TLS=false -e MAIL_IMAP_USER=hello@mytko.dev -e MAIL_IMAP_PASSWORD=imap-test-only
+    -e ANTHROPIC_API_KEY=test -e ANTHROPIC_DEV_BASE=http://127.0.0.1:3298)
+fi
 [ "$MODE" = login ] && AUTH=(-e AUTH_USERNAME=owner -e "AUTH_PASSWORD_HASH=scrypt:1024:8:1:c2FsdHNhbHQ=:aGFzaGhhc2g=")
 # accounts: a real owner login (owner / owner-test-password) for tests that sign in, e.g. e2e/ui-accounts.mjs.
 if [ "$MODE" = accounts ]; then
@@ -34,8 +45,8 @@ if [ "$MODE" = accounts ]; then
 fi
 docker rm -f tasks-ui-run >/dev/null 2>&1 || true
 docker run -d --name tasks-ui-run --network host --read-only --tmpfs /tmp -e NODE_ENV=development -e HOST=127.0.0.1 -e PORT=3197 \
-  -e DATABASE_URL="$TEST_DATABASE_URL" -e PUBLIC_ORIGIN=http://127.0.0.1:3197 "${AUTH[@]}" "${CAL[@]}" "$IMG" >/dev/null
-trap 'docker rm -f tasks-ui-run >/dev/null 2>&1; [ -n "${FAKE:-}" ] && kill "$FAKE" 2>/dev/null' EXIT
+  -e DATABASE_URL="$TEST_DATABASE_URL" -e PUBLIC_ORIGIN=http://127.0.0.1:3197 "${AUTH[@]}" "${CAL[@]}" "${MAILENV[@]}" "$IMG" >/dev/null
+trap 'docker rm -f tasks-ui-run >/dev/null 2>&1; [ -n "${FAKE:-}" ] && kill "$FAKE" 2>/dev/null; [ -n "${CLAUDE:-}" ] && kill "$CLAUDE" 2>/dev/null; [ -n "${MAIL:-}" ] && docker rm -f tasks-ui-greenmail >/dev/null 2>&1' EXIT
 for _ in $(seq 1 30); do curl -fs http://127.0.0.1:3197/readyz >/dev/null 2>&1 && break; sleep 1; done
 [ "$MODE" = app ] && [ "${SEED:-1}" != 0 ] && bash "$HERE/ui-seed.sh" >/dev/null
 if [ -n "${TEST:-}" ]; then rm -rf /tmp/tasks-e2e-profile; node "$TEST"; exit $?; fi

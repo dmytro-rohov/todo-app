@@ -9,6 +9,8 @@ const createArchiveRouter = require("./routes/archive");
 const createClientsRouter = require("./routes/clients");
 const createBookingRouter = require("./routes/booking");
 const createUsersRouter = require("./routes/users");
+const createMailRouter = require("./routes/mail");
+const { createImapSource, scheduleMailSync } = require("./mail-sync");
 const { createUserStore } = require("./users");
 const { OWNER, ownerOnly } = require("./access");
 const createTaskDetailsRouter = require("./routes/task-details");
@@ -110,6 +112,12 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   // The owner's business tools; member accounts have the task app only.
   api.use("/calendar", ownerOnly, calendarRouter);
   api.use("/clients", ownerOnly, createClientsRouter(pool));
+  // Poczta: the mailbox source can be replaced in tests (options.mailSource); the sync runs every few minutes.
+  const mailSource = config.mail ? (options.mailSource || createImapSource(config.mail)) : null;
+  const mailSync = config.mail ? scheduleMailSync(pool, mailSource, config.mail, { firstRunMs: options.mailFirstRunMs ?? 15000 }) : null;
+  if (mailSync) stoppables.push(mailSync);
+  api.use("/mail", ownerOnly, createMailRouter(pool, { mail: config.mail, source: mailSource, sync: mailSync, ai: config.ai, google,
+    key: calendarConfig?.key, fetchImpl: options.fetchImpl }));
   api.use("/users", ownerOnly, createUsersRouter(pool, { sessions, reserved: [config.auth.username, ssoLogin, "dev", "owner"].filter(Boolean) }));
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });

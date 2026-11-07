@@ -10,13 +10,14 @@ import { renderCalendar, bindCalendar, afterCalendarRender } from "./calendar.js
 import { calendarState, eventTime, loadCalendarAccounts, loadToday, openMeeting } from "./meetings.js";
 import { openClient } from "./clients.js";
 import { openAccounts, openPassword } from "./accounts.js";
+import { bindMail, loadMail, mailAddress, mailBadge, renderMail, showMail } from "./mail.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
 
 const PREFS = "mytko-tasks-prefs";
-const VIEWS = { board: ["board", "Tablica"], list: ["list", "Lista"], calendar: ["calendar", "Kalendarz"], archive: ["archive", "Archiwum"] };
+const VIEWS = { board: ["board", "Tablica"], list: ["list", "Lista"], calendar: ["calendar", "Kalendarz"], archive: ["archive", "Archiwum"], mail: ["mail", "Poczta"] };
 
 export const store = {
   session: null,
@@ -39,11 +40,11 @@ export const store = {
 let root;
 let pendingLink = null;
 
-// Links: #board, #list, #calendar choose the view; #task-<id>, #new and #manage-<kind> open after loading.
+// Links: #board, #list, #calendar, #mail choose the view; #task-<id>, #mail-<id>, #new and #manage-<kind> open after loading.
 function readLink() {
   const hash = window.location.hash.slice(1);
   if (VIEWS[hash]) store.view = hash;
-  else if (/^task-\d+$|^new$|^manage-(spaces|projects|categories|assignees)$/.test(hash)) pendingLink = hash;
+  else if (/^task-\d+$|^mail-\d+$|^new$|^manage-(spaces|projects|categories|assignees)$/.test(hash)) pendingLink = hash;
 }
 
 function writeLink() {
@@ -57,6 +58,7 @@ function openLink() {
   pendingLink = null;
   if (link === "new") openNewTask();
   else if (link.startsWith("task-")) openDrawer(Number(link.slice(5)));
+  else if (link.startsWith("mail-")) { if (!isMember()) showMail(Number(link.slice(5))); }
   else openManage(link.slice(7));
 }
 
@@ -224,6 +226,10 @@ function sidebarHtml() {
 }
 
 function headHtml() {
+  if (store.view === "mail") {
+    return `<div class="page-head__title"><span class="page-head__icon">${icon("mail", 30)}</span>
+      <div><h1>Poczta</h1><p>${escapeHtml(mailAddress() || "Skrzynka studia")} · wiadomości, zadania i leady z e-maili</p></div></div>`;
+  }
   const { project, space } = scopeTitle();
   const client = lookup.client(store.filters.clientId);
   const count = counters(store.tasks, store.filters, context());
@@ -301,6 +307,7 @@ export function render() {
   root.querySelector(".page-head").innerHTML = headHtml();
   root.classList.toggle("sidebar-collapsed", store.sidebarCollapsed);
   root.classList.toggle("filters-open", store.filtersOpen);
+  root.classList.toggle("view-mail", store.view === "mail");
   const f = store.filters;
   const active = [f.status, f.projectId, f.clientId, f.labelId, f.assigneeId, f.quick, !f.showDone].filter(Boolean).length;
   const badge = root.querySelector(".filters-toggle .count");
@@ -312,6 +319,11 @@ export function render() {
   const hasDue = store.tasks.some(t => isOpen(t) && t.dueDate && t.dueDate <= isoDay());
   root.querySelector(".bell").classList.toggle("has-dot", hasDue || calendarState.today.length > 0);
   root.querySelector('.menu [data-action="new-meeting"]').hidden = !(calendarState.configured && calendarState.accounts.length);
+  const mailTab = root.querySelector('[data-view="mail"]');
+  mailTab.hidden = isMember();
+  mailTab.querySelector(".count").hidden = !mailBadge();
+  mailTab.querySelector(".count").textContent = String(mailBadge());
+  if (store.view === "mail" && isMember()) store.view = "board";
   for (const tab of root.querySelectorAll("[data-view]")) {
     tab.classList.toggle("is-active", tab.dataset.view === store.view);
     tab.setAttribute("aria-selected", String(tab.dataset.view === store.view));
@@ -324,7 +336,7 @@ export function render() {
   } : null;
   view.dataset.view = store.view;
   view.innerHTML = store.view === "list" ? renderList() : store.view === "calendar" ? renderCalendar()
-    : store.view === "archive" ? renderArchive() : renderBoard();
+    : store.view === "archive" ? renderArchive() : store.view === "mail" ? renderMail() : renderBoard();
   if (keep) {
     const board = view.querySelector(".board");
     if (board) board.scrollLeft = keep.left;
@@ -358,6 +370,7 @@ function shellHtml() {
         <button type="button" role="tab" class="tab" data-view="list">${icon("list")}<span>Lista</span></button>
         <button type="button" role="tab" class="tab" data-view="calendar">${icon("calendar")}<span>Kalendarz</span></button>
         <button type="button" role="tab" class="tab" data-view="archive">${icon("archive")}<span>Archiwum</span></button>
+        <button type="button" role="tab" class="tab" data-view="mail" hidden>${icon("mail")}<span>Poczta</span><em class="count" hidden></em></button>
       </div>
       <button type="button" class="btn btn--ghost filters-toggle" data-action="filters-toggle" aria-expanded="false" aria-controls="filters">${icon("sliders", 18)}<span>Filtry</span><em class="count" hidden></em></button>
       <div class="split-btn">
@@ -491,6 +504,7 @@ export function startApp(element, session, { notice = null } = {}) {
     writeLink();
     render();
     if (store.view === "archive") loadArchive();
+    if (store.view === "mail") loadMail({ quiet: false });
   });
   root.querySelector(".filters").addEventListener("change", event => {
     const key = event.target.dataset.filter;
@@ -524,13 +538,17 @@ export function startApp(element, session, { notice = null } = {}) {
   bindList(root);
   bindCalendar(root);
   bindArchive(root);
+  bindMail(root);
   render();
   const ready = reload();
   loadArchive();
-  if (!isMember()) loadCalendarAccounts().then(loadToday).then(render);
+  if (!isMember()) {
+    loadCalendarAccounts().then(loadToday).then(render);
+    loadMail();
+  }
   if (notice) toast(notice.text, { tone: notice.tone });
   // Running timers tick; other devices' changes arrive when the tab comes back.
   setInterval(() => !isDragging() && root.querySelector("[data-timer]") && render(), 30000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reload({ quiet: true }); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { reload({ quiet: true }); loadMail(); } });
   return { closeDrawer, ready };
 }

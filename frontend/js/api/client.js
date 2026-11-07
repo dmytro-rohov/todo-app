@@ -34,6 +34,15 @@ export const api = {
   deleteEvent: id => request(`/api/calendar/events/${id}`, { method: "DELETE" }),
   setEventClient: (id, clientId) => request(`/api/calendar/events/${id}/client`, json("PUT", { clientId })),
 
+  mail: (view, q) => request(`/api/mail?view=${encodeURIComponent(view)}${q ? `&q=${encodeURIComponent(q)}` : ""}`),
+  mailMessage: id => request(`/api/mail/${id}`),
+  mailSeen: id => request(`/api/mail/${id}/seen`, json("POST", {})),
+  mailUpdate: (id, body) => request(`/api/mail/${id}`, json("PATCH", body)),
+  mailSync: () => request("/api/mail/sync", json("POST", {})),
+  mailLead: id => request(`/api/mail/${id}/lead`, json("POST", {})),
+  mailSuggest: id => request(`/api/mail/${id}/suggest`, json("POST", {})),
+  mailInvite: id => request(`/api/mail/${id}/invite`, json("POST", {})),
+
   changePassword: (current, next) => request("/api/auth/password", json("POST", { current, next })),
 
   list: kind => request(`/api/${kind}`),

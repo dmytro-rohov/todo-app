@@ -18,7 +18,7 @@ const TASK_COLUMNS = `
   TO_CHAR(due_date, 'YYYY-MM-DD') AS "dueDate",
   created_at AS "createdAt", updated_at AS "updatedAt", completed_at AS "completedAt", archived_at AS "archivedAt",
   space_id AS "spaceId", project_id AS "projectId", assignee_id AS "assigneeId", review_requested_at AS "reviewRequestedAt",
-  planned_at AS "plannedAt", client_id AS "clientId", meeting_id AS "meetingId",
+  planned_at AS "plannedAt", client_id AS "clientId", meeting_id AS "meetingId", mail_id AS "mailId",
   ARRAY_REMOVE(ARRAY[category_id] || ARRAY(
     SELECT l.category_id FROM task_labels l
     WHERE l.task_id = tasks.id AND l.category_id IS DISTINCT FROM tasks.category_id ORDER BY l.id), NULL) AS "labelIds",
@@ -80,7 +80,7 @@ async function resolvePlacement(db, current, value, spaces, user) {
 // Labels and the assignee must be ones the account can see; clients and meetings are the owner's only.
 async function checkReferences(db, user, value) {
   const uid = userId(user);
-  if (!isOwner(user) && ((value.clientId ?? null) !== null || (value.meetingId ?? null) !== null)) {
+  if (!isOwner(user) && ((value.clientId ?? null) !== null || (value.meetingId ?? null) !== null || (value.mailId ?? null) !== null)) {
     throw new TaskInputError("Clients and meetings are not available for this account");
   }
   const labels = [...new Set([...(value.labelIds || []), ...(value.categoryId != null ? [value.categoryId] : [])])];
@@ -109,6 +109,7 @@ function sendWriteError(res, error) {
     const message = /assignee/.test(error.constraint || "") ? "Assignee does not exist"
       : /client/.test(error.constraint || "") ? "Client does not exist"
       : /meeting/.test(error.constraint || "") ? "Meeting does not exist"
+      : /mail/.test(error.constraint || "") ? "E-mail does not exist"
       : /project/.test(error.constraint || "") ? "Project does not exist"
       : /space/.test(error.constraint || "") ? "Space does not exist" : "Category does not exist";
     return res.status(400).json({ message });
@@ -128,7 +129,7 @@ module.exports = function createTasksRouter(pool) {
   router.get("/", async (req, res) => {
     const params = [userId(req.user)];
     const conditions = ["archived_at IS NULL", visibleTask("tasks", "$1::integer")];
-    for (const [key, column, choices] of [["priority", "priority", ["P0", "P1", "P2", "P3"]], ["projectId", "project_id", null], ["assigneeId", "assignee_id", null], ["meetingId", "meeting_id", null]]) {
+    for (const [key, column, choices] of [["priority", "priority", ["P0", "P1", "P2", "P3"]], ["projectId", "project_id", null], ["assigneeId", "assignee_id", null], ["meetingId", "meeting_id", null], ["mailId", "mail_id", null]]) {
       if (req.query[key] === undefined) continue;
       if (choices ? !choices.includes(req.query[key]) : parseId(req.query[key]) === null) return res.status(400).json({ message: "Invalid filter" });
       params.push(req.query[key]); conditions.push(`${column} = $${params.length}`);
@@ -169,7 +170,7 @@ module.exports = function createTasksRouter(pool) {
       return res.status(400).json({ message: error });
     }
 
-    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position","spaceId","projectId","labelIds","assigneeId","clientId","meetingId"].includes(key)));
+    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position","spaceId","projectId","labelIds","assigneeId","clientId","meetingId","mailId"].includes(key)));
     const extraValidation = Object.keys(extras).length ? validateTaskPatch(extras) : { value: {} };
     if (extraValidation.error) return res.status(400).json({ message: extraValidation.error });
     const domain = extraValidation.value;
@@ -188,17 +189,17 @@ module.exports = function createTasksRouter(pool) {
           `WITH next AS (SELECT nextval(pg_get_serial_sequence('tasks', 'id')) AS id)
           INSERT INTO tasks
           (id, title, completed, date, category_id, description, status, priority, due_date, position, completed_at, space_id, project_id,
-           assignee_id, review_requested_at, planned_at, client_id, meeting_id, user_id)
+           assignee_id, review_requested_at, planned_at, client_id, meeting_id, user_id, mail_id)
           SELECT next.id, $1::varchar, $2::boolean, $3::date, $4::integer, $5::text, $6::text, $7::text, $8::date,
             COALESCE($9::bigint, next.id), CASE WHEN $2::boolean THEN now() ELSE NULL END, $10::integer, $11::integer,
             $12::integer, CASE WHEN $13::boolean THEN now() ELSE NULL END, CASE WHEN $14::boolean THEN now() ELSE NULL END,
-            $15::integer, $16::integer, $17::integer
+            $15::integer, $16::integer, $17::integer, $18::integer
           FROM next
           RETURNING id`,
           [value.title, status === "done", value.date, labelIds ? labelIds[0] ?? null : value.categoryId, domain.description || "",
             status === "needs_review" ? "in_progress" : status === "planned" ? "todo" : status, domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null,
             placement.spaceId ?? null, placement.projectId ?? null, domain.assigneeId ?? null, status === "needs_review", status === "planned",
-            domain.clientId ?? null, domain.meetingId ?? null, userId(req.user)]
+            domain.clientId ?? null, domain.meetingId ?? null, userId(req.user), domain.mailId ?? null]
         );
         const id = inserted.rows[0].id;
         if (labelIds && labelIds.length > 1) await setLabels(client, id, labelIds);
@@ -256,7 +257,7 @@ module.exports = function createTasksRouter(pool) {
           Object.assign(fields, await resolvePlacement(client, before, value, await defaultSpaces(client, req.user), req.user));
         }
         const { status, ...plain } = fields;
-        const columns = { title: "title", description: "description", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", spaceId: "space_id", projectId: "project_id", assigneeId: "assignee_id", clientId: "client_id", meetingId: "meeting_id" };
+        const columns = { title: "title", description: "description", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", spaceId: "space_id", projectId: "project_id", assigneeId: "assignee_id", clientId: "client_id", meetingId: "meeting_id", mailId: "mail_id" };
         const params = [];
         const assignments = Object.entries(plain).map(([key, val]) => {
           params.push(val); return `${columns[key]} = $${params.length}`;

@@ -314,7 +314,7 @@ describe("input handling", () => {
     const res = await post("/api/tasks", { title: "  Kupić mleko  ", date: "2026-10-30", categoryId: 2 });
     assert.equal(res.status, 201);
     // no space given and no built-in space in the fake database: the task is stored without one (= private)
-    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null, null, null, null, false, false, null, null, null]);
+    assert.deepEqual(lastQuery, ["Kupić mleko", false, "2026-10-30", 2, "", "todo", "P2", null, null, null, null, null, false, false, null, null, null, null]);
   });
 
   test("unknown category -> 400 instead of 500", async () => {

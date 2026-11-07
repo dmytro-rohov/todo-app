@@ -137,6 +137,8 @@ const tasks = pgTable("tasks", {
   meetingId: integer("meeting_id").references(() => calendarEvents.id, { onDelete: "set null" }),
   // Who created the task (NULL = the owner). Seen by its creator, and by everyone while it is in a shared space.
   userId: ownerColumn(),
+  // The e-mail the task was created from (Poczta).
+  mailId: integer("mail_id").references(() => mailMessages.id, { onDelete: "set null" }),
 }, (table) => [
   check("tasks_status_check", sql`${table.status} IN ('todo', 'in_progress', 'done')`),
   check("tasks_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2', 'P3')`),
@@ -247,6 +249,36 @@ const calendarEvents = pgTable("calendar_events", {
   index("calendar_events_start").on(table.startAt),
 ]);
 
+// The owner's mailbox (hello@, IMAP on OVH Zimbra), copied by the mail sync (mail-sync.js): the newest messages of
+// INBOX with their text, matched to clients by the sender's address or domain. "handled" hides a message in Tasks
+// only; the mailbox itself is changed only by marking messages read. invite: the text/calendar part, if any.
+// suggestion: Claude's proposed tasks (JSON), kept until the next request.
+const mailMessages = pgTable("mail_messages", {
+  id: serial("id").primaryKey(),
+  mailbox: varchar("mailbox", { length: 200 }).default("INBOX").notNull(),
+  uidValidity: bigint("uid_validity", { mode: "number" }).notNull(),
+  uid: bigint("uid", { mode: "number" }).notNull(),
+  messageId: varchar("message_id", { length: 300 }),
+  fromAddress: varchar("from_address", { length: 254 }).default("").notNull(),
+  fromName: varchar("from_name", { length: 200 }).default("").notNull(),
+  toAddresses: text("to_addresses").default("").notNull(),
+  subject: varchar("subject", { length: 500 }).default("").notNull(),
+  sentAt: timestamptz("sent_at").notNull(),
+  snippet: varchar("snippet", { length: 400 }).default("").notNull(),
+  bodyText: text("body_text").default("").notNull(),
+  attachments: text("attachments").default("").notNull(),
+  invite: text("invite").default("").notNull(),
+  seen: boolean("seen").default(false).notNull(),
+  handledAt: timestamptz("handled_at"),
+  suggestion: text("suggestion").default("").notNull(),
+  clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("mail_messages_mailbox_uid").on(table.mailbox, table.uidValidity, table.uid),
+  index("mail_messages_sent").on(table.sentAt),
+  index("mail_messages_client").on(table.clientId),
+]);
+
 // Browser sessions of the single owner (password login or "Zaloguj kontem Mytko"). Only the SHA-256 of the random
 // cookie token is stored, so a database read never yields a usable session.
 const authSessions = pgTable("auth_sessions", {
@@ -265,6 +297,7 @@ const authSessions = pgTable("auth_sessions", {
 ]);
 
 module.exports = {
+  mailMessages,
   users,
   clients,
   calendarAccounts,
