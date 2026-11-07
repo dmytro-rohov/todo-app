@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Umów rozmowę · Mytko</title>
+  <link rel="stylesheet" href="booking-form.css">
+</head>
+<body>
+  <!-- data-api: the Mytko Tasks booking API. The site's origin must be listed in BOOKING_ORIGINS. -->
+  <form class="mb-form" data-booking data-api="https://tasks.mytko.dev/api/public/booking" novalidate>
+    <h2>Umów bezpłatną rozmowę</h2>
+    <p class="mb-lead">30 minut na Google Meet: opowiesz o projekcie, my podpowiemy, od czego zacząć.</p>
+    <fieldset>
+      <legend>Termin</legend>
+      <div class="mb-days" data-days></div>
+      <div class="mb-slots" data-slots></div>
+      <button type="button" class="mb-more" data-next>Kolejne terminy →</button>
+      <p class="mb-picked" data-picked aria-live="polite"></p>
+    </fieldset>
+    <fieldset>
+      <legend>Kontakt</legend>
+      <label>Imię i nazwisko<input name="name" autocomplete="name" required minlength="2" maxlength="120"></label>
+      <label>E-mail<input name="email" type="email" autocomplete="email" required maxlength="254"></label>
+      <label>Firma (opcjonalnie)<input name="company" autocomplete="organization" maxlength="160"></label>
+      <label>Telefon (opcjonalnie)<input name="phone" type="tel" autocomplete="tel" maxlength="40"></label>
+      <label>O czym porozmawiamy?<textarea name="message" rows="4" maxlength="2000"></textarea></label>
+      <!-- honeypot: hidden from people, bots fill it in -->
+      <label class="mb-hp" aria-hidden="true">Strona<input name="website" tabindex="-1" autocomplete="off"></label>
+      <label class="mb-check"><input type="checkbox" name="consent" required>Zgadzam się na przetwarzanie moich danych w celu umówienia i przeprowadzenia rozmowy.</label>
+    </fieldset>
+    <button type="submit" class="mb-submit" disabled>Zarezerwuj rozmowę</button>
+    <p class="mb-status" data-status role="status"></p>
+  </form>
+  <script type="module" src="booking-form.js"></script>
+</body>
+</html>

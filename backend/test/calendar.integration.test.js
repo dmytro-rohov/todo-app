@@ -10,6 +10,7 @@ const { runMigrations, listMigrations } = require("../migrations");
 const { startApp, SAME_ORIGIN_JSON, USERNAME, PASSWORD } = require("./support");
 const { encrypt, decrypt, parseKey } = require("../secrets");
 const { syncAll } = require("../calendar-sync");
+const { zonedDay, zonedInstant } = require("../booking");
 
 const OWNER_URL = process.env.TEST_MIGRATION_DATABASE_URL;
 const APP_URL = process.env.TEST_DATABASE_URL;
@@ -47,6 +48,13 @@ function fakeGoogle() {
         return form.get("refresh_token") === "refresh-1" ? send(200, { access_token: "at-2", expires_in: 3600 }) : send(400, { error: "invalid_grant" });
       }
       if (req.headers.authorization !== "Bearer at-2" && req.headers.authorization !== "Bearer at-1") return send(401, { error: { message: "unauthorized" } });
+      if (url.pathname === "/cal/freeBusy") {
+        const { timeMin, timeMax } = JSON.parse(body);
+        state.freeBusyCalls = (state.freeBusyCalls || 0) + 1;
+        const busy = state.events.filter(e => e.start?.dateTime && e.transparency !== "transparent" && e.status !== "cancelled"
+          && e.end.dateTime > timeMin && e.start.dateTime < timeMax).map(e => ({ start: e.start.dateTime, end: e.end.dateTime }));
+        return send(200, { calendars: { primary: { busy } } });
+      }
       const match = url.pathname.match(/^\/cal\/calendars\/([^/]+)\/events(?:\/([^/]+))?$/);
       if (!match) return send(404, {});
       const id = match[2] && decodeURIComponent(match[2]);
@@ -88,7 +96,8 @@ describe("Google Calendars per space", { skip, concurrency: false }, () => {
     await new Promise(resolve => google.server.listen(0, "127.0.0.1", resolve));
     base = `http://127.0.0.1:${google.server.address().port}`;
     ctx = await startApp({ pool: appPool, migrationVersions: VERSIONS,
-      env: { GOOGLE_CLIENT_ID: "client-1", GOOGLE_CLIENT_SECRET: "secret-1", TASKS_SECRET_KEY: KEY },
+      env: { GOOGLE_CLIENT_ID: "client-1", GOOGLE_CLIENT_SECRET: "secret-1", TASKS_SECRET_KEY: KEY,
+        BOOKING_ORIGINS: "https://mytko.dev", BOOKING_DAYS: "1-7", BOOKING_HOURS: "08:00-20:00", BOOKING_NOTICE_HOURS: "0", BOOKING_IP_HOURLY_MAX: "20" },
       appOptions: { googleUrls: { authBase: base, tokenUrl: `${base}/token`, apiBase: `${base}/cal` } } });
     const login = await ctx.request("/api/auth/login", { method: "POST", auth: null, headers: SAME_ORIGIN_JSON, body: JSON.stringify({ login: USERNAME, password: PASSWORD }) });
     cookie = login.headers.get("set-cookie").split(";")[0];
@@ -240,6 +249,75 @@ describe("Google Calendars per space", { skip, concurrency: false }, () => {
     assert.equal((await call(`/api/clients/${lead.id}`, "DELETE")).status, 200);
     assert.equal((await call("/api/tasks")).body.find(t => t.id === direct.id).clientId, null);
     assert.equal((await call("/api/projects")).body.find(p => p.id === project.id).clientId, null);
+  });
+
+  test("booking: CORS for mytko.dev, free slots around busy times, a booking makes a Meet event, a lead and a prep task", async () => {
+    const TZ = "Europe/Warsaw";
+    const day = zonedDay(Date.now() + 6 * 86400000, TZ);
+    const at = time => new Date(zonedInstant(day, time, TZ)).toISOString();
+    const pub = async (url, method = "GET", body, origin = "https://mytko.dev") => {
+      const res = await ctx.request(url, { auth: null, method, headers: { ...(origin ? { origin } : {}), ...(body ? { "content-type": "application/json" } : {}) },
+        body: body && JSON.stringify(body) });
+      const text = await res.text();
+      return { status: res.status, headers: res.headers, body: text ? JSON.parse(text) : null };
+    };
+    assert.equal((await pub("/api/public/booking", "GET", undefined, "https://evil.example")).status, 403);
+    const preflight = await pub("/api/public/booking", "OPTIONS");
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), "https://mytko.dev");
+    assert.match(preflight.headers.get("access-control-allow-headers"), /content-type/);
+
+    // Praca is busy 10:00–11:00 in Google; the private calendar has a timed 14:00–15:00 and an all-day event
+    google.state.events.push({ id: "busy1", summary: "Zajęte", status: "confirmed", start: { dateTime: at("10:00") }, end: { dateTime: at("11:00") } });
+    const privateSpace = (await call("/api/spaces")).body.find(s => s.key === "private");
+    const privateAccount = (await owner.query("INSERT INTO calendar_accounts (space_id, account_email, refresh_token_enc) VALUES ($1, 'me@gmail.com', 'x') RETURNING id", [privateSpace.id])).rows[0].id;
+    await owner.query(`INSERT INTO calendar_events (account_id, external_id, title, start_at, end_at, all_day) VALUES
+      ($1, 'p1', 'Dentysta', $2, $3, false), ($1, 'p2', 'Urodziny', $4, $5, true)`, [privateAccount, at("14:00"), at("15:00"), `${day}T00:00:00Z`, `${day}T23:59:00Z`]);
+    try {
+      const slots = await pub(`/api/public/booking?from=${day}&days=1`);
+      assert.equal(slots.status, 200);
+      assert.equal(slots.headers.get("access-control-allow-origin"), "https://mytko.dev");
+      assert.deepEqual([slots.body.timeZone, slots.body.slotMinutes, slots.body.days[0].date], [TZ, 30, day]);
+      const free = slots.body.days[0].slots;
+      for (const time of ["09:00", "11:30", "13:00", "15:30"]) assert.ok(free.includes(at(time)), `${time} should be free`);
+      for (const time of ["09:30", "10:00", "11:00", "13:30", "14:00", "15:00"]) assert.ok(!free.includes(at(time)), `${time} should be busy`);
+
+      const form = { start: at("09:00"), name: "Anna Nowak", email: "anna_n@piekarnia.pl", company: "Piekarnia Nowak", phone: "+48 600 100 200",
+        message: "Potrzebujemy nowej strony.", consent: true };
+      assert.equal((await pub("/api/public/booking", "POST", { ...form, consent: false })).status, 400);
+      const eventsBefore = google.state.events.length;
+      assert.equal((await pub("/api/public/booking", "POST", { ...form, website: "http://spam.example" })).status, 201);
+      assert.equal(google.state.events.length, eventsBefore); // the honeypot books nothing
+      assert.equal((await pub("/api/public/booking", "POST", { ...form, start: at("09:10") })).status, 409); // not a slot
+
+      const booked = await pub("/api/public/booking", "POST", form);
+      assert.equal(booked.status, 201);
+      assert.deepEqual([booked.body.start, booked.body.end], [at("09:00"), at("09:30")]);
+      assert.match(booked.body.meetUrl, /^https:\/\/meet\.google\.com\//);
+      const sent = google.state.events.at(-1);
+      assert.deepEqual(sent.attendees, [{ email: "anna_n@piekarnia.pl", displayName: "Anna Nowak" }]);
+      assert.match(sent.description, /Potrzebujemy nowej strony\.[\s\S]*Rezerwacja przez formularz na mytko\.dev/);
+
+      const lead = (await call("/api/clients")).body.find(c => c.email === "anna_n@piekarnia.pl");
+      assert.deepEqual([lead.name, lead.status, lead.source, lead.domain, lead.openTasks], ["Piekarnia Nowak", "lead", "booking", "piekarnia.pl", 1]);
+      const meeting = (await call(`/api/calendar/events?from=${day}&to=${day}&clientId=${lead.id}`)).body[0];
+      assert.equal(meeting.title, "Rozmowa: Anna Nowak (Piekarnia Nowak)");
+      const prep = (await call(`/api/tasks?meetingId=${meeting.id}`)).body[0];
+      assert.deepEqual([prep.title, prep.clientId, prep.dueDate, prep.priority, prep.status], ["Przygotować się do rozmowy: Anna Nowak", lead.id, day, "P1", "todo"]);
+      assert.equal((await owner.query("SELECT actor FROM task_history WHERE task_id = $1 LIMIT 1", [prep.id])).rows[0].actor, "booking");
+
+      // the slot is taken now; the same person may hold two upcoming meetings, not three; the lead is reused
+      assert.equal((await pub("/api/public/booking", "POST", { ...form, email: "inna@firma.pl" })).status, 409);
+      assert.equal((await pub("/api/public/booking", "POST", { ...form, start: at("16:00") })).status, 201);
+      assert.equal((await pub("/api/public/booking", "POST", { ...form, start: at("17:00") })).status, 409);
+      assert.equal((await call("/api/clients")).body.filter(c => c.email === "anna_n@piekarnia.pl").length, 1);
+      // without an Origin (not a browser) the API answers too, without CORS headers
+      const plain = await pub(`/api/public/booking?from=${day}&days=1`, "GET", undefined, null);
+      assert.equal(plain.status, 200);
+      assert.equal(plain.headers.get("access-control-allow-origin"), null);
+    } finally {
+      await owner.query("DELETE FROM calendar_accounts WHERE id = $1", [privateAccount]);
+    }
   });
 
   test("ranges are bounded and disconnecting removes the copies", async () => {

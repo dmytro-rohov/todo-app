@@ -278,6 +278,7 @@ module.exports = {
   parsePasswordHash,
   verifyPassword,
   rateLimit,
+  createWindowCounter,
   clientAddress,
   ownerCredentials,
   ownerAuth,
