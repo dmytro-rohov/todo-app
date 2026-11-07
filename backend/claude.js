@@ -76,4 +76,65 @@ async function proposeFromMail(ai, mail, { today, clientName = null, fetchImpl }
   return { summary: text(input.summary, 600), needsReply: input.needsReply === true, tasks: cleanTasks(input.tasks), at: new Date().toISOString() };
 }
 
-module.exports = { callTool, proposeFromMail, cleanTasks, TASKS_SCHEMA, AiError };
+const list = (value, max, size) => (Array.isArray(value) ? value : []).map(item => text(item, size)).filter(Boolean).slice(0, max);
+const STR = { type: "string" };
+
+// siteBrief uses Website Factory's brief.json names (business, about, offer, audience, goal, tone, style, notes), so a
+// meeting can later seed a site; only facts said at the meeting are filled in.
+function cleanSiteBrief(value) {
+  const b = value && typeof value === "object" ? value : {};
+  const business = b.business && typeof b.business === "object" ? b.business : {};
+  const site = {
+    business: Object.fromEntries(["name", "industry", "city", "phone", "email"].map(k => [k, text(business[k], 120)]).filter(([, v]) => v)),
+    about: text(b.about, 4000), audience: text(b.audience, 600), goal: text(b.goal, 300), notes: text(b.notes, 2000),
+    offer: (Array.isArray(b.offer) ? b.offer : []).slice(0, 20).map(o => ({ name: text(o?.name, 80), description: text(o?.description, 400), price: text(o?.price, 40) }))
+      .filter(o => o.name).map(o => Object.fromEntries(Object.entries(o).filter(([, v]) => v))),
+    tone: list(b.tone, 6, 40),
+    style: Object.fromEntries(["likes", "dislikes"].map(k => [k, text(b.style?.[k], 400)]).filter(([, v]) => v))
+  };
+  return Object.fromEntries(Object.entries(site).filter(([, v]) => (Array.isArray(v) ? v.length : typeof v === "object" ? Object.keys(v).length : v)));
+}
+
+async function proposeBrief(ai, { notes, meeting = null, clientName = null, today, fetchImpl } = {}) {
+  const input = await callTool(ai, {
+    fetchImpl, maxTokens: 4000,
+    system: "Jesteś asystentem studia webowego Mytko (strony i aplikacje dla klientów). Z notatek ze spotkania z klientem (np. notatki " +
+      "Gemini z Google Meet) przygotowujesz brief: co ustalono, czego brakuje, zadania dla studia i czy potrzebne jest kolejne spotkanie. " +
+      "Opierasz się wyłącznie na notatkach: niczego nie dopisujesz. Piszesz po polsku.",
+    content: `Dzisiaj jest ${today}.${meeting ? ` Spotkanie: „${meeting.title}”, ${meeting.startAt}.` : ""}${clientName ? ` Klient: ${clientName}.` : ""}
+
+` +
+      `Notatki ze spotkania:
+${String(notes).slice(0, 40000)}`,
+    tool: { name: "meeting_brief", description: "Zwraca brief ze spotkania",
+      input_schema: { type: "object", required: ["summary", "decisions", "openQuestions", "tasks", "nextMeeting"], properties: {
+        summary: { type: "string", description: "Streszczenie spotkania w 2–4 zdaniach" },
+        decisions: { type: "array", items: STR, description: "Co ustalono" },
+        openQuestions: { type: "array", items: STR, description: "Czego brakuje, o co dopytać klienta" },
+        siteBrief: { type: "object", description: "Fakty o firmie klienta i stronie, jeśli padły (pola jak w brief.json Website Factory)", properties: {
+          business: { type: "object", properties: { name: STR, industry: STR, city: STR, phone: STR, email: STR } },
+          about: STR, audience: STR, goal: { type: "string", description: "Co strona ma osiągnąć" }, notes: STR,
+          offer: { type: "array", items: { type: "object", properties: { name: STR, description: STR, price: STR } } },
+          tone: { type: "array", items: STR }, style: { type: "object", properties: { likes: STR, dislikes: STR } } } },
+        tasks: TASKS_SCHEMA,
+        nextMeeting: { type: "object", required: ["needed"], properties: {
+          needed: { type: "boolean" }, title: STR, date: { type: ["string", "null"], description: "YYYY-MM-DD, jeśli ustalono" },
+          durationMinutes: { type: "integer" }, agenda: STR } }
+      } } }
+  });
+  const next = input.nextMeeting && typeof input.nextMeeting === "object" ? input.nextMeeting : {};
+  return {
+    briefVersion: 1,
+    summary: text(input.summary, 1500),
+    decisions: list(input.decisions, 20, 400),
+    openQuestions: list(input.openQuestions, 20, 400),
+    siteBrief: cleanSiteBrief(input.siteBrief),
+    tasks: cleanTasks(input.tasks),
+    nextMeeting: next.needed === true ? { needed: true, title: text(next.title, 200) || "Kolejne spotkanie", date: DATE.test(next.date || "") ? next.date : null,
+      durationMinutes: Number.isInteger(next.durationMinutes) && next.durationMinutes >= 15 && next.durationMinutes <= 240 ? next.durationMinutes : 30,
+      agenda: text(next.agenda, 1000) } : { needed: false },
+    at: new Date().toISOString()
+  };
+}
+
+module.exports = { callTool, proposeFromMail, proposeBrief, cleanTasks, cleanSiteBrief, TASKS_SCHEMA, AiError };

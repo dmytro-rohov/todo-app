@@ -66,15 +66,20 @@ function createImapSource(config) {
 const clean = (value, max) => String(value || "").replace(/\u0000/g, "").slice(0, max);
 const oneLine = text => text.replace(/\s+/g, " ").trim();
 
-// A fetched message -> row values.
+// A fetched message -> row values. Headers come from the parsed source when there is one (it decodes raw UTF-8
+// headers that some servers' envelopes mangle), else from the IMAP envelope.
 async function toRow(message) {
-  const envelope = message.envelope || {};
-  const from = (envelope.from || [])[0] || {};
+  const envelope = { ...(message.envelope || {}) };
   let text = "";
   let attachments = [];
   let invite = "";
   if (message.source) {
     const parsed = await simpleParser(message.source, { skipImageLinks: true, skipTextToHtml: true, skipTextLinks: true });
+    if (parsed.subject) envelope.subject = parsed.subject;
+    if (parsed.from?.value?.length) envelope.from = parsed.from.value;
+    if (parsed.date) envelope.date = parsed.date;
+    if (parsed.messageId) envelope.messageId = parsed.messageId;
+    for (const key of ["to", "cc"]) if (parsed[key]) envelope[key] = [parsed[key]].flat().flatMap(group => group.value || []);
     text = parsed.text || "";
     for (const attachment of parsed.attachments || []) {
       if (/^(text|application)\/(calendar|ics)/i.test(attachment.contentType) && !invite) invite = attachment.content.toString("utf8");
@@ -83,6 +88,7 @@ async function toRow(message) {
   } else {
     text = "(Wiadomość jest za duża, by pokazać ją w Tasks. Otwórz ją w programie pocztowym.)";
   }
+  const from = (envelope.from || [])[0] || {};
   return {
     uid: message.uid,
     messageId: envelope.messageId ? clean(envelope.messageId, 300) : null,
@@ -160,12 +166,16 @@ function describe(error) {
   return "Synchronizacja poczty nie powiodła się.";
 }
 
-// Every config.everyMs, plus on demand (status() / now()).
-function scheduleMailSync(pool, source, config, { firstRunMs = 15000 } = {}) {
+// Every config.everyMs, plus on demand (status() / now()). afterSync runs after each successful sync (meeting briefs
+// from Gemini's notes e-mails, briefs.js); its failure never breaks the sync.
+function scheduleMailSync(pool, source, config, { firstRunMs = 15000, afterSync = null } = {}) {
   const status = { lastSyncAt: null, error: null, running: null };
   const run = () => {
     if (status.running) return status.running;
-    status.running = syncMail(pool, source, config).then(result => {
+    status.running = syncMail(pool, source, config).then(async result => {
+      if (!result.error && afterSync) {
+        try { result.briefs = (await afterSync()).length; } catch { console.error("after mail sync failed"); }
+      }
       Object.assign(status, { lastSyncAt: new Date().toISOString(), error: result.error || null, running: null });
       return result;
     });

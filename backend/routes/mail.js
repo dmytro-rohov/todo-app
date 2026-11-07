@@ -57,7 +57,8 @@ module.exports = function createMailRouter(pool, { mail, source, sync, ai, googl
     if (!message) return res.status(404).json({ message: "E-mail not found" });
     const { uid, invite, suggestion, attachments, toAddresses, ...rest } = message;
     const tasks = (await pool.query("SELECT id, title, status FROM tasks WHERE mail_id = $1 ORDER BY id", [id])).rows;
-    res.json({ ...rest, to: json(toAddresses, []), attachments: json(attachments, []), invite: parseInvite(invite), suggestion: json(suggestion, null), tasks });
+    const brief = (await pool.query(`SELECT id, event_id AS "eventId" FROM meeting_briefs WHERE mail_id = $1 ORDER BY id DESC LIMIT 1`, [id])).rows[0] || null;
+    res.json({ ...rest, to: json(toAddresses, []), attachments: json(attachments, []), invite: parseInvite(invite), suggestion: json(suggestion, null), tasks, brief });
   });
 
   // Opening a message: read in Tasks and on the server (best effort; the next sync corrects it anyway).

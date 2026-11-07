@@ -757,6 +757,24 @@
         .mail__reader { padding: 16px; }
     }
 
+    // ---- meeting brief ------------------------------------------------------------------------------------------
+    .dialog--brief { width: min(860px, calc(100vw - 32px)); }
+    .brief { display: grid; gap: 14px; min-width: 0; textarea { width: 100%; } }
+    .brief__meta { margin: 0; }
+    .brief__section { display: grid; gap: 6px; min-width: 0;
+        h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; .i { color: var(--accent); } .btn { margin-left: auto; } }
+        p { margin: 0; } ul { margin: 0; padding-left: 20px; } }
+    .brief__cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .brief__facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0;
+        dt { color: var(--muted); font-size: 13px; } dd { margin: 0; overflow-wrap: anywhere; } }
+    .brief__next { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 12px; .btn { justify-self: start; } }
+    .brief__notes { summary { cursor: pointer; color: var(--muted); } pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto;
+        padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font: 13.5px/1.5 inherit; font-family: inherit; } }
+    .brief__done { margin: 6px 0 0; }
+    .brief__rerun { justify-self: start; }
+    .meet-brief { justify-self: start; }
+    @media (max-width: 600px) { .brief__cols { grid-template-columns: 1fr; } .brief__facts { grid-template-columns: 1fr; dd { margin-bottom: 6px; } } }
+
     // ---- accounts and shared spaces -----------------------------------------------------------------------------
     .shared-mark { display: inline-flex; margin-left: 2px; color: var(--muted); font-style: normal; .i { width: 14px; height: 14px; } }
     .manage__list li.is-shared { display: flex; align-items: center; gap: 10px; color: var(--muted);
