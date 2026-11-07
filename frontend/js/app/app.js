@@ -525,12 +525,12 @@ export function startApp(element, session, { notice = null } = {}) {
   bindCalendar(root);
   bindArchive(root);
   render();
-  reload();
+  const ready = reload();
   loadArchive();
   if (!isMember()) loadCalendarAccounts().then(loadToday).then(render);
   if (notice) toast(notice.text, { tone: notice.tone });
   // Running timers tick; other devices' changes arrive when the tab comes back.
   setInterval(() => !isDragging() && root.querySelector("[data-timer]") && render(), 30000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reload({ quiet: true }); });
-  return { closeDrawer };
+  return { closeDrawer, ready };
 }

@@ -16,6 +16,20 @@
 <link rel="stylesheet" href="./dist/style.css">
 </head>
 <body>
+<!-- Start-up screen (js/startup.js): in the page itself, so it shows at once on every load. -->
+<div class="startup" id="startup" role="main" aria-busy="true">
+  <div class="orbits orbits--startup" aria-hidden="true">
+    <span class="orbits__sphere orbits__sphere--a"></span><span class="orbits__sphere orbits__sphere--b"></span>
+    <span class="orbits__ring orbits__ring--outer"><i></i><i></i></span><span class="orbits__ring orbits__ring--inner"><i></i><i></i></span>
+  </div>
+  <div class="startup__content">
+    <div class="startup__tile"><img src="./icons/icon-512.png" alt="" width="196" height="196"></div>
+    <p class="startup__wordmark" aria-hidden="true">mytko <span>tasks</span></p>
+    <h1 class="startup__title">Mytko <span>Tasks</span></h1>
+    <div class="startup__bar" role="progressbar" aria-label="Uruchamianie Mytko Tasks" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" data-done="0"><span></span></div>
+    <p class="startup__status" aria-live="polite">Weryfikacja sesji…</p>
+  </div>
+</div>
 <div id="auth" hidden></div>
 <div id="app" hidden></div>
 <noscript>Włącz JavaScript, aby korzystać z Mytko Tasks.</noscript>

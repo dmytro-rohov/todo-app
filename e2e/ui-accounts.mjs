@@ -22,11 +22,18 @@ async function click(selector) {
   for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: p.x, y: p.y, button: "left", buttons: type === "mousePressed" ? 1 : 0, clickCount: 1 });
   await sleep(400);
 }
+const startupVisible = () => ev("(() => { const s = document.querySelector('#startup'); return Boolean(s && !s.hidden && !s.classList.contains('startup--leaving')); })()");
+// Signs in through the login form; returns how long the welcome start-up screen stayed (ms).
 async function signIn(login, password) {
   await send("Page.navigate", { url: BASE + "/" }); await sleep(2000);
   await ev(`(() => { const f = document.querySelector("#auth form"); f.querySelector('#auth-login').value = ${JSON.stringify(login)};
     f.querySelector('[type="password"]').value = ${JSON.stringify(password)}; f.requestSubmit(); })()`);
-  await sleep(3000);
+  const started = Date.now();
+  await sleep(1500);
+  for (let i = 0; i < 100 && await startupVisible(); i++) await sleep(100);
+  const shown = Date.now() - started;
+  await sleep(600);
+  return shown;
 }
 try {
   let target;
@@ -37,7 +44,14 @@ try {
     if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); });
   await send("Runtime.enable");
 
-  await signIn("owner", "owner-test-password");
+  const welcome = await signIn("owner", "owner-test-password");
+  check("after signing in the start-up screen stays about five and a half seconds", welcome >= 5000 && welcome <= 8000, `${welcome} ms`);
+  await send("Page.reload"); await sleep(400);
+  check("after a reload the start-up screen shows", await startupVisible());
+  const reloadStart = Date.now();
+  for (let i = 0; i < 60 && await startupVisible(); i++) await sleep(100);
+  check("…for a short moment only", Date.now() - reloadStart < 3000, `${Date.now() - reloadStart + 400} ms`);
+  await sleep(600);
   check("the owner is the administrator", await ev("document.querySelector('.profile__text small')?.textContent.startsWith('Administrator')"));
   const work = (await call("/api/spaces")).body.find(s => s.key === "work");
   await call("/api/tasks", "POST", { title: "Oferta dla klienta", date: "2026-11-07", spaceId: work.id });

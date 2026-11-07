@@ -1,5 +1,6 @@
 // Login screen, the same as Mytko Workflow's: password login plus "Zaloguj kontem Mytko".
 import { request, ApiError } from "../api/http.js";
+import { markWelcome } from "../startup.js";
 import { escapeHtml } from "../utils/helpers.js";
 
 const FEATURES = [
@@ -161,6 +162,7 @@ export function renderLogin(root, state, { notice = null, onAuthenticated }) {
     markSignedInOnPurpose();
     event.currentTarget.disabled = true;
     event.currentTarget.querySelector("span").textContent = "Logowanie…";
+    markWelcome();
     window.location.assign("/auth/mytko/start");
   });
 
