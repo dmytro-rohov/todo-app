@@ -24,6 +24,9 @@ export const store = {
   view: "board",
   listSort: "position",
   month: isoDay(),
+  calendarDay: isoDay(),
+  sidebarCollapsed: false,
+  filtersOpen: false,
   archive: null,
   sidebarOpen: false
 };
@@ -60,13 +63,15 @@ function loadPrefs() {
     if (Number.isInteger(saved.spaceId)) store.filters.spaceId = saved.spaceId;
     if (Number.isInteger(saved.projectId)) store.filters.projectId = saved.projectId;
     if (saved.listSort) store.listSort = saved.listSort;
+    if (typeof saved.sidebarCollapsed === "boolean") store.sidebarCollapsed = saved.sidebarCollapsed;
   } catch { /* preferences are a convenience only */ }
 }
 
 function savePrefs() {
   try {
     const { spaceId, projectId, showDone } = store.filters;
-    localStorage.setItem(PREFS, JSON.stringify({ view: store.view, showDone, spaceId, projectId, listSort: store.listSort }));
+    localStorage.setItem(PREFS, JSON.stringify({ view: store.view, showDone, spaceId, projectId, listSort: store.listSort,
+      sidebarCollapsed: store.sidebarCollapsed }));
   } catch { /* ignore */ }
 }
 
@@ -164,24 +169,26 @@ function sidebarHtml() {
       <img src="./icons/icon-192.png" alt="" width="44" height="44">
       <span><strong>Mytko</strong><small>Tasks</small></span>
       <button type="button" class="icon-btn sidebar__close" data-action="sidebar-close" aria-label="Zamknij menu">${icon("x")}</button>
+      <button type="button" class="icon-btn sidebar__collapse" data-action="sidebar-collapse" aria-pressed="${store.sidebarCollapsed}"
+        aria-label="${store.sidebarCollapsed ? "Rozwiń panel boczny" : "Zwiń panel boczny"}" title="${store.sidebarCollapsed ? "Rozwiń panel" : "Zwiń panel"}">${icon(store.sidebarCollapsed ? "chevronRight" : "chevronLeft")}</button>
     </div>
     <nav class="sidebar__nav" aria-label="Przestrzenie i projekty">
-      <button type="button" class="nav-item${!filters.spaceId && !filters.projectId ? " is-active" : ""}" data-action="scope" data-space="" data-project="">
+      <button type="button" class="nav-item${!filters.spaceId && !filters.projectId ? " is-active" : ""}" data-action="scope" data-space="" data-project="" title="Wszystkie zadania">
         ${icon("checkSquare")}<span>Wszystkie zadania</span><em>${store.tasks.filter(isOpen).length}</em>
       </button>
       <p class="nav-heading"><span>Przestrzenie</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="spaces" aria-label="Zarządzaj przestrzeniami">${icon("plus", 16)}</button></p>
       ${store.spaces.map(space => `
-        <button type="button" class="nav-item nav-item--space${filters.spaceId === space.id && !filters.projectId ? " is-active" : ""}" data-action="scope" data-space="${space.id}" data-project="">
+        <button type="button" class="nav-item nav-item--space${filters.spaceId === space.id && !filters.projectId ? " is-active" : ""}" data-action="scope" data-space="${space.id}" data-project="" title="${escapeHtml(space.name)}">
           <i class="dot" data-c="${escapeHtml(space.color)}"></i><span>${escapeHtml(space.name)}</span><em>${openCount(space.id)}</em>
         </button>`).join("")}
       <p class="nav-heading"><span>Projekty</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="projects" aria-label="Zarządzaj projektami">${icon("plus", 16)}</button></p>
       ${activeProjects.length ? activeProjects.map(project => `
-        <button type="button" class="nav-item nav-item--sub${filters.projectId === project.id ? " is-active" : ""}" data-action="scope" data-space="${project.spaceId}" data-project="${project.id}">
+        <button type="button" class="nav-item nav-item--sub${filters.projectId === project.id ? " is-active" : ""}" data-action="scope" data-space="${project.spaceId}" data-project="${project.id}" title="${escapeHtml(project.name)}">
           <span class="folder" data-c="${escapeHtml(project.color)}">${icon("folder", 16)}</span><span>${escapeHtml(project.name)}</span><em>${projectCount(project.id)}</em>
         </button>`).join("") : '<p class="nav-empty">Brak projektów w tej przestrzeni.</p>'}
       <p class="nav-heading"><span>Porządek</span></p>
-      <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="categories">${icon("tag", 18)}<span>Etykiety</span><em>${store.labels.length}</em></button>
-      <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
+      <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="categories" title="Etykiety">${icon("tag", 18)}<span>Etykiety</span><em>${store.labels.length}</em></button>
+      <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees" title="Wykonawcy">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
     </nav>
     <div class="sidebar__foot">
       <div class="profile">
@@ -217,7 +224,7 @@ function headHtml() {
 
 function crumbsHtml() {
   const { project, space } = scopeTitle();
-  const parts = [space && `<button type="button" class="crumb" data-action="scope" data-space="${space.id}" data-project="">${escapeHtml(space.name)}</button>`,
+  const parts = [space && `<button type="button" class="crumb" data-action="scope" data-space="${space.id}" data-project="" title="${escapeHtml(space.name)}">${escapeHtml(space.name)}</button>`,
     project && `<span class="crumb">${escapeHtml(project.name)}</span>`].filter(Boolean);
   return `<button type="button" class="crumb crumb--home" data-action="scope" data-space="" data-project="" aria-label="Wszystkie zadania">${icon("home", 18)}</button>
     ${parts.map(p => `<span class="crumb-sep">/</span>${p}`).join("")}<span class="crumb-sep">/</span><strong>Tasks</strong>`;
@@ -260,6 +267,14 @@ export function render() {
   root.querySelector(".sidebar").innerHTML = sidebarHtml();
   root.querySelector(".crumbs").innerHTML = crumbsHtml();
   root.querySelector(".page-head").innerHTML = headHtml();
+  root.classList.toggle("sidebar-collapsed", store.sidebarCollapsed);
+  root.classList.toggle("filters-open", store.filtersOpen);
+  const f = store.filters;
+  const active = [f.status, f.projectId, f.labelId, f.assigneeId, f.quick, !f.showDone].filter(Boolean).length;
+  const badge = root.querySelector(".filters-toggle .count");
+  badge.hidden = !active;
+  badge.textContent = String(active);
+  root.querySelector(".filters-toggle").setAttribute("aria-expanded", String(store.filtersOpen));
   const filters = root.querySelector(".filters");
   if (!filters.contains(document.activeElement)) filters.innerHTML = filtersHtml();
   const hasDue = store.tasks.some(t => isOpen(t) && t.dueDate && t.dueDate <= isoDay());
@@ -294,6 +309,7 @@ function shellHtml() {
     <header class="topbar">
       <button type="button" class="icon-btn topbar__menu" data-action="sidebar-open" aria-label="Otwórz menu" aria-controls="sidebar">${icon("menu")}</button>
       <nav class="crumbs" aria-label="Okruszki"></nav>
+      <button type="button" class="icon-btn icon-btn--box topbar__search" data-action="search-toggle" aria-label="Szukaj" aria-expanded="false">${icon("search")}</button>
       <label class="search">${icon("search", 20)}<span class="visually-hidden">Szukaj</span>
         <input type="search" id="search" placeholder="Szukaj zadań, osób lub etykiet…" autocomplete="off"><kbd>Ctrl K</kbd></label>
       <div class="bell-wrap">
@@ -309,6 +325,7 @@ function shellHtml() {
         <button type="button" role="tab" class="tab" data-view="calendar">${icon("calendar")}<span>Kalendarz</span></button>
         <button type="button" role="tab" class="tab" data-view="archive">${icon("archive")}<span>Archiwum</span></button>
       </div>
+      <button type="button" class="btn btn--ghost filters-toggle" data-action="filters-toggle" aria-expanded="false" aria-controls="filters">${icon("sliders", 18)}<span>Filtry</span><em class="count" hidden></em></button>
       <div class="split-btn">
         <button type="button" class="btn btn--primary" data-action="new-task">${icon("plus")}<span>Nowe zadanie</span></button>
         <button type="button" class="btn btn--primary btn--caret" data-action="new-menu" aria-label="Więcej: nowy projekt, etykieta, przestrzeń" aria-expanded="false">${icon("chevronDown")}</button>
@@ -316,14 +333,15 @@ function shellHtml() {
           <button type="button" data-action="new-task">${icon("checkSquare", 18)}Nowe zadanie</button>
           <button type="button" data-action="manage" data-tab="projects">${icon("folder", 18)}Nowy projekt</button>
           <button type="button" data-action="manage" data-tab="spaces">${icon("layers", 18)}Nowa przestrzeń</button>
-          <button type="button" data-action="manage" data-tab="categories">${icon("tag", 18)}Nowa etykieta</button>
+          <button type="button" data-action="manage" data-tab="categories" title="Etykiety">${icon("tag", 18)}Nowa etykieta</button>
           <button type="button" data-action="manage" data-tab="assignees">${icon("user", 18)}Nowy wykonawca</button>
         </div>
       </div>
     </div>
-    <div class="filters" role="group" aria-label="Filtry"></div>
+    <div class="filters" id="filters" role="group" aria-label="Filtry"></div>
     <section class="view" aria-live="polite"></section>
-  </div>`;
+  </div>
+  <button type="button" class="fab" data-action="new-task" aria-label="Nowe zadanie">${icon("plus", 26)}</button>`;
 }
 
 function closePopups(except) {
@@ -371,6 +389,18 @@ async function handleAction(target, event) {
   } else if (action === "clear-filters") {
     setFilter({ status: "", labelId: null, assigneeId: null, quick: null, search: "" });
     root.querySelector("#search").value = "";
+  } else if (action === "sidebar-collapse") {
+    store.sidebarCollapsed = !store.sidebarCollapsed;
+    savePrefs();
+    render();
+  } else if (action === "search-toggle") {
+    const open = !root.classList.contains("search-open");
+    root.classList.toggle("search-open", open);
+    target.setAttribute("aria-expanded", String(open));
+    if (open) root.querySelector("#search").focus();
+  } else if (action === "filters-toggle") {
+    store.filtersOpen = !store.filtersOpen;
+    render();
   } else if (action === "sidebar-open") {
     toggleSidebar(true);
   } else if (action === "sidebar-close") {
@@ -437,6 +467,7 @@ export function startApp(element, session) {
     }
   });
 
+  window.matchMedia("(max-width: 600px)").addEventListener("change", () => render());
   bindBoard(root);
   bindList(root);
   bindCalendar(root);

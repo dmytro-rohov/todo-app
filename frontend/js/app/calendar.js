@@ -10,6 +10,38 @@ import { openNewTask } from "./dialogs.js";
 const PER_DAY = 3;
 let dragged = null;
 
+const phone = () => window.matchMedia("(max-width: 600px)").matches;
+
+// Phones: a compact month with dots, and the chosen day's tasks below it (titles stay readable).
+function renderAgenda(byDay, today) {
+  const [y, m] = store.month.split("-").map(Number);
+  const day = store.calendarDay.slice(0, 7) === store.month.slice(0, 7) ? store.calendarDay : (today.slice(0, 7) === store.month.slice(0, 7) ? today : `${store.month.slice(0, 7)}-01`);
+  const list = byDay.get(day) || [];
+  const label = new Date(`${day}T12:00:00`).toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+  return `<div class="calendar calendar--agenda">
+    <div class="calendar__bar">
+      <button type="button" class="icon-btn icon-btn--box" data-cal="prev" aria-label="Poprzedni miesiąc">${icon("chevronLeft")}</button>
+      <h2>${MONTHS[m - 1]} ${y}</h2>
+      <button type="button" class="icon-btn icon-btn--box" data-cal="next" aria-label="Następny miesiąc">${icon("chevronRight")}</button>
+      <button type="button" class="btn btn--ghost btn--sm" data-cal="today">Dziś</button>
+    </div>
+    <div class="mini" role="grid" aria-label="${MONTHS[m - 1]} ${y}">
+      ${WEEKDAYS.map(d => `<span class="mini__weekday" role="columnheader">${d}</span>`).join("")}
+      ${monthGrid(store.month).flat().map(cell => {
+        const tasks = byDay.get(cell.day) || [];
+        return `<button type="button" role="gridcell" class="mini__day${cell.inMonth ? "" : " is-out"}${cell.day === today ? " is-today" : ""}${cell.day === day ? " is-selected" : ""}" data-cal="pick" data-day="${cell.day}" aria-label="${cell.day}${tasks.length ? `, ${tasks.length} zadań` : ""}">
+          <span>${Number(cell.day.slice(8))}</span><span class="mini__dots">${tasks.slice(0, 3).map(t => `<i class="mini__dot mini__dot--${t.status}"></i>`).join("")}</span></button>`;
+      }).join("")}
+    </div>
+    <section class="agenda" aria-live="polite">
+      <h3>${escapeHtml(label)}<button type="button" class="btn btn--ghost btn--sm" data-cal="add" data-day="${day}">${icon("plus", 16)}Dodaj</button></h3>
+      ${list.length ? list.map(task => `<button type="button" class="agenda__item event--${task.status}" data-cal="open" data-id="${task.id}">
+          <span class="agenda__title">${escapeHtml(task.title)}</span><span class="muted">${STATUS_LABELS[task.status]}</span></button>`).join("")
+        : '<p class="muted">Brak zadań z terminem w tym dniu.</p>'}
+    </section>
+  </div>`;
+}
+
 export function renderCalendar() {
   const tasks = visibleTasks().filter(t => t.dueDate);
   const byDay = new Map();
@@ -20,6 +52,7 @@ export function renderCalendar() {
   const today = isoDay();
   const [y, m] = store.month.split("-").map(Number);
   const undated = visibleTasks().filter(t => !t.dueDate && t.status !== "done").length;
+  if (phone()) return renderAgenda(byDay, today);
   return `<div class="calendar">
     <div class="calendar__bar">
       <button type="button" class="icon-btn icon-btn--box" data-cal="prev" aria-label="Poprzedni miesiąc">${icon("chevronLeft")}</button>
@@ -52,7 +85,8 @@ export function bindCalendar(root) {
     if (kind === "prev" || kind === "next") { store.month = shiftMonth(store.month, kind === "prev" ? -1 : 1); render(); }
     else if (kind === "today") { store.month = isoDay(); render(); }
     else if (kind === "open") openDrawer(Number(button.dataset.id));
-    else if (kind === "add") openNewTask({ status: "todo", dueDate: button.closest("[data-day]").dataset.day });
+    else if (kind === "add") openNewTask({ status: "todo", dueDate: button.dataset.day || button.closest("[data-day]").dataset.day });
+    else if (kind === "pick") { store.calendarDay = button.dataset.day; render(); }
     else if (kind === "more") {
       store.view = "list";
       store.listSort = "due";
