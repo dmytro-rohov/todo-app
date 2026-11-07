@@ -63,7 +63,7 @@ test("sync errors are described without secrets", () => {
   assert.match(describeError(new Error("weird")), /nie powiodła/);
 });
 
-test("MAIL_* and ANTHROPIC_* settings", () => {
+test("MAIL_*, ANTHROPIC_* and WORKFLOW_TOKEN_SHA256 settings", () => {
   assert.equal(loadConfig(base).mail, null);
   assert.equal(loadConfig(base).ai, null);
   const mail = loadConfig({ ...base, MAIL_IMAP_HOST: "ssl0.ovh.net", MAIL_IMAP_USER: "hello@mytko.dev", MAIL_IMAP_PASSWORD: "x" }).mail;
@@ -76,6 +76,9 @@ test("MAIL_* and ANTHROPIC_* settings", () => {
   const ai = loadConfig({ ...base, ANTHROPIC_API_KEY: "sk-test", ANTHROPIC_DEV_BASE: "http://127.0.0.1:1" }).ai;
   assert.deepEqual([ai.model, ai.apiBase], ["claude-sonnet-5-5", "http://127.0.0.1:1"]);
   assert.equal(loadConfig({ ...prod, ANTHROPIC_API_KEY: "sk", ANTHROPIC_DEV_BASE: "http://evil" }).ai.apiBase, "https://api.anthropic.com");
+  assert.equal(loadConfig(base).workflow, null);
+  assert.equal(loadConfig({ ...base, WORKFLOW_TOKEN_SHA256: "A".repeat(64) }).workflow.tokenSha256, "a".repeat(64));
+  assert.throws(() => loadConfig({ ...base, WORKFLOW_TOKEN_SHA256: "plain-token" }), /64 hex/);
 });
 
 test("Claude's proposals are forced into the tool and validated; API errors become readable", async () => {

@@ -9,6 +9,7 @@ const createArchiveRouter = require("./routes/archive");
 const createClientsRouter = require("./routes/clients");
 const createBookingRouter = require("./routes/booking");
 const createUsersRouter = require("./routes/users");
+const createAgentRouter = require("./routes/agent");
 const createMailRouter = require("./routes/mail");
 const { createImapSource, scheduleMailSync } = require("./mail-sync");
 const { processGeminiMail } = require("./briefs");
@@ -126,6 +127,10 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });
+  // Mytko Workflow polls its ToDo with a Bearer token, never a session (routes/agent.js).
+  if (config.workflow) {
+    app.use("/api/agent", express.json({ limit: "20kb", inflate: false }), createAgentRouter(pool, { ...config.workflow, publicOrigin: config.publicOrigin }));
+  }
   // The booking form on mytko.dev: public, before the session-guarded API (routes/booking.js).
   if (google && config.booking) {
     const booking = createBookingRouter(pool, { google, key: calendarConfig.key, settings: config.booking });

@@ -47,6 +47,9 @@ function loadConfig(env = process.env) {
   const booking = loadBooking(env, errors, { calendar, isProduction });
   const mail = loadMail(env, errors, { isProduction });
   const ai = loadAi(env, errors, { isProduction });
+  // Mytko Workflow ToDo (routes/agent.js): the SHA-256 (hex) of the token Workflow sends; the token itself stays in Workflow.
+  const workflowTokenSha256 = (env.WORKFLOW_TOKEN_SHA256 || "").toLowerCase();
+  if (workflowTokenSha256 && !/^[0-9a-f]{64}$/.test(workflowTokenSha256)) errors.push("WORKFLOW_TOKEN_SHA256 must be 64 hex characters (sha256 of the token)");
 
   if (errors.length > 0) {
     const error = new Error(`Invalid configuration:\n- ${errors.join("\n- ")}`);
@@ -84,6 +87,7 @@ function loadConfig(env = process.env) {
     booking,
     mail,
     ai,
+    workflow: workflowTokenSha256 ? { tokenSha256: workflowTokenSha256 } : null,
     retention: {
       archiveDays: toInt(env.RETENTION_ARCHIVE_DAYS, 7),
       deletePrivateDays: toInt(env.RETENTION_DELETE_PRIVATE_DAYS, 7),

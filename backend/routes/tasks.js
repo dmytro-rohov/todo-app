@@ -19,6 +19,8 @@ const TASK_COLUMNS = `
   created_at AS "createdAt", updated_at AS "updatedAt", completed_at AS "completedAt", archived_at AS "archivedAt",
   space_id AS "spaceId", project_id AS "projectId", assignee_id AS "assigneeId", review_requested_at AS "reviewRequestedAt",
   planned_at AS "plannedAt", client_id AS "clientId", meeting_id AS "meetingId", mail_id AS "mailId",
+  workflow_requested_at AS "workflowRequestedAt", workflow_ref AS "workflowRef", workflow_status AS "workflowStatus",
+  workflow_url AS "workflowUrl", workflow_updated_at AS "workflowUpdatedAt",
   ARRAY_REMOVE(ARRAY[category_id] || ARRAY(
     SELECT l.category_id FROM task_labels l
     WHERE l.task_id = tasks.id AND l.category_id IS DISTINCT FROM tasks.category_id ORDER BY l.id), NULL) AS "labelIds",
@@ -80,7 +82,7 @@ async function resolvePlacement(db, current, value, spaces, user) {
 // Labels and the assignee must be ones the account can see; clients and meetings are the owner's only.
 async function checkReferences(db, user, value) {
   const uid = userId(user);
-  if (!isOwner(user) && ((value.clientId ?? null) !== null || (value.meetingId ?? null) !== null || (value.mailId ?? null) !== null)) {
+  if (!isOwner(user) && ((value.clientId ?? null) !== null || (value.meetingId ?? null) !== null || (value.mailId ?? null) !== null || value.workflow === true)) {
     throw new TaskInputError("Clients and meetings are not available for this account");
   }
   const labels = [...new Set([...(value.labelIds || []), ...(value.categoryId != null ? [value.categoryId] : [])])];
@@ -92,6 +94,20 @@ async function checkReferences(db, user, value) {
     const { rowCount } = await db.query(`SELECT 1 FROM assignees a WHERE a.id = $1 AND ${visibleAssignee("a", "$2::integer")}`, [value.assigneeId, uid]);
     if (!rowCount) throw new TaskInputError("Assignee does not exist");
   }
+}
+
+// Sends a task to (true) or withdraws it from (false) the Mytko Workflow ToDo. Only tasks in spaces visible to agents
+// go (never a private space); Workflow picks them up from /api/agent/workflow (routes/agent.js).
+async function setWorkflow(db, taskId, requested, actor) {
+  const task = (await db.query(
+    `SELECT t.workflow_requested_at, t.workflow_ref, s.agent_visible FROM tasks t LEFT JOIN spaces s ON s.id = t.space_id WHERE t.id = $1`, [taskId])).rows[0];
+  if (requested && !task.agent_visible) throw new TaskInputError("This space is not visible to agents");
+  if (requested === Boolean(task.workflow_requested_at)) return;
+  await db.query(
+    `UPDATE tasks SET workflow_requested_at = ${requested ? "now()" : "NULL"},
+       workflow_status = CASE WHEN $2::boolean THEN COALESCE(workflow_status, 'requested') WHEN workflow_ref IS NULL THEN NULL ELSE 'withdrawn' END,
+       workflow_updated_at = now(), updated_at = now() WHERE id = $1`, [taskId, requested]);
+  await recordTaskChanges(db, taskId, [{ field: "workflow", oldValue: task.workflow_requested_at ? "requested" : null, newValue: requested ? "requested" : "withdrawn" }], actor);
 }
 
 // Replaces the task's labels: the first becomes category_id, the rest go to task_labels.
@@ -170,7 +186,7 @@ module.exports = function createTasksRouter(pool) {
       return res.status(400).json({ message: error });
     }
 
-    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position","spaceId","projectId","labelIds","assigneeId","clientId","meetingId","mailId"].includes(key)));
+    const extras = Object.fromEntries(Object.entries(req.body).filter(([key]) => ["description","status","priority","dueDate","position","spaceId","projectId","labelIds","assigneeId","clientId","meetingId","mailId","workflow"].includes(key)));
     const extraValidation = Object.keys(extras).length ? validateTaskPatch(extras) : { value: {} };
     if (extraValidation.error) return res.status(400).json({ message: extraValidation.error });
     const domain = extraValidation.value;
@@ -203,6 +219,7 @@ module.exports = function createTasksRouter(pool) {
         );
         const id = inserted.rows[0].id;
         if (labelIds && labelIds.length > 1) await setLabels(client, id, labelIds);
+        if (domain.workflow === true) await setWorkflow(client, id, true, req.user.actor);
         const created = await loadTask(client, id);
         await recordTaskChanges(client, id, taskChanges(null, created), req.user.actor);
         return created;
@@ -252,7 +269,7 @@ module.exports = function createTasksRouter(pool) {
         const before = await loadTask(client, id, { lock: true });
         if (!before) return null;
         await checkReferences(client, req.user, value);
-        const { spaceId, projectId, labelIds, ...fields } = value;
+        const { spaceId, projectId, labelIds, workflow, ...fields } = value;
         if ("spaceId" in value || "projectId" in value) {
           Object.assign(fields, await resolvePlacement(client, before, value, await defaultSpaces(client, req.user), req.user));
         }
@@ -275,6 +292,7 @@ module.exports = function createTasksRouter(pool) {
           await client.query("DELETE FROM task_labels WHERE task_id = $1 AND category_id = $2", [id, value.categoryId]);
         }
         if (status !== undefined) await stopTimerUnlessInProgress(client, id, status);
+        if (workflow !== undefined) await setWorkflow(client, id, workflow, req.user.actor);
         const after = await loadTask(client, id);
         await recordTaskChanges(client, id, taskChanges(before, after), req.user.actor);
         return after;

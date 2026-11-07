@@ -91,8 +91,11 @@ export async function openBrief({ event = null, briefId = null } = {}) {
     box.innerHTML = `<p class="field-error">${escapeHtml(error.message || "Nie udało się wczytać briefu.")}</p>`;
   }
 
+  // coding proposals go to the Mytko Workflow ToDo at once (when Praca is visible to agents)
+  const work = () => store.spaces.find(s => s.key === "work");
   const taskBody = proposal => ({ title: proposal.title, date: isoDay(), description: proposal.description || "", priority: proposal.priority,
-    dueDate: proposal.dueDate, spaceId: store.spaces.find(s => s.key === "work")?.id ?? null, clientId: brief.clientId, meetingId: brief.eventId });
+    dueDate: proposal.dueDate, spaceId: work()?.id ?? null, clientId: brief.clientId, meetingId: brief.eventId,
+    workflow: proposal.coding && Boolean(work()?.agentVisible) });
 
   element.addEventListener("click", async e => {
     if (e.target.closest("[data-close]")) return element.close();

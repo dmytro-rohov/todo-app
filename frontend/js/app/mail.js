@@ -160,6 +160,8 @@ export function renderMail() {
 
 const taskDescription = m => `E-mail od ${m.fromName ? `${m.fromName} <${m.fromAddress}>` : m.fromAddress}, ${full(m.sentAt)}: „${m.subject}”\n\n${m.bodyText.trim().slice(0, 1500)}`;
 const workSpace = () => store.spaces.find(s => s.key === "work")?.id ?? null;
+// Coding proposals go to the Mytko Workflow ToDo at once (Praca is visible to agents unless switched off).
+const toWorkflow = proposal => proposal.coding && Boolean(store.spaces.find(s => s.key === "work")?.agentVisible);
 
 async function markHandled(m, handled, { quiet = false } = {}) {
   await api.mailUpdate(m.id, { handled });
@@ -220,9 +222,9 @@ export function bindMail(root) {
       accept.disabled = true;
       try {
         const created = await api.createTask({ title: proposal.title, date: isoDay(), description: proposal.description || taskDescription(m).slice(0, 2000),
-          priority: proposal.priority, dueDate: proposal.dueDate, spaceId: workSpace(), clientId: m.clientId, mailId: m.id });
+          priority: proposal.priority, dueDate: proposal.dueDate, spaceId: workSpace(), clientId: m.clientId, mailId: m.id, workflow: toWorkflow(proposal) });
         upsertTask(created);
-        toast(`Dodano „${created.title}”.`, { action: "Otwórz", onAction: () => openDrawer(created.id) });
+        toast(`Dodano „${created.title}”${created.workflowRequestedAt ? " i wysłano do Workflow" : ""}.`, { action: "Otwórz", onAction: () => openDrawer(created.id) });
         await openMessage(m.id);
       } catch (error) { accept.disabled = false; toast(error.message || "Nie udało się dodać zadania.", { tone: "error" }); }
       return;

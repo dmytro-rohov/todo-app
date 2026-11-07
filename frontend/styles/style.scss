@@ -786,6 +786,8 @@
     .accounts__password { display: flex; gap: 8px; input { flex: 1; min-width: 0; } }
 
     // ---- clients (CRM-lite) ------------------------------------------------------------------------------------
+    .chip--workflow { border-color: #818cf866; color: #c7cbff; .i { color: #a5b4fc; } }
+    .workflow-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; small { flex-basis: 100%; } }
     .chip--client { border-color: color-mix(in srgb, var(--c, var(--accent)) 45%, transparent); color: color-mix(in srgb, var(--c, var(--accent)) 55%, white); .i { color: var(--c, var(--accent)); } }
     .lead-badge {
         margin-left: auto; padding: 1px 7px; border-radius: 99px; background: color-mix(in srgb, var(--warning, #f2c463) 18%, transparent);

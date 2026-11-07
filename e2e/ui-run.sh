@@ -7,6 +7,7 @@
 #   e2e/ui-run.sh <image> <app|login> <out-prefix> [WxH ...]
 #
 #   CALENDAR=1 also turns on the booking API for a form served on 127.0.0.1:3198 (e2e/ui-booking.mjs).
+#   The Workflow agent API accepts the test token "workflow-test-token-0123456789" (e2e/ui-workflow.mjs).
 #   Modes: app (no login, seeded), login (login screen), accounts (owner / owner-test-password, not seeded).
 #   SEED=0 skips seeding (EXTRA=1 / PLANS=1 are passed to ui-seed.sh); LINKS="list calendar task-4" adds one
 #   screenshot per #link at the first size; TEST=e2e/ui-smoke.mjs runs that test instead of screenshots.
@@ -45,7 +46,7 @@ if [ "$MODE" = accounts ]; then
 fi
 docker rm -f tasks-ui-run >/dev/null 2>&1 || true
 docker run -d --name tasks-ui-run --network host --read-only --tmpfs /tmp -e NODE_ENV=development -e HOST=127.0.0.1 -e PORT=3197 \
-  -e DATABASE_URL="$TEST_DATABASE_URL" -e PUBLIC_ORIGIN=http://127.0.0.1:3197 "${AUTH[@]}" "${CAL[@]}" "${MAILENV[@]}" "$IMG" >/dev/null
+  -e DATABASE_URL="$TEST_DATABASE_URL" -e PUBLIC_ORIGIN=http://127.0.0.1:3197 -e WORKFLOW_TOKEN_SHA256=a48bd928db7403efa307f0531a185ddc47d639a2057c8a7417a10bcd067719b5 "${AUTH[@]}" "${CAL[@]}" "${MAILENV[@]}" "$IMG" >/dev/null
 trap 'docker rm -f tasks-ui-run >/dev/null 2>&1; [ -n "${FAKE:-}" ] && kill "$FAKE" 2>/dev/null; [ -n "${CLAUDE:-}" ] && kill "$CLAUDE" 2>/dev/null; [ -n "${MAIL:-}" ] && docker rm -f tasks-ui-greenmail >/dev/null 2>&1' EXIT
 for _ in $(seq 1 30); do curl -fs http://127.0.0.1:3197/readyz >/dev/null 2>&1 && break; sleep 1; done
 [ "$MODE" = app ] && [ "${SEED:-1}" != 0 ] && bash "$HERE/ui-seed.sh" >/dev/null
