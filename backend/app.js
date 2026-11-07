@@ -6,6 +6,7 @@ const createSpacesRouter = require("./routes/spaces");
 const createProjectsRouter = require("./routes/projects");
 const createAssigneesRouter = require("./routes/assignees");
 const createArchiveRouter = require("./routes/archive");
+const createClientsRouter = require("./routes/clients");
 const createTaskDetailsRouter = require("./routes/task-details");
 const { createAuthRouter } = require("./routes/auth");
 const { createSsoRouter, createWorkflowHealth } = require("./routes/sso");
@@ -99,6 +100,7 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use("/assignees", createAssigneesRouter(pool));
   api.use("/archive", createArchiveRouter(pool, config.retention));
   api.use("/calendar", calendarRouter);
+  api.use("/clients", createClientsRouter(pool));
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });

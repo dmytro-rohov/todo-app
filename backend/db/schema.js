@@ -34,10 +34,34 @@ const spaces = pgTable("spaces", {
   uniqueIndex("spaces_key").on(table.key).where(sql`${table.key} IS NOT NULL`),
 ]);
 
+// CRM-lite: a lead (e.g. booked a first meeting) or a client. Projects, tasks and meetings point to it; meetings
+// are matched to it by a guest's e-mail or domain.
+const clients = pgTable("clients", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  status: varchar("status", { length: 10 }).default("lead").notNull(),
+  company: varchar("company", { length: 160 }).default("").notNull(),
+  email: varchar("email", { length: 200 }),
+  phone: varchar("phone", { length: 40 }).default("").notNull(),
+  website: varchar("website", { length: 300 }).default("").notNull(),
+  domain: varchar("domain", { length: 120 }),
+  color: varchar("color", { length: 7 }).notNull(),
+  notes: text("notes").default("").notNull(),
+  source: varchar("source", { length: 20 }).default("manual").notNull(),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("clients_status_check", sql`${table.status} IN ('lead', 'client', 'archived')`),
+  check("clients_source_check", sql`${table.source} IN ('manual', 'booking', 'mail', 'meeting')`),
+  index("clients_email").on(table.email),
+  index("clients_domain").on(table.domain),
+]);
+
 // A project is a folder inside one space, e.g. one client. Its tasks carry its colour as a label.
 const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   spaceId: integer("space_id").notNull().references(() => spaces.id, { onDelete: "restrict" }),
+  clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
   name: varchar("name", { length: 80 }).notNull(),
   color: varchar("color", { length: 7 }).notNull(),
   position: integer("position").default(0).notNull(),
@@ -81,6 +105,10 @@ const tasks = pgTable("tasks", {
   reviewRequestedAt: timestamptz("review_requested_at"),
   // "Long-term plans" (the fifth board column) is status todo with this timestamp set, for the same reason.
   plannedAt: timestamptz("planned_at"),
+  // The client directly (a task can belong to a client without a project); otherwise the project's client.
+  clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+  // The meeting the task was created for (preparation, follow-up, from a brief).
+  meetingId: integer("meeting_id").references(() => calendarEvents.id, { onDelete: "set null" }),
 }, (table) => [
   check("tasks_status_check", sql`${table.status} IN ('todo', 'in_progress', 'done')`),
   check("tasks_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2', 'P3')`),
@@ -89,6 +117,8 @@ const tasks = pgTable("tasks", {
   index("tasks_space").on(table.spaceId),
   index("tasks_project").on(table.projectId),
   index("tasks_assignee").on(table.assigneeId),
+  index("tasks_client").on(table.clientId),
+  index("tasks_meeting").on(table.meetingId),
 ]);
 
 const taskLabels = pgTable("task_labels", {
@@ -182,6 +212,7 @@ const calendarEvents = pgTable("calendar_events", {
   attendees: text("attendees").default("").notNull(),
   status: varchar("status", { length: 20 }).default("confirmed").notNull(),
   updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
 }, (table) => [
   uniqueIndex("calendar_events_account_external").on(table.accountId, table.externalId),
   index("calendar_events_start").on(table.startAt),
@@ -203,6 +234,7 @@ const authSessions = pgTable("auth_sessions", {
 ]);
 
 module.exports = {
+  clients,
   calendarAccounts,
   calendarEvents,
   authSessions,

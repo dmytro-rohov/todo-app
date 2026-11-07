@@ -39,7 +39,7 @@ describe("Tasks 1.0 data model", { skip, concurrency: false }, () => {
   });
 
   beforeEach(async () => {
-    await owner.query(`DROP TABLE IF EXISTS public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
+    await owner.query(`DROP TABLE IF EXISTS public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes,
       public.task_labels, public.tasks, public.projects, public.spaces, public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
     await runMigrations(owner, { dir: MIGRATIONS_DIR, appRole: APP_ROLE, log: () => {} });

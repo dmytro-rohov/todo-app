@@ -2,6 +2,7 @@
 // to a year ahead is read and upserted; events gone from Google within the window are removed.
 const { withTransaction } = require("./db");
 const { decrypt } = require("./secrets");
+const { matchMeetings } = require("./clients");
 
 const WINDOW_BACK_DAYS = 60;
 const WINDOW_AHEAD_DAYS = 365;
@@ -64,6 +65,7 @@ async function syncAccount(pool, account, { google, key }) {
         `DELETE FROM calendar_events WHERE account_id = $1 AND end_at >= $2 AND start_at <= $3 AND NOT (external_id = ANY($4::text[]))`,
         [account.id, timeMin, timeMax, kept]);
       await client.query("UPDATE calendar_accounts SET last_sync_at = now(), last_error = NULL WHERE id = $1", [account.id]);
+      await matchMeetings(client);
     });
     return { ok: true, events: events.length };
   } catch (error) {

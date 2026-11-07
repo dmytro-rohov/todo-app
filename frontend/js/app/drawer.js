@@ -12,7 +12,7 @@ import { toast } from "./toast.js";
 const FIELD_NAMES = {
   created: "Utworzono", title: "Tytuł", description: "Opis", status: "Status", priority: "Priorytet", date: "Data",
   due_date: "Termin", category_id: "Etykieta główna", labels: "Etykiety", space_id: "Przestrzeń", project_id: "Projekt",
-  assignee_id: "Wykonawca", archived_at: "Archiwum"
+  assignee_id: "Wykonawca", client_id: "Klient", archived_at: "Archiwum"
 };
 
 let panel = null;
@@ -28,6 +28,7 @@ function historyValue(field, value) {
   if (field === "space_id") return lookup.space(Number(value))?.name || `#${value}`;
   if (field === "project_id") return lookup.project(Number(value))?.name || `#${value}`;
   if (field === "assignee_id") return lookup.assignee(Number(value))?.name || `#${value}`;
+  if (field === "client_id") return lookup.client(Number(value))?.name || `#${value}`;
   if (field === "category_id") return lookup.label(Number(value))?.name || `#${value}`;
   if (field === "labels") return value.split(",").map(id => lookup.label(Number(id))?.name || `#${id}`).join(", ");
   if (field === "archived_at") return "zarchiwizowano";
@@ -69,6 +70,8 @@ function bodyHtml(task) {
         <dd><label class="select select--sm"><select data-field="spaceId" aria-label="Przestrzeń">${options(store.spaces, spaceId)}</select>${icon("chevronDown", 16)}</label></dd>
         <dt>${icon("folder", 18)}Projekt</dt>
         <dd><label class="select select--sm"><select data-field="projectId" aria-label="Projekt">${options(projects, task.projectId, "Bez projektu")}</select>${icon("chevronDown", 16)}</label></dd>
+        <dt>${icon("users", 18)}Klient</dt>
+        <dd><label class="select select--sm"><select data-field="clientId" aria-label="Klient">${options(store.clients.filter(c => c.status !== "archived" || c.id === task.clientId), task.clientId, lookup.clientOf(task) && !task.clientId ? `Z projektu: ${escapeHtml(lookup.client(lookup.clientOf(task))?.name || "")}` : "Bez klienta")}</select>${icon("chevronDown", 16)}</label></dd>
         <dt>${icon("user", 18)}Wykonawca</dt>
         <dd><label class="select select--sm"><select data-field="assigneeId" aria-label="Wykonawca">${options(store.assignees, task.assigneeId, "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</label></dd>
         <dt>${icon("flag", 18)}Priorytet</dt>
@@ -188,6 +191,7 @@ async function onChange(event) {
   if (field === "priority") return save({ priority: value }, "Nie udało się zmienić priorytetu.");
   if (field === "spaceId") return save({ spaceId: Number(value) }, "Nie udało się zmienić przestrzeni.");
   if (field === "projectId") return save({ projectId: Number(value) || null }, "Nie udało się zmienić projektu.");
+  if (field === "clientId") return save({ clientId: Number(value) || null }, "Nie udało się zmienić klienta.");
   if (field === "assigneeId") return save({ assigneeId: Number(value) || null }, "Nie udało się zmienić wykonawcy.");
 }
 
