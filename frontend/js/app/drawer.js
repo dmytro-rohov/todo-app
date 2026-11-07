@@ -5,7 +5,7 @@ import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { formatDuration, PRIORITY_LABELS, STATUS_LABELS, titleError, trackedNow, yearsAhead } from "./logic.js";
 import { isMember, lookup, paint, reload, runTask, store } from "./app.js";
-import { moveTask } from "./board.js";
+import { moveTask, workflowLabel } from "./board.js";
 import { confirmDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
 
@@ -72,6 +72,7 @@ function bodyHtml(task) {
         <dd><label class="select select--sm"><select data-field="projectId" aria-label="Projekt">${options(projects, task.projectId, "Bez projektu")}</select>${icon("chevronDown", 16)}</label></dd>
         ${isMember() ? "" : `<dt>${icon("users", 18)}Klient</dt>
         <dd><label class="select select--sm"><select data-field="clientId" aria-label="Klient">${options(store.clients.filter(c => c.status !== "archived" || c.id === task.clientId), task.clientId, lookup.clientOf(task) && !task.clientId ? `Z projektu: ${escapeHtml(lookup.client(lookup.clientOf(task))?.name || "")}` : "Bez klienta")}</select>${icon("chevronDown", 16)}</label></dd>`}
+        ${isMember() ? "" : workflowRowHtml(task)}
         ${task.mailId && !isMember() ? `<dt>${icon("mail", 18)}E-mail</dt><dd><a class="btn btn--ghost btn--sm" href="#mail-${task.mailId}">Otwórz wiadomość</a></dd>` : ""}
         <dt>${icon("user", 18)}Wykonawca</dt>
         <dd><label class="select select--sm"><select data-field="assigneeId" aria-label="Wykonawca">${options(store.assignees, task.assigneeId, "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</label></dd>
@@ -156,6 +157,20 @@ async function loadDetails() {
   } catch { /* the panel still works with the task itself */ }
 }
 
+// Mytko Workflow ToDo: send / withdraw, and where it stands there. Only spaces visible to agents can send.
+function workflowRowHtml(task) {
+  const space = lookup.space(task.spaceId);
+  const label = workflowLabel(task);
+  const requested = Boolean(task.workflowRequestedAt);
+  const action = requested
+    ? `<button type="button" class="btn btn--ghost btn--sm" data-d="workflow-off">Wycofaj</button>`
+    : space?.agentVisible ? `<button type="button" class="btn btn--ghost btn--sm" data-d="workflow-on">${icon("layers", 15)}Wyślij do Workflow</button>`
+      : `<small class="muted">Ta przestrzeń nie jest widoczna dla agentów</small>`;
+  const link = task.workflowUrl && requested ? `<a class="btn btn--ghost btn--sm" href="${escapeHtml(task.workflowUrl)}" target="_blank" rel="noopener noreferrer">Otwórz w Workflow</a>` : "";
+  const hint = requested && !task.workflowRef ? '<small class="muted">Workflow pobierze je, gdy Fujitsu będzie włączone.</small>' : "";
+  return `<dt>${icon("layers", 18)}Workflow</dt><dd class="workflow-cell">${label ? `<span class="chip chip--workflow">${escapeHtml(label)}</span>` : ""}${action}${link}${hint}</dd>`;
+}
+
 async function save(body, failure) {
   const id = current.id;
   const task = await runTask(() => api.updateTask(id, body), failure);
@@ -203,6 +218,7 @@ async function onClick(event) {
   const id = current.id;
   const kind = button.dataset.d;
   if (kind === "close") return closeDrawer();
+  if (kind === "workflow-on" || kind === "workflow-off") return save({ workflow: kind === "workflow-on" }, "Nie udało się zmienić Workflow.");
   if (kind === "horizon") return save({ dueDate: yearsAhead(Number(button.dataset.years)) }, "Nie udało się ustawić celu.");
   if (kind === "timer-start" || kind === "timer-stop") {
     await runTask(() => api.timer(id, kind === "timer-start" ? "start" : "stop"));

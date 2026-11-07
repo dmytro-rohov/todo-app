@@ -139,6 +139,13 @@ const tasks = pgTable("tasks", {
   userId: ownerColumn(),
   // The e-mail the task was created from (Poczta).
   mailId: integer("mail_id").references(() => mailMessages.id, { onDelete: "set null" }),
+  // Mytko Workflow ToDo (C6): requested = sent by the owner (or a coding proposal); Workflow picks it up from
+  // /api/agent/workflow while Fujitsu runs, stores its own id/link and reports its status, mirrored on the board.
+  workflowRequestedAt: timestamptz("workflow_requested_at"),
+  workflowRef: varchar("workflow_ref", { length: 100 }),
+  workflowStatus: varchar("workflow_status", { length: 30 }),
+  workflowUrl: varchar("workflow_url", { length: 500 }),
+  workflowUpdatedAt: timestamptz("workflow_updated_at"),
 }, (table) => [
   check("tasks_status_check", sql`${table.status} IN ('todo', 'in_progress', 'done')`),
   check("tasks_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2', 'P3')`),

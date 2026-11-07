@@ -13,7 +13,8 @@ const TRACKED = {
   projectId: "project_id",
   assigneeId: "assignee_id",
   clientId: "client_id",
-  archivedAt: "archived_at"
+  archivedAt: "archived_at",
+  workflowStatus: "workflow"
 };
 const MAX_VALUE = 200;
 

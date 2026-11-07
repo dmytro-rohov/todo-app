@@ -71,6 +71,7 @@ try {
   await shot("brief");
   await click('dialog[open] [data-brief="add-all"]'); await sleep(2000);
   check("all proposed tasks are added to the meeting", await ev("[...document.querySelectorAll('dialog[open] [data-brief-task]')].length") === 2);
+  check("the coding proposal went to Workflow at once", (await api("/api/tasks")).find(t => t.title === "Przygotować makietę sklepu")?.workflowStatus === "requested");
   const meetingTasks = (await api("/api/tasks")).filter(t => t.meetingId && ["Przygotować makietę sklepu", "Wysłać wycenę"].includes(t.title));
   check("…linked to the meeting and its client", meetingTasks.length === 2 && meetingTasks.every(t => t.clientId), JSON.stringify(meetingTasks.map(t => [t.meetingId, t.clientId])));
   await click('dialog[open] [data-brief="schedule"]'); await sleep(800);

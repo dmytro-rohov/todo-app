@@ -17,6 +17,14 @@ let suppressClick = false;
 
 export const isDragging = () => drag?.active === true;
 
+// Where the task stands in the Mytko Workflow ToDo (C6), or "" when it was never sent.
+const WORKFLOW = { requested: "Czeka na Workflow", todo: "W Workflow", in_progress: "Workflow: w realizacji", needs_attention: "Workflow: wymaga uwagi",
+  done: "Workflow: zrobione", withdrawn: "Wycofane z Workflow" };
+export function workflowLabel(task) {
+  if (!task.workflowStatus || task.workflowStatus === "cancelled") return "";
+  return WORKFLOW[task.workflowStatus] || "W Workflow";
+}
+
 export function chipsHtml(task) {
   const project = lookup.project(task.projectId);
   const client = lookup.client(lookup.clientOf(task));
@@ -24,7 +32,9 @@ export function chipsHtml(task) {
   const projectChip = project ? `<span class="chip chip--project" data-c="${escapeHtml(project.color)}">${icon("folder", 15)}${escapeHtml(project.name)}</span>` : "";
   const labels = (task.labelIds || []).map(lookup.label).filter(Boolean).map(label =>
     `<span class="chip chip--label" data-c="${escapeHtml(label.color)}"><i class="dot"></i>${escapeHtml(label.name)}</span>`).join("");
-  return clientChip || projectChip || labels ? `<div class="chips">${clientChip}${projectChip}${labels}</div>` : "";
+  const flow = workflowLabel(task);
+  const workflowChip = flow ? `<span class="chip chip--workflow" title="Mytko Workflow">${icon("layers", 14)}${escapeHtml(flow)}</span>` : "";
+  return clientChip || projectChip || labels || workflowChip ? `<div class="chips">${workflowChip}${clientChip}${projectChip}${labels}</div>` : "";
 }
 
 export function avatarHtml(task) {

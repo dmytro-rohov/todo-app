@@ -3,7 +3,7 @@ const { STATUSES } = require('./task-status');
 const PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
 function validateTaskPatch(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Invalid request body' };
-  const allowed = ['title','description','status','priority','categoryId','dueDate','position','spaceId','projectId','labelIds','assigneeId','clientId','meetingId','mailId'];
+  const allowed = ['title','description','status','priority','categoryId','dueDate','position','spaceId','projectId','labelIds','assigneeId','clientId','meetingId','mailId','workflow'];
   if (!Object.keys(body).length || Object.keys(body).some(k => !allowed.includes(k))) return { error: 'Unknown or empty task fields' };
   if ('title' in body && (typeof body.title !== 'string' || !body.title.trim() || body.title.trim().length < 3 || body.title.length > 100)) return { error: 'Invalid title' };
   if ('description' in body && (typeof body.description !== 'string' || body.description.length > 5000)) return { error: 'Invalid description' };
@@ -19,6 +19,7 @@ function validateTaskPatch(body) {
   if ('meetingId' in body && body.meetingId !== null && parseId(body.meetingId) === null) return { error: 'Invalid meeting' };
   if ('mailId' in body && body.mailId !== null && parseId(body.mailId) === null) return { error: 'Invalid e-mail' };
   if ('labelIds' in body && !isLabelList(body.labelIds)) return { error: 'Invalid labels' };
+  if ('workflow' in body && typeof body.workflow !== 'boolean') return { error: 'Invalid workflow' };
   const value = { ...body, ...('title' in body ? { title: body.title.trim() } : {}) };
   for (const key of ['categoryId', 'spaceId', 'projectId', 'assigneeId', 'clientId', 'meetingId', 'mailId']) if (value[key] != null) value[key] = Number(value[key]);
   if (value.labelIds) value.labelIds = value.labelIds.map(Number);
