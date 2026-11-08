@@ -267,7 +267,8 @@ export function bindGoals(root) {
     const action = button.dataset.goal;
     const goal = goalOf(button);
     if (action === "mode") { goalsState.mode = button.dataset.mode; goalsState.key = null; render(); }
-    else if (action === "retry") { goalsState.failed = null; render(); }
+    // retry always fetches again, also a list that was loaded before a failed save
+    else if (action === "retry") { goalsState.failed = null; goalsState.key = null; render(); }
     else if (action === "prev") shift(-1);
     else if (action === "next") shift(1);
     else if (action === "open-period") {
