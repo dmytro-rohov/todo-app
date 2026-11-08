@@ -709,6 +709,32 @@
     }
     .meet-join { justify-self: start; }
 
+    // ---- the running timer, always in sight --------------------------------------------------------------------------
+    .timer-dock {
+        position: fixed; z-index: 45; right: max(1.25rem, env(safe-area-inset-right)); bottom: calc(1.25rem + env(safe-area-inset-bottom));
+        display: flex; align-items: center; gap: 0.25rem; max-width: min(22.5rem, calc(100vw - 2rem)); padding: 0.375rem 0.375rem 0.375rem 0.25rem;
+        border: 1px solid #b7e34d66; border-radius: 1rem; background: color-mix(in srgb, var(--surface) 92%, #b7e34d);
+        box-shadow: 0 0.875rem 2.25rem #000a, 0 0 1.5rem #b7e34d22;
+        &[hidden] { display: none; }
+    }
+    .timer-dock__open {
+        display: flex; align-items: center; gap: 0.75rem; min-width: 0; padding: 0.375rem 0.5rem; border: 0; border-radius: 0.75rem;
+        background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+        &:hover { background: #ffffff0d; } &:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    }
+    .timer-dock__pulse { flex: 0 0 auto; width: 0.625rem; height: 0.625rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 #b7e34d99; animation: dock-pulse 1.6s ease-out infinite; }
+    @keyframes dock-pulse { 70% { box-shadow: 0 0 0 0.5rem #b7e34d00; } 100% { box-shadow: 0 0 0 0 #b7e34d00; } }
+    .timer-dock__text { display: grid; min-width: 0; small { color: var(--muted); font-size: 0.75rem; } strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9375rem; } }
+    .timer-dock__time { flex: 0 0 auto; padding: 0.25rem 0.5rem; border-radius: 0.5rem; background: #b7e34d26; color: var(--accent); font-weight: 750; font-variant-numeric: tabular-nums; }
+    .timer-dock__stop { flex: 0 0 auto; color: var(--accent); }
+    .app.has-timer-dock .main { padding-bottom: 6rem; }
+    @media (prefers-reduced-motion: reduce) { .timer-dock__pulse { animation: none; } }
+    @media (max-width: 900px) {
+        // above the "+" button on phones and tablets
+        .timer-dock { bottom: calc(5.75rem + env(safe-area-inset-bottom)); right: max(1rem, env(safe-area-inset-right)); }
+        body.drawer-open .timer-dock, body:has(dialog[open]) .timer-dock, .sidebar-open .timer-dock { display: none; }
+    }
+
     // ---- Poczta -------------------------------------------------------------------------------------------------
     .tab .count { margin-left: 2px; background: var(--accent); color: var(--accent-contrast); }
     .mail { display: grid; grid-template-columns: minmax(18.75rem, 26.25rem) minmax(0, 1fr); gap: 1rem; align-items: start; min-width: 0; }
