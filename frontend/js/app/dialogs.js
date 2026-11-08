@@ -1,5 +1,6 @@
 // Modal dialogs (native <dialog>): new task, managing spaces / projects / labels / people, confirmations.
 import { api } from "../api/client.js";
+import { SCALES, savedScale, saveScale } from "../ui-scale.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { isoDay, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
@@ -21,6 +22,20 @@ export function dialog(className, html) {
   paint(element);
   element.showModal();
   return element;
+}
+
+// "Rozmiar interfejsu": the whole interface scales (every size is in rem); kept on this device only.
+export function openScaleDialog() {
+  const labels = { auto: "Automatycznie (komputer 75%, telefon 70%)", "0.7": "70%", "0.8": "80%", "0.9": "90%", "1": "100%" };
+  const current = savedScale();
+  const element = dialog("dialog--confirm dialog--scale", `<form class="dialog__body" novalidate>
+    <header class="dialog__head"><h2>Rozmiar interfejsu</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
+    <p class="muted">Ustawienie tego urządzenia. Zmianę widać od razu.</p>
+    <div class="scale-options">${SCALES.map(value => `<label class="check"><input type="radio" name="scale" value="${value}"${value === current ? " checked" : ""}>${labels[value]}</label>`).join("")}</div>
+    <div class="dialog__actions"><button type="button" class="btn btn--primary" data-close>Gotowe</button></div>
+  </form>`);
+  element.addEventListener("click", event => { if (event.target.closest("[data-close]")) element.close(); });
+  element.addEventListener("change", event => { if (event.target.name === "scale") saveScale(event.target.value); });
 }
 
 export function confirmDialog(message, confirmLabel = "OK") {

@@ -48,5 +48,5 @@ const PATHS = {
 };
 
 export function icon(name, size = 20, extra = "") {
-  return `<svg class="i i-${name}${extra ? ` ${extra}` : ""}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${PATHS[name] || ""}</svg>`;
+  return `<svg class="i i-${name}${extra ? ` ${extra}` : ""}" width="${size / 16}rem" height="${size / 16}rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${PATHS[name] || ""}</svg>`;
 }

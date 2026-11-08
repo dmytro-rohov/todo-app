@@ -8,6 +8,7 @@ import { lookup, render, runTask, store, visibleTasks } from "./app.js";
 import { calendarState, ensureEvents, eventsByDay, eventTime, hasCalendars, openMeeting, scopedEvents } from "./meetings.js";
 import { openDrawer } from "./drawer.js";
 import { openNewTask } from "./dialogs.js";
+import { uiScale } from "../ui-scale.js";
 
 const PER_DAY = 3;
 const HOUR_START = 6;
@@ -78,11 +79,12 @@ function renderWeek(byDay, meetingsByDay, today) {
 // Positions the week's events (CSSOM, not style attributes: the CSP allows no inline styles).
 export function afterCalendarRender(view) {
   for (const node of view.querySelectorAll(".week__event")) {
-    node.style.top = `${node.dataset.top}px`;
-    node.style.height = `${node.dataset.h}px`;
+    // rem, like the hour grid: the events scale with the interface
+    node.style.top = `${node.dataset.top / 16}rem`;
+    node.style.height = `${node.dataset.h / 16}rem`;
   }
   const scroll = view.querySelector(".week__scroll");
-  if (scroll && !scroll.dataset.placed) { scroll.scrollTop = (8 - HOUR_START) * HOUR_PX; scroll.dataset.placed = "1"; }
+  if (scroll && !scroll.dataset.placed) { scroll.scrollTop = (8 - HOUR_START) * HOUR_PX * uiScale(); scroll.dataset.placed = "1"; }
 }
 
 // Phones: a compact month with dots, and the chosen day's tasks below it (titles stay readable).

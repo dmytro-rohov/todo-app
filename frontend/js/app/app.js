@@ -4,7 +4,7 @@ import { logout, markLoggedOut } from "../auth/login.js";
 import { escapeHtml, safeColor } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { counters, filterTasks, initials, isOpen, isoDay, STATUS_LABELS } from "./logic.js";
-import { renderBoard, bindBoard, isDragging, updatePeek } from "./board.js";
+import { renderBoard, bindBoard, tickTimers, updatePeek } from "./board.js";
 import { renderList, bindList } from "./list.js";
 import { renderCalendar, bindCalendar, afterCalendarRender } from "./calendar.js";
 import { calendarState, eventTime, loadCalendarAccounts, loadToday, openMeeting } from "./meetings.js";
@@ -13,7 +13,7 @@ import { openAccounts, openPassword } from "./accounts.js";
 import { bindMail, loadMail, mailAddress, mailBadge, renderMail, showMail } from "./mail.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
-import { openNewTask, openManage, confirmDialog } from "./dialogs.js";
+import { openNewTask, openManage, confirmDialog, openScaleDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
 
 const PREFS = "mytko-tasks-prefs";
@@ -214,6 +214,7 @@ function sidebarHtml() {
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="categories" title="Etykiety">${icon("tag", 18)}<span>Etykiety</span><em>${store.labels.length}</em></button>
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees" title="Wykonawcy">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
       ${isMember() ? "" : `<button type="button" class="nav-item nav-item--sub" data-action="accounts" title="Konta">${icon("lock", 18)}<span>Konta</span></button>`}
+      <button type="button" class="nav-item nav-item--sub" data-action="ui-scale" title="Rozmiar interfejsu">${icon("sliders", 18)}<span>Rozmiar interfejsu</span></button>
     </nav>
     <div class="sidebar__foot">
       <div class="profile">
@@ -434,6 +435,8 @@ async function handleAction(target, event) {
   } else if (action === "client-scope") {
     toggleSidebar(false);
     setFilter({ clientId: Number(target.dataset.client), spaceId: null, projectId: null });
+  } else if (action === "ui-scale") {
+    openScaleDialog();
   } else if (action === "accounts") {
     openAccounts();
   } else if (action === "password") {
@@ -548,7 +551,8 @@ export function startApp(element, session, { notice = null } = {}) {
   }
   if (notice) toast(notice.text, { tone: notice.tone });
   // Running timers tick; other devices' changes arrive when the tab comes back.
-  setInterval(() => !isDragging() && root.querySelector("[data-timer]") && render(), 30000);
+  // Running timers tick every second in place; the board re-renders on its own changes only.
+  setInterval(() => tickTimers(document), 1000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { reload({ quiet: true }); loadMail(); } });
   return { closeDrawer, ready };
 }

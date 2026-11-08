@@ -28,7 +28,7 @@ try {
   check("the month shows meetings of the connected calendar", await ev("[...document.querySelectorAll('.event--meeting')].some(e => e.textContent.includes('Spotkanie z leadem'))"));
   await click('[data-cal="mode"][data-mode="week"]'); await sleep(800);
   const week = await ev("(() => { const e = [...document.querySelectorAll('.week__event')].find(n => n.textContent.includes('Spotkanie z leadem')); return e && { top: e.style.top, h: e.style.height }; })()");
-  check("the week places a 10:00–11:00 meeting at its hour", week?.top === "192px" && week?.h === "48px", JSON.stringify(week));
+  check("the week places a 10:00–11:00 meeting at its hour", week?.top === "12rem" && week?.h === "3rem", JSON.stringify(week));
   await ev("[...document.querySelectorAll('.week__event')].find(n => n.textContent.includes('Spotkanie z leadem')).setAttribute('data-test', 'lead')");
   await click('.week__event[data-test="lead"]');
   check("a meeting opens with its Google Meet link and guests", await ev("Boolean(document.querySelector('dialog[open] .meet-join[href^=\"https://meet.google.com/\"]')) && document.querySelector('dialog[open] .guests').textContent.includes('Anna Róża')"));
