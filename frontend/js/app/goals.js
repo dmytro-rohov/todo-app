@@ -13,7 +13,7 @@ import { LOCALE } from "../i18n.js";
 const now = new Date();
 export const goalsState = {
   mode: "month", year: now.getFullYear(), month: now.getMonth() + 1,
-  items: null, key: null, periods: [], loading: false,
+  items: null, key: null, periods: [], loading: false, failed: null,
   // what is being typed into the add form survives a re-render of the page
   draft: { title: "", description: "", deadline: "", kind: "goal", more: false }
 };
@@ -28,12 +28,14 @@ export async function loadGoals() {
   const current = period();
   const key = keyOf(current);
   goalsState.loading = true;
+  goalsState.failed = null;
   try {
     const [items, periods] = await Promise.all([api.goals(current.year, current.month), api.goalPeriods()]);
-    if (keyOf(period()) !== key) return; // another period was chosen meanwhile
-    Object.assign(goalsState, { items, periods, key });
+    // another period chosen meanwhile: the render below loads that one instead
+    if (keyOf(period()) === key) Object.assign(goalsState, { items, periods, key });
   } catch (error) {
-    toast(error.message || "Nie udało się wczytać listy.", { tone: "error" });
+    // shown with a retry button; never retried on its own (that would loop on a server error)
+    if (keyOf(period()) === key) goalsState.failed = { key, message: error.message || "Nie udało się wczytać listy." };
   } finally {
     goalsState.loading = false;
   }
@@ -100,9 +102,11 @@ function historyHtml() {
 
 export function renderGoals() {
   const current = period();
-  if (goalsState.key !== keyOf(current) && !goalsState.loading) queueMicrotask(loadGoals);
+  const failed = goalsState.failed?.key === keyOf(current) ? goalsState.failed : null;
+  if (goalsState.key !== keyOf(current) && !goalsState.loading && !failed) queueMicrotask(loadGoals);
   const items = goalsState.key === keyOf(current) ? goalsState.items : null;
-  const years = Array.from({ length: 8 }, (_, i) => now.getFullYear() - 2 + i);
+  const years = [...new Set([...Array.from({ length: 8 }, (_, i) => now.getFullYear() - 2 + i), goalsState.year, ...goalsState.periods.map(p => p.year)])]
+    .sort((a, b) => a - b);
   return `<div class="goals">
     <div class="goals__bar">
       <span class="seg" role="group" aria-label="Okres">
@@ -120,10 +124,11 @@ export function renderGoals() {
     <div class="goals__layout">
       <section class="goals__list" aria-label="${escapeHtml(periodName(current))}">
         <header class="goals__head"><h2>${icon(current.month ? "calendar" : "calendarRange", 22)}${escapeHtml(periodName(current))}</h2>${items ? summary(items) : ""}</header>
-        ${items === null ? '<p class="empty">Wczytuję…</p>' : items.length
+        ${failed ? `<p class="field-error">${escapeHtml(failed.message)} <button type="button" class="btn btn--ghost btn--sm" data-goal="retry">Spróbuj ponownie</button></p>`
+          : items === null ? '<p class="empty">Wczytuję…</p>' : items.length
           ? `<ol class="goals__items" data-goal-list>${items.map(itemHtml).join("")}</ol>`
           : '<p class="goals__empty muted">Pusta lista. Dodaj pierwszy cel albo marzenie na ten okres.</p>'}
-        ${addFormHtml()}
+        ${items === null ? "" : addFormHtml()}
       </section>
       ${historyHtml()}
     </div>
@@ -148,13 +153,15 @@ function shift(step) {
 
 async function saveOrder(ids) {
   const current = period();
+  const key = goalsState.key;
   const before = goalsState.items;
   goalsState.items = ids.map(id => before.find(g => g.id === id));
   render();
   try {
-    goalsState.items = await api.orderGoals({ ...current, ids });
+    const items = await api.orderGoals({ ...current, ids });
+    if (goalsState.key === key) goalsState.items = items;
   } catch (error) {
-    goalsState.items = before;
+    if (goalsState.key === key) goalsState.items = before;
     toast(error.message || "Nie udało się zmienić kolejności.", { tone: "error" });
     await loadGoals();
     return;
@@ -172,9 +179,10 @@ function move(id, step) {
 }
 
 async function update(id, body) {
+  const key = goalsState.key;
   try {
     const saved = await api.updateGoal(id, body);
-    goalsState.items = goalsState.items.map(g => (g.id === id ? saved : g));
+    if (goalsState.key === key) goalsState.items = goalsState.items.map(g => (g.id === id ? saved : g));
     goalsState.periods = await api.goalPeriods();
   } catch (error) {
     toast(error.message || "Nie udało się zapisać.", { tone: "error" });
@@ -234,9 +242,10 @@ async function add(form) {
   d.description = form.description.value;
   d.deadline = form.deadline.value;
   if (!d.title.trim()) return form.title.focus();
+  const key = goalsState.key;
   try {
     const goal = await api.createGoal({ ...period(), title: d.title, description: d.description, deadline: d.deadline || null, kind: d.kind });
-    goalsState.items = [...goalsState.items, goal];
+    if (goalsState.key === key) goalsState.items = [...goalsState.items, goal];
     goalsState.periods = await api.goalPeriods();
     Object.assign(d, { title: "", description: "", deadline: "" });
   } catch (error) {
@@ -258,6 +267,8 @@ export function bindGoals(root) {
     const action = button.dataset.goal;
     const goal = goalOf(button);
     if (action === "mode") { goalsState.mode = button.dataset.mode; goalsState.key = null; render(); }
+    // retry always fetches again, also a list that was loaded before a failed save
+    else if (action === "retry") { goalsState.failed = null; goalsState.key = null; render(); }
     else if (action === "prev") shift(-1);
     else if (action === "next") shift(1);
     else if (action === "open-period") {
@@ -298,6 +309,7 @@ export function bindGoals(root) {
     const item = event.target.closest?.(".goal");
     if (!item || event.target !== item) return;
     const goal = goalOf(item);
+    if (!goal) return;
     if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) { event.preventDefault(); move(goal.id, event.key === "ArrowUp" ? -1 : 1); }
     else if (event.key === "Enter") { event.preventDefault(); openEdit(goal); }
   });
@@ -324,13 +336,19 @@ export function bindGoals(root) {
     });
     if (moving) list.insertBefore(moving, after || null);
   });
-  view.addEventListener("dragend", () => {
-    if (!dragged) return;
+  view.addEventListener("drop", event => {
+    if (!dragged || !event.target.closest?.("[data-goal-list]")) return;
+    event.preventDefault();
     const list = view.querySelector("[data-goal-list]");
     const ids = [...list.querySelectorAll(".goal")].map(el => Number(el.dataset.goalId));
     list.querySelector(".is-dragging")?.classList.remove("is-dragging");
-    const changed = ids.some((id, i) => id !== goalsState.items[i]?.id);
     dragged = null;
-    if (changed) saveOrder(ids);
+    if (ids.some((id, i) => id !== goalsState.items[i]?.id)) saveOrder(ids);
+  });
+  view.addEventListener("dragend", () => {
+    if (!dragged) return;
+    // released outside the list: back to the saved order
+    dragged = null;
+    render();
   });
 }

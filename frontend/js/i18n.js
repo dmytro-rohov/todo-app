@@ -290,6 +290,7 @@ const PROTECTED = [
   ".account__text strong", ".mail-row__from", ".mail-row__subject", ".mail-row__snippet", ".mail__reader h2", ".mail__from strong",
   ".mail__body", ".mail-proposals strong", ".brief__section > p", ".timer-dock__text strong", ".popover__item > span:last-child", ".goal__title", ".goal__desc",
 ].join(", ");
+const BUILT_IN = new Set(["Praca", "Prywatne"]);
 const ATTRIBUTES = ["title", "aria-label", "placeholder", "aria-valuetext", "aria-roledescription"];
 const SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA", "CODE", "PRE", "svg"]);
 
@@ -310,6 +311,8 @@ function translate(text, where = "text") {
 function translateText(node) {
   const parent = node.parentElement;
   if (!parent || SKIP.has(parent.tagName) || parent.closest(PROTECTED)) return;
+  // an option holding a project, client, label, person or space (its value is an id) is a name someone gave
+  if (parent.tagName === "OPTION" && /^\d+$/.test(parent.value) && !BUILT_IN.has(node.data.trim())) return;
   const next = translate(node.data);
   if (next !== node.data) node.data = next;
 }

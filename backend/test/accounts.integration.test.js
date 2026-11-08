@@ -146,6 +146,7 @@ describe("member accounts", { skip, concurrency: false }, () => {
     assert.equal((await call("/api/goals/order", "PUT", { ...december, ids: [third.id, first.body.id] })).status, 409);
     assert.equal((await call("/api/goals/order", "PUT", { ...december, ids: [third.id, first.body.id, year.id] })).status, 409);
     assert.equal((await call("/api/goals/order", "PUT", { ...december, ids: [third.id, third.id, dream.id] })).status, 400);
+    assert.equal((await call("/api/goals/order", "PUT", { ...december, ids: [third.id, String(third.id), dream.id] })).status, 400);
 
     // looking back: per period, how much was done
     assert.deepEqual((await call("/api/goals/periods")).body,

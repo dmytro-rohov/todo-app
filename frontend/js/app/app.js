@@ -201,7 +201,7 @@ function sidebarHtml() {
       <p class="nav-heading"><span>Przestrzenie</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="spaces" aria-label="Zarządzaj przestrzeniami">${icon("plus", 16)}</button></p>
       ${store.spaces.map(space => `
         <button type="button" class="nav-item nav-item--space${filters.spaceId === space.id && !filters.projectId ? " is-active" : ""}" data-action="scope" data-space="${space.id}" data-project="" title="${escapeHtml(space.name)}">
-          <i class="dot" data-c="${escapeHtml(space.color)}"></i><span>${escapeHtml(space.name)}</span>${space.shared ? `<i class="shared-mark" title="Wspólna przestrzeń">${icon("users", 14)}</i>` : ""}<em>${openCount(space.id)}</em>
+          <i class="dot" data-c="${escapeHtml(space.color)}"></i><span${space.key === "work" || String(space.key).startsWith("private") ? "" : ' translate="no"'}>${escapeHtml(space.name)}</span>${space.shared ? `<i class="shared-mark" title="Wspólna przestrzeń">${icon("users", 14)}</i>` : ""}<em>${openCount(space.id)}</em>
         </button>`).join("")}
       <p class="nav-heading"><span>Projekty</span><button type="button" class="icon-btn icon-btn--sm" data-action="manage" data-tab="projects" aria-label="Zarządzaj projektami">${icon("plus", 16)}</button></p>
       ${activeProjects.length ? activeProjects.map(project => `

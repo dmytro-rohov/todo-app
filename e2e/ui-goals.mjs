@@ -7,6 +7,8 @@ const chrome = spawn("google-chrome", ["--headless=new", "--no-sandbox", "--disa
   "--user-data-dir=/tmp/tasks-e2e-profile", "about:blank"], { stdio: "ignore" });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let ws, seq = 0; const pending = new Map(); const errors = []; const results = [];
+// failing: requests to /api/goals are answered with a network error (Fetch domain), counted in `failed`
+let failing = false, failed = 0;
 const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`); };
 const send = (method, params = {}) => { const id = ++seq; ws.send(JSON.stringify({ id, method, params })); return new Promise(r => pending.set(id, r)); };
 const ev = async expression => (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
@@ -33,7 +35,11 @@ try {
   ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise(r => ws.addEventListener("open", r));
   ws.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
-    if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); });
+    if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
+    if (m.method === "Fetch.requestPaused") {
+      if (failing) { failed++; send("Fetch.failRequest", { requestId: m.params.requestId, errorReason: "Failed" }); }
+      else send("Fetch.continueRequest", { requestId: m.params.requestId });
+    } });
   await send("Runtime.enable");
   await send("Page.navigate", { url: BASE + "/" }); await sleep(3500);
   await click('[data-view="goals"]'); await sleep(800);
@@ -103,6 +109,33 @@ try {
   await click('[data-goal="next"]');
   check("the arrows go to the next month (an empty list)", Boolean(await ev(`document.querySelector('.goals__empty')`)));
   await click('[data-goal="prev"]');
+  // two quick clicks: the list of the period finally shown is loaded, not stuck on "Wczytuję…"
+  await ev(`(() => { const b = document.querySelector('[data-goal="next"]'); b.click(); document.querySelector('[data-goal="next"]').click(); return true; })()`); await sleep(1500);
+  check("fast period switching ends on a loaded list", !(await ev(`/Wczytuję/.test(document.querySelector('.goals__list')?.textContent || "")`))
+    && Boolean(await ev(`document.querySelector('.goals__empty, .goals__items')`)), await ev(`document.querySelector('.goals__head h2')?.textContent.trim()`));
+  await ev(`(() => { document.querySelector('[data-goal="prev"]').click(); return true; })()`); await sleep(800);
+  await ev(`(() => { document.querySelector('[data-goal="prev"]').click(); return true; })()`); await sleep(1200);
+
+  // the server failing: one error with "Spróbuj ponownie", no retry loop; the button loads the list again
+  await send("Fetch.enable", { patterns: [{ urlPattern: "*/api/goals*" }] });
+  failing = true; failed = 0;
+  await ev(`(() => { document.querySelector('[data-goal="next"]').click(); return true; })()`); await sleep(2500);
+  const errorShown = await ev(`!!document.querySelector('.goals__list [data-goal="retry"]')`);
+  check("a failed load shows “Spróbuj ponownie” and does not retry on its own", errorShown && failed <= 2, `requests failed: ${failed}`);
+  failing = false;
+  await click('[data-goal="retry"]'); await sleep(1200);
+  check("“Spróbuj ponownie” loads the list", Boolean(await ev(`document.querySelector('.goals__empty, .goals__items')`)));
+  await ev(`(() => { document.querySelector('[data-goal="prev"]').click(); return true; })()`); await sleep(1500);
+  // a failed reorder whose reload fails too: retry fetches the saved list again
+  failing = true; failed = 0;
+  await click('.goal:nth-child(2) [data-goal="up"]'); await sleep(1500);
+  check("a failed save shows the error with a retry", await ev(`!!document.querySelector('.goals__list [data-goal="retry"]')`), `requests failed: ${failed}`);
+  failing = false;
+  await click('[data-goal="retry"]'); await sleep(1200);
+  const afterRetry = await titles();
+  const stored = (await api(`/api/goals?year=${year}&month=${month}`)).map(g => g.title).join("|");
+  check("…and retry shows the list as saved on the server", afterRetry === stored, `${afterRetry} vs ${stored}`);
+  await send("Fetch.disable");
 
   // phone
   await send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });

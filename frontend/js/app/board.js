@@ -352,8 +352,10 @@ export function bindBoard(root) {
     let move = null;
     if (event.key === "ArrowUp" && index > 0) move = [task.status, list[index - 1].id];
     if (event.key === "ArrowDown" && index < list.length - 1) move = [task.status, list[index + 2]?.id ?? null];
-    const column = STATUSES.indexOf(task.status) + (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0);
-    if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && STATUSES[column]) move = [STATUSES[column], null];
+    // only between the columns on screen (Zakończone may be hidden)
+    const shown = [...view.querySelectorAll(".board .column")].map(c => c.dataset.status);
+    const column = shown.indexOf(task.status) + (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0);
+    if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && shown.includes(task.status) && shown[column]) move = [shown[column], null];
     if (!move) return;
     event.preventDefault();
     moveTask(id, move[0], move[1]).then(() => root.querySelector(`.card[data-id="${id}"]`)?.focus());
