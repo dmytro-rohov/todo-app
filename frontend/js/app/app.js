@@ -12,13 +12,14 @@ import { openClient } from "./clients.js";
 import { openAccounts, openPassword } from "./accounts.js";
 import { bindMail, loadMail, mailAddress, mailBadge, renderMail, showMail } from "./mail.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
+import { afterGoalsRender, bindGoals, renderGoals } from "./goals.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog, openLanguageDialog, openScaleDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
 import { LANG } from "../i18n.js";
 
 const PREFS = "mytko-tasks-prefs";
-const VIEWS = { board: ["board", "Tablica"], list: ["list", "Lista"], calendar: ["calendar", "Kalendarz"], archive: ["archive", "Archiwum"], mail: ["mail", "Poczta"] };
+const VIEWS = { board: ["board", "Tablica"], list: ["list", "Lista"], calendar: ["calendar", "Kalendarz"], goals: ["goals", "Cele / Marzenia"], archive: ["archive", "Archiwum"], mail: ["mail", "Poczta"] };
 
 export const store = {
   session: null,
@@ -230,6 +231,10 @@ function sidebarHtml() {
 }
 
 function headHtml() {
+  if (store.view === "goals") {
+    return `<div class="page-head__title"><span class="page-head__icon">${icon("star", 30)}</span>
+      <div><h1>Cele / Marzenia</h1><p>Na miesiąc albo na cały rok: co chcesz osiągnąć i o czym marzysz</p></div></div>`;
+  }
   if (store.view === "mail") {
     return `<div class="page-head__title"><span class="page-head__icon">${icon("mail", 30)}</span>
       <div><h1>Poczta</h1><p>${escapeHtml(mailAddress() || "Skrzynka studia")} · wiadomości, zadania i leady z e-maili</p></div></div>`;
@@ -318,6 +323,7 @@ export function render() {
   root.classList.toggle("sidebar-collapsed", store.sidebarCollapsed);
   root.classList.toggle("filters-open", store.filtersOpen);
   root.classList.toggle("view-mail", store.view === "mail");
+  root.classList.toggle("view-goals", store.view === "goals");
   const f = store.filters;
   const active = [f.status, f.projectId, f.clientId, f.labelId, f.assigneeId, f.quick, !f.showDone].filter(Boolean).length;
   const badge = root.querySelector(".filters-toggle .count");
@@ -347,7 +353,7 @@ export function render() {
   } : null;
   view.dataset.view = store.view;
   view.innerHTML = store.view === "list" ? renderList() : store.view === "calendar" ? renderCalendar()
-    : store.view === "archive" ? renderArchive() : store.view === "mail" ? renderMail() : renderBoard();
+    : store.view === "archive" ? renderArchive() : store.view === "mail" ? renderMail() : store.view === "goals" ? renderGoals() : renderBoard();
   if (keep) {
     const board = view.querySelector(".board");
     if (board) board.scrollLeft = keep.left;
@@ -356,6 +362,7 @@ export function render() {
   updatePeek(view);
   renderTimerDock();
   if (store.view === "calendar") afterCalendarRender(view);
+  if (store.view === "goals") afterGoalsRender(view);
   paint(root);
 }
 
@@ -381,6 +388,7 @@ function shellHtml() {
         <button type="button" role="tab" class="tab" data-view="board">${icon("board")}<span>Tablica</span></button>
         <button type="button" role="tab" class="tab" data-view="list">${icon("list")}<span>Lista</span></button>
         <button type="button" role="tab" class="tab" data-view="calendar">${icon("calendar")}<span>Kalendarz</span></button>
+        <button type="button" role="tab" class="tab" data-view="goals">${icon("star")}<span>Cele<span class="tab__more"> / Marzenia</span></span></button>
         <button type="button" role="tab" class="tab" data-view="archive">${icon("archive")}<span>Archiwum</span></button>
         <button type="button" role="tab" class="tab" data-view="mail" hidden>${icon("mail")}<span>Poczta</span><em class="count" hidden></em></button>
       </div>
@@ -578,6 +586,7 @@ export function startApp(element, session, { notice = null } = {}) {
   bindList(root);
   bindCalendar(root);
   bindArchive(root);
+  bindGoals(root);
   bindMail(root);
   render();
   const ready = reload();

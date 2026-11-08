@@ -11,6 +11,12 @@ export const api = {
   moveTask: body => request("/api/tasks/move", json("POST", body)),
   history: id => request(`/api/tasks/${id}/history`),
   archive: () => request("/api/archive"),
+  goals: (year, month) => request(`/api/goals?year=${year}${month ? `&month=${month}` : ""}`),
+  goalPeriods: () => request("/api/goals/periods"),
+  createGoal: body => request("/api/goals", json("POST", body)),
+  updateGoal: (id, body) => request(`/api/goals/${id}`, json("PATCH", body)),
+  deleteGoal: id => request(`/api/goals/${id}`, { method: "DELETE" }),
+  orderGoals: body => request("/api/goals/order", json("PUT", body)),
   restore: id => request(`/api/archive/${id}/restore`, json("POST", {})),
   timer: (id, action) => request(`/api/tasks/${id}/timer/${action}`, json("POST", {})),
 

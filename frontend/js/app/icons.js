@@ -28,6 +28,8 @@ const PATHS = {
   chevronDown: '<path d="m7 10 5 5 5-5"/>',
   chevronLeft: '<path d="m14.5 6-6 6 6 6"/>',
   chevronRight: '<path d="m9.5 6 6 6-6 6"/>',
+  star: '<path d="m12 4 2.4 5 5.4.7-4 3.7 1 5.4L12 16.2l-4.8 2.6 1-5.4-4-3.7 5.4-.7z"/>',
+  chevronUp: '<path d="m6.5 14.5 5.5-5.5 5.5 5.5"/>',
   globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5z"/>',
   sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
   x: '<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>',

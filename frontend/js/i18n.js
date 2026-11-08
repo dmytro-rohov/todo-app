@@ -190,6 +190,15 @@ const UK = {
   "Nie udało się wczytać briefu.": "Не вдалося завантажити бриф.", "Skopiowano brief strony (JSON).": "Бриф сайту скопійовано (JSON).", "Nie udało się skopiować.": "Не вдалося скопіювати.",
   "Firma": "Компанія", "Kontakt": "Контакт", "Cel strony": "Мета сайту", "O firmie": "Про компанію", "Odbiorcy": "Аудиторія", "Oferta": "Пропозиція", "Ton": "Тон",
   "Lubi": "Подобається", "Nie lubi": "Не подобається", "Uwagi": "Примітки", "Wczytuję…": "Завантажую…", "Zapisuję…": "Зберігаю…",
+  // Cele / Marzenia
+  "Cele / Marzenia": "Цілі / Мрії", "Cele": "Цілі", "/ Marzenia": "/ Мрії", "Marzenie": "Мрія", "Rok": "Рік", "Okres": "Період", "Rodzaj": "Тип", "Nagłówek": "Заголовок",
+  "Na miesiąc albo na cały rok: co chcesz osiągnąć i o czym marzysz": "На місяць або на цілий рік: чого хочете досягти й про що мрієте",
+  "Poprzedni okres": "Попередній період", "Następny okres": "Наступний період", "Nowy cel…": "Нова ціль…", "Nowe marzenie…": "Нова мрія…",
+  "Opis i termin": "Опис і термін", "Bez opisu i terminu": "Без опису й терміну", "Opis (opcjonalnie)": "Опис (необов’язково)", "Inne listy": "Інші списки",
+  "Pusta lista. Dodaj pierwszy cel albo marzenie na ten okres.": "Список порожній. Додайте першу ціль або мрію на цей період.",
+  "Zrobione": "Виконано", "Wyżej": "Вище", "Niżej": "Нижче", "Edytuj": "Редагувати", "Zmień na: Marzenie": "Змінити на: Мрія", "Zmień na: Cel": "Змінити на: Ціль",
+  "Podaj nagłówek.": "Вкажіть заголовок.", "Nie udało się wczytać listy.": "Не вдалося завантажити список.", "Nie udało się zmienić kolejności.": "Не вдалося змінити порядок.",
+  "Nie udało się dodać.": "Не вдалося додати.",
   // more
   "Bez daty": "Без дати", "Bez terminu": "Без терміну", "Bez przypisanego spotkania": "Без прив’язаної зустрічі", "Cel": "Ціль", "Data": "Дата",
   "Dodaj zadanie do spotkania": "Додати завдання до зустрічі", "Nowe zadanie do spotkania": "Нове завдання до зустрічі", "Nowe podzadanie": "Нове підзавдання",
@@ -268,7 +277,9 @@ const PATTERNS = [
     (m, days, own, work) => `Завершені завдання потрапляють сюди через ${days} дн. «Приватне» ${rule(own)}, робота й проєкти клієнтів ${rule(work)} — разом із нотатками, підзавданнями та історією.`],
   [/^usuwane na zawsze po (\d+) dniach w archiwum$/, (m, days) => rule(m)],
   [/^(.+) · wiadomości, zadania i leady z e-maili$/, (m, box) => `${UK[box] || box} · листи, завдання й ліди з ел. пошти`],
-  [/^Spotkanie: (.+)$/, "Зустріч: $1", "attr"], [/^\+(\d+) więcej$/, "+$1 більше"],
+  [/^Spotkanie: (.+)$/, "Зустріч: $1", "attr"],
+  [/^Zrobione (\d+) z (\d+)$/, "Виконано $1 з $2"], [/^Cele (\d+\/\d+) · Marzenia (\d+\/\d+)$/, "Цілі $1 · Мрії $2"], [/^Rok (\d{4})$/, "Рік $1"],
+  [/^Zrobione: (.+)$/, "Виконано: $1", "attr"], [/^(.+)\. Alt i strzałki zmieniają kolejność\.$/, "$1. Alt і стрілки змінюють порядок.", "attr"], [/^\+(\d+) więcej$/, "+$1 більше"],
   [/^(P\d) · termin (\S+)$/, "$1 · термін $2"], [/^· termin (\S+)$/, "· термін $1"],
 ];
 
@@ -277,7 +288,7 @@ const PROTECTED = [
   '[translate="no"]', ".card__title", ".row__title", ".agenda__title", ".subtasks span", ".notes p", ".event", ".week__event span",
   ".client-row > span", ".chip--client", ".chip--project", ".chip--label", '[data-action="scope"].nav-item--sub > span', '[data-action="client-scope"] > span:not(.folder)', ".crumb:not(.crumb--home)",
   ".account__text strong", ".mail-row__from", ".mail-row__subject", ".mail-row__snippet", ".mail__reader h2", ".mail__from strong",
-  ".mail__body", ".mail-proposals strong", ".brief__section > p", ".timer-dock__text strong", ".popover__item > span:last-child",
+  ".mail__body", ".mail-proposals strong", ".brief__section > p", ".timer-dock__text strong", ".popover__item > span:last-child", ".goal__title", ".goal__desc",
 ].join(", ");
 const ATTRIBUTES = ["title", "aria-label", "placeholder", "aria-valuetext", "aria-roledescription"];
 const SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA", "CODE", "PRE", "svg"]);

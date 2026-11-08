@@ -30,7 +30,7 @@ async function collect(where) {
   const found = await ev(`(() => {
     const re = ${POLISH};
     const out = [];
-    const prot = el => el.closest('[translate="no"], .card__title, .row__title, .agenda__title, .subtasks span, .notes p, .event, .week__event span, .client-row > span, .chip--client, .chip--project, .chip--label, [data-action="scope"].nav-item--sub > span, [data-action="client-scope"] > span, .crumb:not(.crumb--home), .account__text strong, .mail-row__from, .mail-row__subject, .mail-row__snippet, .mail__reader h2, .mail__from strong, .mail__body, .mail-proposals, .brief__section > p, .timer-dock__text strong, .popover__item > span:last-child, textarea, option, input, .nav-item--space span, .brief__meta, .dialog__head h2 .client-dot');
+    const prot = el => el.closest('[translate="no"], .card__title, .row__title, .agenda__title, .subtasks span, .notes p, .event, .week__event span, .client-row > span, .chip--client, .chip--project, .chip--label, [data-action="scope"].nav-item--sub > span, [data-action="client-scope"] > span, .crumb:not(.crumb--home), .account__text strong, .mail-row__from, .mail-row__subject, .mail-row__snippet, .mail__reader h2, .mail__from strong, .mail__body, .mail-proposals, .brief__section > p, .timer-dock__text strong, .popover__item > span:last-child, .goal__title, .goal__desc, textarea, option, input, .nav-item--space span, .brief__meta, .dialog__head h2 .client-dot');
     const visible = el => el.getClientRects().length > 0;
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n; (n = walker.nextNode());) {
@@ -77,7 +77,7 @@ try {
   check("the setting shows УКР", await text('[data-action="language"] em') === "УКР");
   await collect("board"); await shot("board");
 
-  for (const [hash, name] of [["list", "list"], ["calendar", "calendar"], ["archive", "archive"], ["mail", "mail"]]) {
+  for (const [hash, name] of [["list", "list"], ["calendar", "calendar"], ["archive", "archive"], ["mail", "mail"], ["goals", "goals"]]) {
     await send("Page.navigate", { url: `${BASE}/#${hash}` }); await sleep(2500);
     await collect(name);
   }
