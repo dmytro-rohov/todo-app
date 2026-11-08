@@ -36,3 +36,6 @@ The workflow takes no secret as an input; the image is public on GHCR and verifi
 and the installable app) has no Session, so it gets none of the release steps above. It reaches production through a
 short technical Mytko Session started from that `main`: Validate, Push, Review, Merge, then "Wydanie produkcyjne" as
 usual. The release then contains exactly that `main` plus the Session's own small change.
+
+**Release 2** (calendars, clients, accounts, Poczta, briefs, Workflow ToDo; migrations 0004–0009): see
+[RELEASE-2.md](RELEASE-2.md).
