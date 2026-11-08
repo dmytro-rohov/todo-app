@@ -13,8 +13,9 @@ import { openAccounts, openPassword } from "./accounts.js";
 import { bindMail, loadMail, mailAddress, mailBadge, renderMail, showMail } from "./mail.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
-import { openNewTask, openManage, confirmDialog, openScaleDialog } from "./dialogs.js";
+import { openNewTask, openManage, confirmDialog, openLanguageDialog, openScaleDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
+import { LANG } from "../i18n.js";
 
 const PREFS = "mytko-tasks-prefs";
 const VIEWS = { board: ["board", "Tablica"], list: ["list", "Lista"], calendar: ["calendar", "Kalendarz"], archive: ["archive", "Archiwum"], mail: ["mail", "Poczta"] };
@@ -215,6 +216,7 @@ function sidebarHtml() {
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees" title="Wykonawcy">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
       ${isMember() ? "" : `<button type="button" class="nav-item nav-item--sub" data-action="accounts" title="Konta">${icon("lock", 18)}<span>Konta</span></button>`}
       <button type="button" class="nav-item nav-item--sub" data-action="ui-scale" title="Rozmiar interfejsu">${icon("sliders", 18)}<span>Rozmiar interfejsu</span></button>
+      <button type="button" class="nav-item nav-item--sub" data-action="language" title="Język">${icon("globe", 18)}<span>Język</span><em translate="no">${LANG === "uk" ? "УКР" : "PL"}</em></button>
     </nav>
     <div class="sidebar__foot">
       <div class="profile">
@@ -455,6 +457,8 @@ async function handleAction(target, event) {
     setFilter({ clientId: Number(target.dataset.client), spaceId: null, projectId: null });
   } else if (action === "ui-scale") {
     openScaleDialog();
+  } else if (action === "language") {
+    openLanguageDialog();
   } else if (action === "accounts") {
     openAccounts();
   } else if (action === "password") {

@@ -9,6 +9,7 @@ import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.j
 import { openClient } from "./clients.js";
 import { openDrawer } from "./drawer.js";
 import { toast } from "./toast.js";
+import { LANG, LANGUAGES, LOCALE, setLang } from "../i18n.js";
 
 const PALETTE = ["#b7e34d", "#84cc16", "#22c55e", "#14b8a6", "#38bdf8", "#818cf8", "#f2c463", "#fb923c", "#f87171", "#e879f9"];
 
@@ -36,6 +37,18 @@ export function openScaleDialog() {
   </form>`);
   element.addEventListener("click", event => { if (event.target.closest("[data-close]")) element.close(); });
   element.addEventListener("change", event => { if (event.target.name === "scale") saveScale(event.target.value); });
+}
+
+// "Język": Polish or Ukrainian interface, on this device; the page reloads in the chosen language.
+export function openLanguageDialog() {
+  const element = dialog("dialog--confirm dialog--scale", `<form class="dialog__body" novalidate>
+    <header class="dialog__head"><h2>Język interfejsu</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
+    <p class="muted">Ustawienie tego urządzenia.</p>
+    <div class="scale-options">${Object.entries(LANGUAGES).map(([value, label]) => `<label class="check" translate="no"><input type="radio" name="lang" value="${value}"${value === LANG ? " checked" : ""}>${label}</label>`).join("")}</div>
+    <div class="dialog__actions"><button type="button" class="btn btn--primary" data-close>Gotowe</button></div>
+  </form>`);
+  element.addEventListener("click", event => { if (event.target.closest("[data-close]")) element.close(); });
+  element.addEventListener("change", event => { if (event.target.name === "lang" && event.target.value !== LANG) setLang(event.target.value); });
 }
 
 export function confirmDialog(message, confirmLabel = "OK") {
@@ -182,7 +195,7 @@ function itemHtml(kind, item) {
     ? ""
     : account
       ? `<div class="cal-link">${icon("calendar", 16)}<span><strong>${escapeHtml(account.accountEmail)}</strong>
-          <small class="${account.lastError ? "is-error" : "muted"}">${account.lastError ? escapeHtml(account.lastError) : account.lastSyncAt ? `zsynchronizowano ${new Date(account.lastSyncAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}` : "synchronizacja…"}</small></span>
+          <small class="${account.lastError ? "is-error" : "muted"}">${account.lastError ? escapeHtml(account.lastError) : account.lastSyncAt ? `zsynchronizowano ${new Date(account.lastSyncAt).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" })}` : "synchronizacja…"}</small></span>
           <button type="button" class="btn btn--ghost btn--sm" data-cal-action="sync" data-account="${account.id}">Synchronizuj</button>
           <button type="button" class="btn btn--ghost btn--sm" data-cal-action="connect" data-space="${item.id}">Zmień konto</button>
           <button type="button" class="icon-btn" data-cal-action="disconnect" data-account="${account.id}" aria-label="Odłącz kalendarz" title="Odłącz kalendarz">${icon("x", 18)}</button></div>`

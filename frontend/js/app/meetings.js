@@ -8,6 +8,7 @@ import { confirmDialog, dialog } from "./dialogs.js";
 import { openDrawer } from "./drawer.js";
 import { openBrief } from "./brief.js";
 import { toast } from "./toast.js";
+import { LOCALE } from "../i18n.js";
 
 export const calendarState = { configured: false, accounts: [], events: [], rangeKey: "", today: [] };
 
@@ -21,7 +22,7 @@ export function eventDay(event) {
 
 export function eventTime(event) {
   if (event.allDay) return "cały dzień";
-  const f = d => new Date(d).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  const f = d => new Date(d).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
   return `${f(event.startAt)}–${f(event.endAt)}`;
 }
 

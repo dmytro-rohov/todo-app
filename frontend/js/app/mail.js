@@ -12,6 +12,7 @@ import { openClient } from "./clients.js";
 import { calendarState } from "./meetings.js";
 import { openBrief } from "./brief.js";
 import { toast } from "./toast.js";
+import { LOCALE } from "../i18n.js";
 
 export const mailState = { data: null, view: "inbox", q: "", openId: null, message: null, busy: "" };
 
@@ -21,10 +22,10 @@ const URL = /\bhttps?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)]/g;
 const when = iso => {
   const date = new Date(iso);
   const today = isoDay() === isoDay(date);
-  return today ? date.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })
-    : date.toLocaleDateString("pl-PL", { day: "numeric", month: "short", ...(date.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
+  return today ? date.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleDateString(LOCALE, { day: "numeric", month: "short", ...(date.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
 };
-const full = iso => new Date(iso).toLocaleString("pl-PL", { weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+const full = iso => new Date(iso).toLocaleString(LOCALE, { weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 // Plain text, escaped, with web links clickable (they open outside Tasks).
 const bodyHtml = text => escapeHtml(text).replace(URL, url => `<a href="${url}" target="_blank" rel="noopener noreferrer nofollow">${url}</a>`);
 const clientChip = id => {
@@ -92,7 +93,7 @@ function listHtml(data) {
 
 function inviteHtml(invite) {
   if (!invite) return "";
-  const start = invite.start.dateTime ? full(invite.start.dateTime) : new Date(`${invite.start.date}T12:00:00`).toLocaleDateString("pl-PL", { weekday: "short", day: "numeric", month: "long" });
+  const start = invite.start.dateTime ? full(invite.start.dateTime) : new Date(`${invite.start.date}T12:00:00`).toLocaleDateString(LOCALE, { weekday: "short", day: "numeric", month: "long" });
   const canAdd = invite.method !== "CANCEL" && calendarState.accounts.some(a => lookup.space(a.spaceId)?.key === "work");
   return `<section class="mail-card mail-card--invite">
     <h3>${icon("calendar", 18)}${invite.method === "CANCEL" ? "Odwołanie spotkania" : "Zaproszenie"}</h3>

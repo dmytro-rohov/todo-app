@@ -3,12 +3,13 @@
 import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { addDays, byPosition, isoDay, monthGrid, MONTHS, shiftMonth, STATUS_LABELS, WEEKDAYS } from "./logic.js";
+import { addDays, byPosition, isoDay, monthGrid, MONTHS, MONTHS_SHORT, shiftMonth, STATUS_LABELS, WEEKDAYS } from "./logic.js";
 import { lookup, render, runTask, store, visibleTasks } from "./app.js";
 import { calendarState, ensureEvents, eventsByDay, eventTime, hasCalendars, openMeeting, scopedEvents } from "./meetings.js";
 import { openDrawer } from "./drawer.js";
 import { openNewTask } from "./dialogs.js";
 import { uiScale } from "../ui-scale.js";
+import { LOCALE } from "../i18n.js";
 
 const PER_DAY = 3;
 const HOUR_START = 6;
@@ -45,7 +46,7 @@ function renderWeek(byDay, meetingsByDay, today) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const end = days[6];
   ensureEvents(start, end);
-  const short = day => `${Number(day.slice(8))} ${MONTHS[Number(day.slice(5, 7)) - 1].slice(0, 3).toLowerCase()}`;
+  const short = day => `${Number(day.slice(8))} ${MONTHS_SHORT[Number(day.slice(5, 7)) - 1]}`;
   const hours = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
   return `<div class="calendar calendar--week">
     <div class="calendar__bar">
@@ -93,7 +94,7 @@ function renderAgenda(byDay, today, meetingsByDay) {
   const day = store.calendarDay.slice(0, 7) === store.month.slice(0, 7) ? store.calendarDay : (today.slice(0, 7) === store.month.slice(0, 7) ? today : `${store.month.slice(0, 7)}-01`);
   const list = byDay.get(day) || [];
   const meetings = meetingsByDay.get(day) || [];
-  const label = new Date(`${day}T12:00:00`).toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" });
+  const label = new Date(`${day}T12:00:00`).toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" });
   return `<div class="calendar calendar--agenda">
     <div class="calendar__bar">
       <button type="button" class="icon-btn icon-btn--box" data-cal="prev" aria-label="Poprzedni miesiąc">${icon("chevronLeft")}</button>

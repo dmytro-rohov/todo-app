@@ -7,11 +7,12 @@ import { context, reload, render, store } from "./app.js";
 import { chipsHtml } from "./board.js";
 import { confirmDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
+import { LOCALE } from "../i18n.js";
 
 const DAY_MS = 86400000;
 
 function day(value) {
-  return new Date(value).toLocaleDateString("pl-PL", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(value).toLocaleDateString(LOCALE, { day: "numeric", month: "short", year: "numeric" });
 }
 
 function deletionText(task) {
