@@ -324,7 +324,33 @@ const authSessions = pgTable("auth_sessions", {
   index("auth_sessions_expires").on(table.expiresAt),
 ]);
 
+// "Cele / Marzenia": each account's own list of goals and dreams for a month or for a whole year. Done items stay
+// (done_at set) so a period can be looked back on: what was planned, what worked out, what did not.
+const goals = pgTable("goals", {
+  id: serial("id").primaryKey(),
+  year: integer("year").notNull(),
+  // 1–12; NULL: the list for the whole year
+  month: integer("month"),
+  kind: varchar("kind", { length: 10 }).default("goal").notNull(),
+  title: varchar("title", { length: 160 }).notNull(),
+  description: text("description").default("").notNull(),
+  deadline: date("deadline"),
+  doneAt: timestamptz("done_at"),
+  position: bigint("position", { mode: "number" }).notNull(),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  userId: ownerColumn(),
+}, (table) => [
+  check("goals_kind_check", sql`${table.kind} IN ('goal', 'dream')`),
+  check("goals_year_check", sql`${table.year} >= 2000 AND ${table.year} <= 2200`),
+  // (a NULL month passes: CHECK only refuses false)
+  check("goals_month_check", sql`${table.month} >= 1 AND ${table.month} <= 12`),
+  check("goals_position_check", sql`${table.position} >= 0`),
+  index("goals_period").on(table.userId, table.year, table.month, table.position),
+]);
+
 module.exports = {
+  goals,
   meetingBriefs,
   mailMessages,
   users,

@@ -5,6 +5,7 @@ const createCategoriesRouter = require("./routes/categories");
 const createSpacesRouter = require("./routes/spaces");
 const createProjectsRouter = require("./routes/projects");
 const createAssigneesRouter = require("./routes/assignees");
+const createGoalsRouter = require("./routes/goals");
 const createArchiveRouter = require("./routes/archive");
 const createClientsRouter = require("./routes/clients");
 const createBookingRouter = require("./routes/booking");
@@ -111,6 +112,7 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use("/spaces", createSpacesRouter(pool));
   api.use("/projects", createProjectsRouter(pool));
   api.use("/assignees", createAssigneesRouter(pool));
+  api.use("/goals", createGoalsRouter(pool));
   api.use("/archive", createArchiveRouter(pool, config.retention));
   // The owner's business tools; member accounts have the task app only.
   api.use("/calendar", ownerOnly, calendarRouter);

@@ -39,3 +39,5 @@ usual. The release then contains exactly that `main` plus the Session's own smal
 
 **Release 2** (calendars, clients, accounts, Poczta, briefs, Workflow ToDo; migrations 0004–0009): see
 [RELEASE-2.md](RELEASE-2.md).
+
+**Release 3** (Ukrainian, board fixes, Cele / Marzenia; migration 0010): see [RELEASE-3.md](RELEASE-3.md).

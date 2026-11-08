@@ -24,7 +24,7 @@ describe("member accounts", { skip, concurrency: false }, () => {
   before(async () => {
     owner = createPool({ connectionString: OWNER_URL, max: 2, statementTimeoutMs: 0 });
     appPool = createPool({ connectionString: APP_URL, max: 5 });
-    await owner.query(`DROP TABLE IF EXISTS public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history,
+    await owner.query(`DROP TABLE IF EXISTS public.goals, public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history,
       public.task_time_entries, public.task_subtasks, public.task_notes, public.task_labels, public.tasks, public.projects, public.spaces,
       public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
@@ -109,6 +109,64 @@ describe("member accounts", { skip, concurrency: false }, () => {
     assert.equal(history[0].actor, "user:anna");
   });
 
+  test("Cele / Marzenia: each account has its own lists per month and year; done items stay; order and look back", async () => {
+    const member = as(anna);
+    const december = { year: 2026, month: 12 };
+    const add = (who, body) => who("/api/goals", "POST", { ...december, ...body });
+    const first = await add(call, { title: "Przebiec 50 km", description: "po 5 km dwa razy w tygodniu", deadline: "2026-12-31" });
+    assert.equal(first.status, 201);
+    assert.deepEqual([first.body.year, first.body.month, first.body.kind, first.body.deadline, first.body.doneAt], [2026, 12, "goal", "2026-12-31", null]);
+    const dream = (await add(call, { title: "Zobaczyć zorzę polarną", kind: "dream" })).body;
+    const third = (await add(call, { title: "Przeczytać 2 książki" })).body;
+    const year = (await call("/api/goals", "POST", { year: 2026, title: "Nowa strona studia" })).body;
+    assert.equal(year.month, null);
+
+    // the month and the year are separate lists, in the order added
+    assert.deepEqual((await call("/api/goals?year=2026&month=12")).body.map(g => g.title), ["Przebiec 50 km", "Zobaczyć zorzę polarną", "Przeczytać 2 książki"]);
+    assert.deepEqual((await call("/api/goals?year=2026")).body.map(g => g.title), ["Nowa strona studia"]);
+
+    // invalid input
+    for (const body of [{ title: "" }, { title: "x".repeat(161) }, { title: "Ok", kind: "wish" }, { title: "Ok", deadline: "31.12.2026" }, { title: "Ok", month: 13 }, { title: "Ok", year: 1999 }]) {
+      assert.equal((await add(call, body)).status, 400, JSON.stringify(body));
+    }
+    assert.equal((await call("/api/goals?year=abc")).status, 400);
+
+    // done: crossed out but kept; undone again
+    const done = await call(`/api/goals/${first.body.id}`, "PATCH", { done: true });
+    assert.ok(done.body.doneAt);
+    const again = await call(`/api/goals/${first.body.id}`, "PATCH", { done: true, kind: "dream" });
+    assert.equal(again.body.doneAt, done.body.doneAt); // stays the first time it was done
+    assert.equal(again.body.kind, "dream");
+    assert.equal((await call(`/api/goals/${third.id}`, "PATCH", { done: true })).status, 200);
+    assert.equal((await call(`/api/goals/${third.id}`, "PATCH", { done: false })).body.doneAt, null);
+
+    // reorder within the list: every id, top to bottom; a stale or foreign list is refused
+    const order = [third.id, first.body.id, dream.id];
+    assert.deepEqual((await call("/api/goals/order", "PUT", { ...december, ids: order })).body.map(g => g.id), order);
+    assert.equal((await call("/api/goals/order", "PUT", { ...december, ids: [third.id, first.body.id] })).status, 409);
+    assert.equal((await call("/api/goals/order", "PUT", { ...december, ids: [third.id, first.body.id, year.id] })).status, 409);
+    assert.equal((await call("/api/goals/order", "PUT", { ...december, ids: [third.id, third.id, dream.id] })).status, 400);
+
+    // looking back: per period, how much was done
+    assert.deepEqual((await call("/api/goals/periods")).body,
+      [{ year: 2026, month: null, total: 1, done: 0, dreams: 0, dreamsDone: 0 }, { year: 2026, month: 12, total: 3, done: 1, dreams: 2, dreamsDone: 1 }]);
+
+    // a member has their own lists and cannot see or touch the owner's
+    assert.deepEqual((await member("/api/goals?year=2026&month=12")).body, []);
+    assert.deepEqual((await member("/api/goals/periods")).body, []);
+    for (const [url, method, body] of [[`/api/goals/${first.body.id}`, "PATCH", { title: "Moje" }], [`/api/goals/${first.body.id}`, "DELETE"]]) {
+      assert.equal((await member(url, method, body)).status, 404);
+    }
+    assert.equal((await member("/api/goals/order", "PUT", { ...december, ids: order })).status, 409);
+    const hers = await add(member, { title: "Kurs ceramiki", kind: "dream" });
+    assert.equal(hers.status, 201);
+    assert.deepEqual((await call("/api/goals?year=2026&month=12")).body.map(g => g.id), order);
+    assert.equal((await call(`/api/goals/${hers.body.id}`, "DELETE")).status, 404);
+
+    assert.equal((await call(`/api/goals/${dream.id}`, "DELETE")).status, 200);
+    assert.deepEqual((await call("/api/goals?year=2026&month=12")).body.map(g => g.id), [third.id, first.body.id]);
+  });
+
   test("a shared space is seen and edited by both; unsharing sends the member's tasks home", async () => {
     const member = as(anna);
     const dom = (await call("/api/spaces", "POST", { name: "Dom", color: "#38bdf8", shared: true })).body;
@@ -191,6 +249,7 @@ describe("member accounts", { skip, concurrency: false }, () => {
     assert.equal((await call(`/api/users/${id}`, "DELETE")).status, 200);
     assert.equal((await as(again.cookie)("/api/tasks")).status, 401);
     assert.equal((await owner.query("SELECT count(*)::int AS n FROM tasks WHERE user_id = $1", [id])).rows[0].n, 0);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM goals WHERE user_id = $1", [id])).rows[0].n, 0);
     const ownerPrivate = (await call("/api/spaces")).body.find(s => s.key === "private").id;
     assert.equal((await call("/api/tasks")).body.find(t => t.id === ownerThere.id).spaceId, ownerPrivate);
     const olaPrivate = (await as(ola.cookie)("/api/spaces")).body.find(s => s.key === "private").id;
