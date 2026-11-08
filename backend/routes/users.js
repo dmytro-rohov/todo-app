@@ -67,11 +67,17 @@ module.exports = function createUsersRouter(pool, { sessions, reserved }) {
     const deleted = await withTransaction(pool, async db => {
       if (!(await db.query("SELECT 1 FROM users WHERE id = $1 FOR UPDATE", [id])).rowCount) return false;
       const ownerPrivate = (await defaultSpaces(db)).private;
+      // each to its own creator's private space (the owner's, or another member's), without the project
       const kept = await db.query(
-        `UPDATE tasks SET space_id = $1, project_id = NULL, updated_at = now()
-         WHERE user_id IS DISTINCT FROM $2 AND (space_id IN (SELECT id FROM spaces WHERE user_id = $2) OR project_id IN (SELECT id FROM projects WHERE user_id = $2))
-         RETURNING id`, [ownerPrivate, id]);
-      for (const row of kept.rows) await recordTaskChanges(db, row.id, [{ field: "space_id", oldValue: null, newValue: String(ownerPrivate) }], "accounts");
+        `WITH moved AS (
+           SELECT t.id, t.space_id AS old_space FROM tasks t
+           WHERE t.user_id IS DISTINCT FROM $2 AND (t.space_id IN (SELECT id FROM spaces WHERE user_id = $2) OR t.project_id IN (SELECT id FROM projects WHERE user_id = $2))
+           FOR UPDATE)
+         UPDATE tasks t SET space_id = COALESCE((SELECT s.id FROM spaces s WHERE s.key = 'private:' || t.user_id), $1), project_id = NULL, updated_at = now()
+         FROM moved WHERE t.id = moved.id RETURNING t.id, t.space_id, moved.old_space`, [ownerPrivate, id]);
+      for (const row of kept.rows) {
+        await recordTaskChanges(db, row.id, [{ field: "space_id", oldValue: row.old_space === null ? null : String(row.old_space), newValue: String(row.space_id) }], "accounts");
+      }
       await db.query("DELETE FROM tasks WHERE user_id = $1", [id]);
       await db.query("DELETE FROM projects WHERE user_id = $1 OR space_id IN (SELECT id FROM spaces WHERE user_id = $1)", [id]);
       await db.query("DELETE FROM spaces WHERE user_id = $1", [id]);

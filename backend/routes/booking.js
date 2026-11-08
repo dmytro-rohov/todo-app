@@ -14,6 +14,7 @@ const { isValidDate } = require("../validation");
 const { loadTask } = require("./tasks");
 
 const CACHE_MS = 60000;
+const BOOKING_LOCK_ID = 7243917466;
 
 module.exports = function createBookingRouter(pool, { google, key, settings }) {
   const router = express.Router();
@@ -64,6 +65,18 @@ module.exports = function createBookingRouter(pool, { google, key, settings }) {
 
   const unavailable = res => res.status(503).json({ message: "Booking is not available right now" });
 
+  // One booking at a time (in this process and across replicas): the free-slot check, Google's insert and the local
+  // copy happen under one PostgreSQL advisory lock, so two visitors can never take the same slot.
+  async function exclusively(work) {
+    const db = await pool.connect();
+    try {
+      await db.query("SELECT pg_advisory_lock($1)", [BOOKING_LOCK_ID]);
+      try { return await work(); } finally { await db.query("SELECT pg_advisory_unlock($1)", [BOOKING_LOCK_ID]); }
+    } finally {
+      db.release();
+    }
+  }
+
   router.get("/", async (req, res) => {
     const acc = await account();
     if (!acc) return unavailable(res);
@@ -92,11 +105,22 @@ module.exports = function createBookingRouter(pool, { google, key, settings }) {
     const start = Date.parse(value.start);
     const end = start + settings.slotMinutes * 60000;
     const day = zonedDay(start, settings.timeZone);
+    const outcome = await exclusively(() => book(acc, value, start, end, day));
+    if (outcome.status !== 201) return res.status(outcome.status).json({ message: outcome.message });
+    res.status(201).json(outcome.body);
+  });
+
+  async function book(acc, value, start, end, day) {
     let created;
     try {
-      // The slot must still be free right now, not only when the page was loaded.
-      const days = await slotsFor(acc, day, 1, { fresh: true });
-      if (!days[0]?.slots.includes(value.start)) return res.status(409).json({ message: "This time is no longer available" });
+      // The slot must still be free right now, not only when the page was loaded: no meeting of this calendar (with
+      // the buffer) in the local copy, which already holds a booking made a moment ago, and Google agrees.
+      const buffer = settings.bufferMinutes * 60000;
+      const taken = await pool.query(
+        `SELECT 1 FROM calendar_events WHERE account_id = $1 AND status <> 'cancelled' AND NOT all_day AND start_at < $3 AND end_at > $2 LIMIT 1`,
+        [acc.id, new Date(start - buffer).toISOString(), new Date(end + buffer).toISOString()]);
+      const days = taken.rowCount ? [] : await slotsFor(acc, day, 1, { fresh: true });
+      if (!days[0]?.slots.includes(value.start)) return { status: 409, message: "This time is no longer available" };
       const token = await google.accessToken(decrypt(key, acc.refresh_token_enc));
       const description = [value.message, "", `${value.name} <${value.email}>`, value.phone ? `tel. ${value.phone}` : null, value.company || null,
         "", "Rezerwacja przez formularz na mytko.dev"].filter(line => line !== null).join("\n").trim();
@@ -109,7 +133,7 @@ module.exports = function createBookingRouter(pool, { google, key, settings }) {
       }, { meet: true });
     } catch (failure) {
       console.error("booking failed", failure.status || failure.code || "");
-      return unavailable(res);
+      return { status: 503, message: "Booking is not available right now" };
     }
     perDay.hit("all");
     await withTransaction(pool, async db => {
@@ -131,8 +155,8 @@ module.exports = function createBookingRouter(pool, { google, key, settings }) {
       const taskId = task.rows[0].id;
       await recordTaskChanges(db, taskId, taskChanges(null, await loadTask(db, taskId)), "booking");
     });
-    res.status(201).json({ status: "booked", start: new Date(start).toISOString(), end: new Date(end).toISOString(), meetUrl: toRow(created).meetUrl });
-  });
+    return { status: 201, body: { status: "booked", start: new Date(start).toISOString(), end: new Date(end).toISOString(), meetUrl: toRow(created).meetUrl } };
+  }
 
   return router;
 };

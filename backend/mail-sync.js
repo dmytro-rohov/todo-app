@@ -26,11 +26,13 @@ function createImapSource(config) {
   }
   return {
     // { uidValidity, uids: [all uids, ascending] }
+    // A refused SEARCH (imapflow resolves false, it does not throw) must never look like an empty mailbox: the sync
+    // would then delete the local copy, with its handled flags, links and briefs.
     async state() {
-      return withMailbox(async client => ({
-        uidValidity: Number(client.mailbox.uidValidity),
-        uids: ((await client.search({ all: true }, { uid: true })) || []).map(Number).sort((a, b) => a - b)
-      }));
+      return withMailbox(async client => {
+        const found = await client.search({ all: true }, { uid: true });
+        return { uidValidity: Number(client.mailbox.uidValidity), uids: searchedUids(found, client.mailbox.exists) };
+      });
     },
     // Full messages for these uids: [{ uid, seen, size, source? }] (no source above MAX_SOURCE_BYTES).
     async messages(uids) {
@@ -61,6 +63,14 @@ function createImapSource(config) {
       return withMailbox(client => client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true }));
     }
   };
+}
+
+// UIDs from SEARCH ALL; throws instead of returning an empty list when the server refused or answered nothing for a
+// mailbox that has messages.
+function searchedUids(found, exists) {
+  if (!Array.isArray(found)) throw new Error("IMAP SEARCH failed");
+  if (!found.length && exists > 0) throw new Error("IMAP SEARCH returned nothing for a non-empty mailbox");
+  return found.map(Number).sort((a, b) => a - b);
 }
 
 const clean = (value, max) => String(value || "").replace(/\u0000/g, "").slice(0, max);
@@ -187,4 +197,4 @@ function scheduleMailSync(pool, source, config, { firstRunMs = 15000, afterSync 
   return { status, now: run, stop() { clearTimeout(first); clearInterval(every); } };
 }
 
-module.exports = { createImapSource, syncMail, scheduleMailSync, toRow, matchMail, describe };
+module.exports = { createImapSource, syncMail, scheduleMailSync, toRow, matchMail, describe, searchedUids };

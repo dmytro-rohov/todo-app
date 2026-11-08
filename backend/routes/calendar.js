@@ -96,7 +96,8 @@ function createCalendarRouter(pool, { google, key, cookie }) {
   router.post("/connect", async (req, res) => {
     if (!google) return res.status(404).json({ message: "Google Calendar is not configured" });
     const spaceId = parseId(req.body?.spaceId);
-    if (spaceId === null || !(await pool.query("SELECT 1 FROM spaces WHERE id = $1", [spaceId])).rowCount) {
+    // the owner's spaces only (a member's space is never connected to the owner's Google account)
+    if (spaceId === null || !(await pool.query("SELECT 1 FROM spaces WHERE id = $1 AND user_id IS NULL", [spaceId])).rowCount) {
       return res.status(400).json({ message: "Space does not exist" });
     }
     const state = crypto.randomBytes(24).toString("base64url");

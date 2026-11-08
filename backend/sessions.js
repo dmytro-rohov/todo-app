@@ -4,7 +4,9 @@
 const crypto = require("node:crypto");
 const { withTransaction } = require("./db");
 
+// Per account: a member signing in often never pushes the owner (or another member) out.
 const MAX_SESSIONS = 32;
+const MAX_MEMBER_SESSIONS = 8;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 function hashToken(token) {
@@ -39,9 +41,10 @@ function createSessionStore(pool, { ttlMs }) {
         await client.query(
           "INSERT INTO auth_sessions (token_hash, login, method, expires_at, user_id) VALUES ($1, $2, $3, $4, $5)",
           [hashToken(token), login, method, expiresAt, userId]);
-        // Oldest sessions beyond the cap are dropped.
+        // This account's oldest sessions beyond its cap are dropped.
         await client.query(
-          `DELETE FROM auth_sessions WHERE id IN (SELECT id FROM auth_sessions ORDER BY id DESC OFFSET ${MAX_SESSIONS})`);
+          `DELETE FROM auth_sessions WHERE id IN (SELECT id FROM auth_sessions WHERE user_id IS NOT DISTINCT FROM $1::integer
+             ORDER BY id DESC OFFSET ${userId ? MAX_MEMBER_SESSIONS : MAX_SESSIONS})`, [userId]);
       });
       return { token, expiresAt };
     },

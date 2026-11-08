@@ -49,15 +49,17 @@ function validateClient(body, { partial = false } = {}) {
 }
 
 // Links unassigned meetings to clients: a guest with the client's e-mail, else a guest from the client's domain.
+// Compared on the parsed guest list (exact, case-insensitive): "_" or "%" in an address is never a wildcard.
+const GUESTS = "json_array_elements(NULLIF(e.attendees, '')::json)";
 async function matchMeetings(db) {
   await db.query(
     `UPDATE calendar_events e SET client_id = c.id FROM clients c
      WHERE e.client_id IS NULL AND c.status <> 'archived' AND c.email IS NOT NULL
-       AND e.attendees ILIKE '%"email":"' || c.email || '"%'`);
+       AND EXISTS (SELECT 1 FROM ${GUESTS} g WHERE lower(g->>'email') = c.email)`);
   await db.query(
     `UPDATE calendar_events e SET client_id = c.id FROM clients c
      WHERE e.client_id IS NULL AND c.status <> 'archived' AND c.domain IS NOT NULL
-       AND e.attendees ILIKE '%@' || c.domain || '"%'`);
+       AND EXISTS (SELECT 1 FROM ${GUESTS} g WHERE split_part(lower(g->>'email'), '@', 2) = c.domain)`);
 }
 
 module.exports = { validateClient, companyDomain, matchMeetings, PUBLIC_DOMAINS, STATUSES };

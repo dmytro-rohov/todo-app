@@ -4,7 +4,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
 const { parseInvite } = require("../ics");
-const { toRow, describe: describeError } = require("../mail-sync");
+const { toRow, describe: describeError, searchedUids, syncMail } = require("../mail-sync");
 const { loadConfig } = require("../config");
 const { proposeFromMail, cleanTasks, AiError } = require("../claude");
 
@@ -56,6 +56,18 @@ test("a fetched message becomes a row: text, snippet, attachments by name, the i
   assert.match(big.bodyText, /za duża/);
 });
 
+test("a refused SEARCH never empties the local mailbox copy", async () => {
+  assert.throws(() => searchedUids(false, 12), /SEARCH failed/); // imapflow resolves false on NO / BAD
+  assert.throws(() => searchedUids([], 12), /returned nothing/);
+  assert.deepEqual(searchedUids([5, "3", 9], 3), [3, 5, 9]);
+  assert.deepEqual(searchedUids([], 0), []); // a really empty mailbox
+  const queries = [];
+  const pool = { query: async sql => { queries.push(sql); return { rows: [], rowCount: 0 }; } };
+  const result = await syncMail(pool, { state: async () => { throw new Error("IMAP SEARCH failed"); } }, { mailbox: "INBOX", limit: 200 });
+  assert.match(result.error, /nie powiodła/);
+  assert.equal(queries.some(sql => /DELETE/.test(sql)), false);
+});
+
 test("sync errors are described without secrets", () => {
   assert.match(describeError(Object.assign(new Error("x"), { authenticationFailed: true })), /login lub hasło/);
   assert.match(describeError(Object.assign(new Error("x"), { code: "ENOTFOUND" })), /Nie znaleziono/);
@@ -104,5 +116,7 @@ test("Claude's proposals are forced into the tool and validated; API errors beco
   }
   await assert.rejects(proposeFromMail(ai, mail, { today: "2026-11-07", fetchImpl: fake({ ok: false, status: 400, json: async () => ({ error: { message: "Your credit balance is too low" } }) }) }),
     /Brak środków/);
+  await assert.rejects(proposeFromMail(ai, mail, { today: "2026-11-07", fetchImpl: fake({ ok: true, status: 200,
+    json: async () => ({ content: [{ type: "tool_use", name: "propose_tasks", input: null }] }) }) }), AiError); // malformed: no 500
   assert.deepEqual(cleanTasks(null), []);
 });
