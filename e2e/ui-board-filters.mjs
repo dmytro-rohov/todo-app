@@ -53,6 +53,13 @@ try {
     return { col: c.getBoundingClientRect().width, rem, board: b.clientWidth }; })()`);
   const gap = width.col * 3 + 2 * width.rem - width.board;
   check("…and three columns fill the board", Math.abs(gap) <= 3, JSON.stringify(width));
+  // keyboard moves skip the hidden column
+  const review = (await api("/api/tasks")).find(t => t.status === "needs_review");
+  await ev(`document.querySelector('.card[data-id="${review.id}"]').focus()`);
+  for (const type of ["keyDown", "keyUp"]) await send("Input.dispatchKeyEvent", { type, key: "ArrowRight", code: "ArrowRight", windowsVirtualKeyCode: 39, modifiers: 1 });
+  await sleep(1200);
+  const movedTo = (await api("/api/tasks")).find(t => t.id === review.id)?.status;
+  check("Alt+→ from Needs review goes to the next column on screen (Plany), not the hidden Zakończone", movedTo === "planned", movedTo);
   await send("Page.reload"); await sleep(3500);
   check("the choice is remembered", await columns() === "todo,in_progress,needs_review,planned", await columns());
   await pick("status", "done"); await sleep(500);

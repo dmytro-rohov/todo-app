@@ -94,8 +94,9 @@ module.exports = function createGoalsRouter(pool) {
   // New order of a list: every id of the period, top to bottom.
   router.put("/order", async (req, res) => {
     const period = parsePeriod(req.body || {});
-    const ids = req.body?.ids;
-    if (!period || !Array.isArray(ids) || !ids.length || ids.length > MAX_ITEMS || ids.some(id => parseId(id) === null) || new Set(ids).size !== ids.length) {
+    const raw = req.body?.ids;
+    const ids = Array.isArray(raw) ? raw.map(id => parseId(id)) : [];
+    if (!period || !ids.length || ids.length > MAX_ITEMS || ids.includes(null) || new Set(ids).size !== ids.length) {
       return res.status(400).json({ message: "Invalid order" });
     }
     const rows = await withTransaction(pool, async client => {
@@ -103,10 +104,10 @@ module.exports = function createGoalsRouter(pool) {
       const { rows: current } = await client.query(
         `SELECT id FROM goals g WHERE ${own("g", "$1::integer")} AND ${periodMatch("g", "$2", "$3")} FOR UPDATE`, [user, period.year, period.month]);
       const known = new Set(current.map(row => row.id));
-      if (current.length !== ids.length || ids.some(id => !known.has(Number(id)))) return null;
+      if (current.length !== ids.length || ids.some(id => !known.has(id))) return null;
       await client.query(
-        "UPDATE goals SET position = o.ord * $2, updated_at = now() FROM unnest($1::int[]) WITH ORDINALITY AS o(id, ord) WHERE goals.id = o.id",
-        [ids.map(Number), STEP]);
+        `UPDATE goals SET position = o.ord * $2, updated_at = now() FROM unnest($1::int[]) WITH ORDINALITY AS o(id, ord)
+         WHERE goals.id = o.id AND ${own("goals", "$3::integer")}`, [ids, STEP, user]);
       return (await client.query(
         `SELECT ${GOAL_COLUMNS} FROM goals g WHERE ${own("g", "$1::integer")} AND ${periodMatch("g", "$2", "$3")} ORDER BY position ASC, id ASC`,
         [user, period.year, period.month])).rows;

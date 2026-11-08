@@ -103,6 +103,12 @@ try {
   await click('[data-goal="next"]');
   check("the arrows go to the next month (an empty list)", Boolean(await ev(`document.querySelector('.goals__empty')`)));
   await click('[data-goal="prev"]');
+  // two quick clicks: the list of the period finally shown is loaded, not stuck on "Wczytuję…"
+  await ev(`(() => { const b = document.querySelector('[data-goal="next"]'); b.click(); document.querySelector('[data-goal="next"]').click(); return true; })()`); await sleep(1500);
+  check("fast period switching ends on a loaded list", !(await ev(`/Wczytuję/.test(document.querySelector('.goals__list')?.textContent || "")`))
+    && Boolean(await ev(`document.querySelector('.goals__empty, .goals__items')`)), await ev(`document.querySelector('.goals__head h2')?.textContent.trim()`));
+  await ev(`(() => { document.querySelector('[data-goal="prev"]').click(); return true; })()`); await sleep(800);
+  await ev(`(() => { document.querySelector('[data-goal="prev"]').click(); return true; })()`); await sleep(1200);
 
   // phone
   await send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
