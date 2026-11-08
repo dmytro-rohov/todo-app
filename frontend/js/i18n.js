@@ -241,6 +241,7 @@ const PATTERNS = [
   [new RegExp(`^(.+)\\. ${STATUS}\\. Alt i strzałki przenoszą, Enter otwiera\\.$`), (m, title, status) => `${title}. ${UK[status]}. Alt і стрілки переміщують, Enter відкриває.`, "attr"],
   [new RegExp(`^(.+) — ${STATUS}$`), (m, title, status) => `${title} — ${UK[status]}`, "attr"],
   [new RegExp(`^Dodaj zadanie do kolumny ${STATUS}$`), (m, status) => `Додати завдання до колонки «${UK[status]}»`, "attr"],
+  [new RegExp(`^Pokaż tylko kolumnę ${STATUS}$`), (m, status) => `Показати лише колонку «${UK[status]}»`, "attr"],
   [/^Dodaj zadanie na (\d{4}-\d{2}-\d{2})$/, "Додати завдання на $1", "attr"], [/^Nowe spotkanie (\S+) (\d+):00$/, "Нова зустріч $1 $2:00", "attr"],
   [/^Zadania w przestrzeni (.+)$/, "Завдання в просторі $1"], [/^Zadania, prace i działania w projekcie (.+)$/, "Завдання, роботи й справи в проєкті $1"],
   [/^Zakończone dłużej niż (\d+) dni trafiają do Archiwum\.$/, "Завершені понад $1 дн. тому потрапляють до архіву."],

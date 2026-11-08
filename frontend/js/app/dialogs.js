@@ -3,7 +3,7 @@ import { api } from "../api/client.js";
 import { SCALES, savedScale, saveScale } from "../ui-scale.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { isoDay, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
+import { isoDay, PRIORITY_LABELS, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
 import { isMember, lookup, paint, reload, render, store, upsertTask } from "./app.js";
 import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.js";
 import { openClient } from "./clients.js";
@@ -72,7 +72,7 @@ function choices(list, selected, empty) {
 }
 
 // mailId / meetingId link the task to an e-mail / a meeting; onCreated(task) runs after it is saved.
-export function openNewTask({ status = "todo", dueDate = null, clientId = null, meetingId = null, mailId = null, spaceId = null, title = "", description = "",
+export function openNewTask({ status = "todo", priority = "P2", dueDate = null, clientId = null, meetingId = null, mailId = null, spaceId = null, title = "", description = "",
   onCreated = null } = {}) {
   const privateSpace = lookup.privateSpace();
   const project = lookup.project(store.filters.projectId);
@@ -91,6 +91,8 @@ export function openNewTask({ status = "todo", dueDate = null, clientId = null, 
       <div class="horizon" data-horizon${status === "planned" ? "" : " hidden"}><span>Cel za:</span>
         ${[[1, "rok"], [2, "2 lata"], [5, "5 lat"]].map(([years, label]) => `<button type="button" class="chip chip--toggle-btn" data-years="${years}">${label}</button>`).join("")}
         <button type="button" class="chip chip--toggle-btn" data-years="0">kiedyś</button></div>
+      <fieldset class="label-picker priority-picker"><legend>Priorytet</legend>${Object.entries(PRIORITY_LABELS).map(([value, label]) =>
+        `<label class="chip chip--toggle chip--priority chip--${value.toLowerCase()}"><input type="radio" name="priority" value="${value}"${value === priority ? " checked" : ""}>${icon("flag", 14)}${label}</label>`).join("")}</fieldset>
       <div class="field-row">
         <label class="field"><span>Przestrzeń</span><span class="select"><select name="spaceId">${choices(store.spaces, spaceId)}</select>${icon("chevronDown", 16)}</span></label>
         <label class="field"><span>Projekt</span><span class="select"><select name="projectId">${choices(projectsFor(spaceId), project?.id, "Bez projektu")}</select>${icon("chevronDown", 16)}</span></label>
@@ -137,6 +139,7 @@ export function openNewTask({ status = "todo", dueDate = null, clientId = null, 
         title: title.trim(),
         date: isoDay(),
         status: form.status.value,
+        priority: form.elements.priority.value || "P2",
         dueDate: form.dueDate.value || null,
         spaceId: Number(form.spaceId.value) || null,
         projectId: Number(form.projectId.value) || null,
