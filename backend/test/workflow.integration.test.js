@@ -75,6 +75,17 @@ describe("Mytko Workflow ToDo", { skip, concurrency: false }, () => {
     assert.equal((await agent("/api/tasks")).status, 401);
   });
 
+  test("Workflow taking a task keeps its column and running timer", async () => {
+    const work = (await call("/api/spaces")).body.find(s => s.key === "work");
+    const busy = (await call("/api/tasks", "POST", { title: "Już w realizacji", date: "2026-11-07", spaceId: work.id })).body;
+    await call(`/api/tasks/${busy.id}/timer/start`, "POST", {});
+    await call(`/api/tasks/${busy.id}`, "PATCH", { workflow: true });
+    assert.equal((await agent(`/api/agent/workflow/tasks/${busy.id}`, "POST", { status: "todo", ref: "todo-busy" })).status, 200);
+    const after = (await call("/api/tasks")).body.find(t => t.id === busy.id);
+    assert.deepEqual([after.status, Boolean(after.timerStartedAt), after.workflowRef], ["in_progress", true, "todo-busy"]);
+    await agent(`/api/agent/workflow/tasks/${busy.id}`, "POST", { status: "cancelled" });
+  });
+
   test("Workflow's statuses are mirrored on the board and recorded in the history", async () => {
     const [queued] = (await agent("/api/agent/workflow/tasks")).body.tasks;
     const took = await agent(`/api/agent/workflow/tasks/${queued.id}`, "POST", { status: "todo", ref: "todo-1a2b", url: "https://workflow.mytko.dev/todos/todo-1a2b" });

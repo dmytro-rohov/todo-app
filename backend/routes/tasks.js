@@ -52,7 +52,17 @@ async function loadTask(db, id, { lock = false } = {}) {
 // Decides space_id / project_id for a write. A project fixes the space; moving a task to another space
 // drops a project that does not belong there. `current` is the task before the change (null when creating).
 // Only projects and spaces the account can see are accepted; no space means the account's private space.
-async function resolvePlacement(db, current, value, spaces, user) {
+// A task goes only to a shared space or to a space of its creator: nobody can move someone else's task out of sight
+// of the person who created it (e.g. a member moving the owner's task from "Dom" into their own Prywatne).
+async function checkDestination(db, spaceId, creatorId) {
+  if (spaceId === null) return;
+  const space = (await db.query("SELECT shared, user_id FROM spaces WHERE id = $1", [spaceId])).rows[0];
+  if (space && !space.shared && (space.user_id ?? null) !== (creatorId ?? null)) {
+    throw new TaskInputError("A task can only move to a shared space or a space of its creator");
+  }
+}
+
+async function resolvePlacement(db, current, value, spaces, user, creatorId = userId(user)) {
   const result = {};
   const uid = userId(user);
   if ("projectId" in value && value.projectId !== null) {
@@ -62,6 +72,7 @@ async function resolvePlacement(db, current, value, spaces, user) {
     if ("spaceId" in value && (value.spaceId ?? spaces.private) !== projectSpace) {
       throw new TaskInputError("Project belongs to another space");
     }
+    await checkDestination(db, projectSpace, creatorId);
     return { spaceId: projectSpace, projectId: value.projectId };
   }
   if ("projectId" in value) result.projectId = null;
@@ -70,6 +81,7 @@ async function resolvePlacement(db, current, value, spaces, user) {
     if (spaceId !== null && !(await db.query(`SELECT 1 FROM spaces s WHERE s.id = $1 AND ${visibleSpace("s", "$2::integer")}`, [spaceId, uid])).rowCount) {
       throw new TaskInputError("Space does not exist");
     }
+    await checkDestination(db, spaceId, creatorId);
     result.spaceId = spaceId;
     if (!("projectId" in value) && current && current.projectId !== null) {
       const project = await db.query("SELECT 1 FROM projects WHERE id = $1 AND space_id = $2", [current.projectId, spaceId]);
@@ -271,7 +283,8 @@ module.exports = function createTasksRouter(pool) {
         await checkReferences(client, req.user, value);
         const { spaceId, projectId, labelIds, workflow, ...fields } = value;
         if ("spaceId" in value || "projectId" in value) {
-          Object.assign(fields, await resolvePlacement(client, before, value, await defaultSpaces(client, req.user), req.user));
+          const creator = (await client.query("SELECT user_id FROM tasks WHERE id = $1", [id])).rows[0].user_id;
+          Object.assign(fields, await resolvePlacement(client, before, value, await defaultSpaces(client, req.user), req.user, creator));
         }
         const { status, ...plain } = fields;
         const columns = { title: "title", description: "description", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", spaceId: "space_id", projectId: "project_id", assigneeId: "assignee_id", clientId: "client_id", meetingId: "meeting_id", mailId: "mail_id" };

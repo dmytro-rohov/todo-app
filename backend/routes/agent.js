@@ -64,7 +64,8 @@ module.exports = function createAgentRouter(pool, { tokenSha256, publicOrigin })
       if (!linked) return null;
       const before = await loadTask(db, id, { lock: true });
       const params = [id, body.status, body.ref ?? null, body.url ?? null];
-      const board = BOARD[body.status];
+      // Workflow taking the task (no ref yet) only links it: the card keeps its column and its running timer.
+      const board = before.workflowRef ? BOARD[body.status] : undefined;
       const sets = ["workflow_status = $2", "workflow_ref = COALESCE($3, workflow_ref)", "workflow_url = COALESCE($4, workflow_url)", "workflow_updated_at = now()", "updated_at = now()"];
       if (body.status === "cancelled") sets.push("workflow_requested_at = NULL");
       if (board && board !== before.status) { params.push(board); sets.push(...statusAssignmentsSql(`$${params.length}`)); }

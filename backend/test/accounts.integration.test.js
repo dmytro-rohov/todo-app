@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const { createPool } = require("../db");
 const { runMigrations, listMigrations } = require("../migrations");
-const { startApp, SAME_ORIGIN_JSON } = require("./support");
+const { startApp, SAME_ORIGIN_JSON, USERNAME, PASSWORD } = require("./support");
 
 const OWNER_URL = process.env.TEST_MIGRATION_DATABASE_URL;
 const APP_URL = process.env.TEST_DATABASE_URL;
@@ -135,6 +135,17 @@ describe("member accounts", { skip, concurrency: false }, () => {
     const expected = require("node:crypto").createHash("sha256").update(canonical).digest("hex");
     assert.equal((await member("/api/tasks/move", "POST", { id: shopping.id, status: "done", beforeId: null, expected })).status, 200);
 
+    // nobody moves someone else's task out of its creator's sight; a project does not drag other accounts' tasks along
+    const annaPrivate = (await member("/api/spaces")).body.find(s => s.key === "private").id;
+    assert.equal((await member(`/api/tasks/${ownerTask.id}`, "PATCH", { spaceId: annaPrivate })).status, 400);
+    const domProject = (await member("/api/projects", "POST", { name: "Remont", color: "#38bdf8", spaceId: dom.id })).body;
+    const ownerInProject = (await call("/api/tasks", "POST", { title: "Zamówić farbę", date: "2026-11-07", projectId: domProject.id })).body;
+    assert.equal((await member(`/api/tasks/${ownerInProject.id}`, "PATCH", { projectId: null, spaceId: annaPrivate })).status, 400);
+    assert.equal((await member(`/api/projects/${domProject.id}`, "PATCH", { spaceId: annaPrivate })).status, 200);
+    const ownerPrivateId = (await call("/api/spaces")).body.find(s => s.key === "private").id;
+    const farba = (await call("/api/tasks")).body.find(t => t.id === ownerInProject.id);
+    assert.deepEqual([farba.spaceId, farba.projectId], [ownerPrivateId, null]); // back with its creator, without the project
+
     assert.equal((await call(`/api/spaces/${dom.id}`, "PATCH", { shared: false })).status, 200);
     assert.ok(!(await member("/api/spaces")).body.some(s => s.id === dom.id));
     const moved = (await member("/api/tasks")).body.find(t => t.id === shopping.id);
@@ -163,14 +174,28 @@ describe("member accounts", { skip, concurrency: false }, () => {
     assert.equal(again.status, 200);
     assert.equal((await call(`/api/users/${id}`, "PATCH", { login: "inna" })).status, 400);
 
-    // deleting: the member's data goes, the owner's task in the member's shared space comes back to the owner
-    const theirs = (await as(again.cookie)("/api/spaces", "POST", { name: "Wspólne Anny", color: "#e879f9", shared: true })).body;
+    // the session cap is per account: a member signing in many times never signs the owner out
+    const ownerLogin = await login(USERNAME, PASSWORD);
+    for (let i = 0; i < 10; i++) assert.equal((await login("anna", "anna-reset-password-3")).status, 200);
+    assert.equal((await call("/api/auth/session", "GET", undefined, ownerLogin.cookie)).body.authenticated, true);
+    const latest = await login("anna", "anna-reset-password-3");
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM auth_sessions WHERE user_id = $1", [id])).rows[0].n, 8);
+
+    // deleting: the member's data goes; the owner's and another member's tasks in the member's shared space go back
+    // to their own creators' private spaces
+    const theirs = (await as(latest.cookie)("/api/spaces", "POST", { name: "Wspólne Anny", color: "#e879f9", shared: true })).body;
     const ownerThere = (await call("/api/tasks", "POST", { title: "W jej przestrzeni", date: "2026-11-07", spaceId: theirs.id })).body;
+    assert.equal((await call("/api/users", "POST", { login: "ola", name: "Ola", password: "ola-test-password-1" })).status, 201);
+    const ola = await login("ola", "ola-test-password-1");
+    const olaThere = (await as(ola.cookie)("/api/tasks", "POST", { title: "Zadanie Oli u Anny", date: "2026-11-07", spaceId: theirs.id })).body;
     assert.equal((await call(`/api/users/${id}`, "DELETE")).status, 200);
     assert.equal((await as(again.cookie)("/api/tasks")).status, 401);
-    assert.equal((await owner.query("SELECT count(*)::int AS n FROM tasks WHERE user_id IS NOT NULL")).rows[0].n, 0);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM tasks WHERE user_id = $1", [id])).rows[0].n, 0);
     const ownerPrivate = (await call("/api/spaces")).body.find(s => s.key === "private").id;
     assert.equal((await call("/api/tasks")).body.find(t => t.id === ownerThere.id).spaceId, ownerPrivate);
-    assert.equal((await owner.query("SELECT count(*)::int AS n FROM spaces WHERE user_id IS NOT NULL")).rows[0].n, 0);
+    const olaPrivate = (await as(ola.cookie)("/api/spaces")).body.find(s => s.key === "private").id;
+    assert.equal((await as(ola.cookie)("/api/tasks")).body.find(t => t.id === olaThere.id).spaceId, olaPrivate);
+    const history = (await as(ola.cookie)(`/api/tasks/${olaThere.id}/history`)).body.find(h => h.field === "space_id");
+    assert.deepEqual([history.oldValue, history.newValue], [String(theirs.id), String(olaPrivate)]);
   });
 });

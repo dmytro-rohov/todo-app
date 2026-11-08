@@ -83,12 +83,14 @@ module.exports = function createSpacesRouter(pool) {
         const current = await mine(db, req, id, " FOR UPDATE");
         if (!current) return 404;
         if (current.key !== null) return 409;
+        if ((await db.query("SELECT 1 FROM calendar_accounts WHERE space_id = $1", [id])).rowCount) return 423;
         await sendTasksHome(db, id, req.user.actor);
         await db.query("DELETE FROM spaces WHERE id = $1", [id]);
         return 200;
       });
       if (outcome === 404) return res.status(404).json({ message: "Space not found" });
       if (outcome === 409) return res.status(409).json({ message: "Built-in spaces cannot be deleted" });
+      if (outcome === 423) return res.status(409).json({ message: "Disconnect the space's Google Calendar first" });
       res.json({ message: "Space deleted" });
     } catch (error) {
       if (error.code === FOREIGN_KEY_VIOLATION) return res.status(409).json({ message: "Space still has projects" });

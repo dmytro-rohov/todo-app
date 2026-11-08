@@ -29,7 +29,7 @@ async function callTool(ai, { system, content, tool, maxTokens = 2000, fetchImpl
   if (!response.ok) throw new AiError("Claude nie odpowiada. Spróbuj za chwilę.");
   const data = await response.json();
   const call = (data.content || []).find(block => block.type === "tool_use" && block.name === tool.name);
-  if (!call) throw new AiError("Claude nie zwrócił propozycji.");
+  if (!call || !call.input || typeof call.input !== "object" || Array.isArray(call.input)) throw new AiError("Claude nie zwrócił propozycji.");
   return call.input;
 }
 

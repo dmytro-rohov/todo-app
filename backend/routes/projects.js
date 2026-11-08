@@ -1,6 +1,7 @@
 const express = require("express");
 const { withTransaction } = require("../db");
 const { recordTaskChanges } = require("../task-history");
+const { defaultSpaces } = require("../spaces");
 const { parseId, validateProject } = require("../validation");
 const { isOwner, userId, own, visibleProject, visibleSpace } = require("../access");
 
@@ -65,6 +66,18 @@ module.exports = function createProjectsRouter(pool) {
       const updated = await client.query(`UPDATE projects SET ${assignments.join(", ")} WHERE id = $${params.length} RETURNING ${PROJECT_COLUMNS}`, params);
       const oldSpace = current.rows[0].space_id;
       if (value.spaceId !== undefined && value.spaceId !== oldSpace) {
+        // Into a space that is not shared, other accounts' tasks do not follow: they go to their creators' private
+        // spaces, without the project (their creators could not see them there).
+        const target = (await client.query("SELECT shared, user_id FROM spaces WHERE id = $1", [value.spaceId])).rows[0];
+        if (!target.shared) {
+          const home = await client.query(
+            `UPDATE tasks t SET space_id = COALESCE((SELECT s.id FROM spaces s WHERE s.key = 'private:' || t.user_id), $3), project_id = NULL, updated_at = now()
+             WHERE t.project_id = $1 AND t.user_id IS DISTINCT FROM $2 RETURNING t.id, t.space_id`,
+            [id, target.user_id, (await defaultSpaces(client)).private]);
+          for (const row of home.rows) {
+            await recordTaskChanges(client, row.id, [{ field: "space_id", oldValue: String(oldSpace), newValue: String(row.space_id) }], req.user.actor);
+          }
+        }
         const moved = await client.query(
           "UPDATE tasks SET space_id = $1, updated_at = now() WHERE project_id = $2 AND space_id IS DISTINCT FROM $1 RETURNING id, space_id",
           [value.spaceId, id]);

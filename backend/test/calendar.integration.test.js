@@ -210,6 +210,10 @@ describe("Google Calendars per space", { skip, concurrency: false }, () => {
     assert.deepEqual([lead.status, lead.email, lead.domain, lead.openTasks], ["lead", "anna@kwiaciarnia.pl", "kwiaciarnia.pl", 0]);
     const gmail = (await call("/api/clients", "POST", { name: "Jan z Gmaila", color: "#22c55e", email: "jan@gmail.com" })).body;
     assert.equal(gmail.domain, null); // a public mailbox never identifies a company
+    // "_" in an address is an ordinary character, not a wildcard
+    const underscore = (await call("/api/clients", "POST", { name: "Jan K", email: "jan_k@gmail.com" })).body;
+    google.state.events.push({ id: "g-us", summary: "Inny Jan", status: "confirmed", start: { dateTime: new Date(Date.now() + 5 * 86400000).toISOString() },
+      end: { dateTime: new Date(Date.now() + 5 * 86400000 + 3600000).toISOString() }, attendees: [{ email: "janXk@gmail.com" }] });
     const uncoloured = (await call("/api/clients", "POST", { name: "Lead bez koloru", email: "x@lead.pl" })).body;
     assert.match(uncoloured.color, /^#[0-9a-f]{6}$/); // booking and mail leads get a palette colour
     assert.equal((await call(`/api/clients/${uncoloured.id}`, "PATCH", { color: "red" })).status, 400);
@@ -233,6 +237,8 @@ describe("Google Calendars per space", { skip, concurrency: false }, () => {
     const meeting = (await call(`/api/calendar/events?from=${today}&to=${new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10)}`)).body.find(e => e.title === "Druga rozmowa");
     assert.equal(meeting.clientId, lead.id);
     assert.ok((await call(`/api/clients/${lead.id}`)).body.nextMeetingAt);
+    const other = (await call(`/api/calendar/events?from=${today}&to=${new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10)}`)).body.find(e => e.title === "Inny Jan");
+    assert.equal(other.clientId, null); // janXk@ is not jan_k@
     const range = `from=${today}&to=${new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10)}`;
     assert.deepEqual((await call(`/api/calendar/events?${range}&clientId=${lead.id}`)).body.map(e => e.id), [meeting.id]); // the client card
     assert.equal((await call(`/api/calendar/events?${range}&clientId=x`)).status, 400);
@@ -290,6 +296,11 @@ describe("Google Calendars per space", { skip, concurrency: false }, () => {
       assert.equal(google.state.events.length, eventsBefore); // the honeypot books nothing
       assert.equal((await pub("/api/public/booking", "POST", { ...form, start: at("09:10") })).status, 409); // not a slot
 
+      // two visitors at once for one slot: exactly one gets it
+      const race = await Promise.all([
+        pub("/api/public/booking", "POST", { ...form, start: at("12:00"), email: "pierwszy@firma.pl" }),
+        pub("/api/public/booking", "POST", { ...form, start: at("12:00"), email: "drugi@firma.pl" })]);
+      assert.deepEqual(race.map(r => r.status).sort(), [201, 409]);
       const booked = await pub("/api/public/booking", "POST", form);
       assert.equal(booked.status, 201);
       assert.deepEqual([booked.body.start, booked.body.end], [at("09:00"), at("09:30")]);
@@ -318,6 +329,15 @@ describe("Google Calendars per space", { skip, concurrency: false }, () => {
     } finally {
       await owner.query("DELETE FROM calendar_accounts WHERE id = $1", [privateAccount]);
     }
+  });
+
+  test("a space with a connected calendar is not deleted; calendars belong to the owner's spaces", async () => {
+    const custom = (await call("/api/spaces", "POST", { name: "Projekty B2B", color: "#38bdf8" })).body;
+    await owner.query("INSERT INTO calendar_accounts (space_id, account_email, refresh_token_enc) VALUES ($1, 'b2b@mytko.dev', 'x')", [custom.id]);
+    const refused = await call(`/api/spaces/${custom.id}`, "DELETE");
+    assert.deepEqual([refused.status, refused.body.message], [409, "Disconnect the space's Google Calendar first"]);
+    await owner.query("DELETE FROM calendar_accounts WHERE space_id = $1", [custom.id]);
+    assert.equal((await call(`/api/spaces/${custom.id}`, "DELETE")).status, 200);
   });
 
   test("ranges are bounded and disconnecting removes the copies", async () => {

@@ -40,7 +40,9 @@ try {
   check("the card carries the Workflow chip", await ev(`document.querySelector('.card[data-id="${task.id}"] .chip--workflow')?.textContent === 'Czeka na Workflow'`));
   const queue = (await workflow("/api/agent/workflow/tasks")).tasks;
   check("Workflow's queue has it", queue.some(t => t.id === task.id && t.requested && t.space === "Praca"));
-  await workflow(`/api/agent/workflow/tasks/${task.id}`, "POST", { status: "in_progress", ref: "todo-42", url: "https://workflow.example/todos/todo-42" });
+  // Workflow takes the task (only links it), then reports progress, which moves the card
+  await workflow(`/api/agent/workflow/tasks/${task.id}`, "POST", { status: "todo", ref: "todo-42", url: "https://workflow.example/todos/todo-42" });
+  await workflow(`/api/agent/workflow/tasks/${task.id}`, "POST", { status: "in_progress" });
   await ev("document.dispatchEvent(new Event('visibilitychange'))"); await sleep(1500);
   await send("Page.navigate", { url: `${BASE}/#task-${task.id}` }); await sleep(3500);
   check("Workflow's progress moves the card", await ev(`document.querySelector('[data-drop="in_progress"] .card[data-id="${task.id}"] .chip--workflow')?.textContent === 'Workflow: w realizacji'`));
