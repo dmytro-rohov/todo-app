@@ -43,8 +43,15 @@ try {
   await sleep(2200);
   const later = await ev(`document.querySelector('.card[data-id="${plain.id}"] .timer.is-running')?.textContent.trim()`);
   check("…and ticks every second", later && later !== first, `${first} → ${later}`);
+  const dock = await ev(`(() => { const d = document.querySelector('.timer-dock');
+    return { hidden: d.hidden, title: d.querySelector('strong')?.textContent, time: d.querySelector('.timer-dock__time')?.textContent.trim() }; })()`);
+  check("the corner dock shows the task being worked on, ticking", !dock.hidden && dock.title === "Zwykłe zadanie" && /^\d:\d\d$/.test(dock.time || ""), JSON.stringify(dock));
+  await click('.timer-dock__open'); await sleep(800);
+  check("the dock opens the task", await ev(`document.querySelector('.drawer [data-field="title"]')?.value === "Zwykłe zadanie"`));
+  await ev("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))"); await sleep(500);
   await click(`.card[data-id="${plain.id}"] [data-card="timer-stop"]`); await sleep(1200);
   const stopped = await ev(`document.querySelector('.card[data-id="${plain.id}"] .timer')?.textContent.trim()`);
+  check("the dock goes away when the timer stops", await ev("document.querySelector('.timer-dock').hidden"));
   check("a stopped timer leaves its time on the card", /^\d+ s$/.test(stopped || ""), stopped);
   await api(`/api/tasks/${plain.id}`, "PATCH", { status: "done" });
   await ev("document.dispatchEvent(new Event('visibilitychange'))"); await sleep(1500);

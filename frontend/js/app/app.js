@@ -3,8 +3,8 @@ import { api } from "../api/client.js";
 import { logout, markLoggedOut } from "../auth/login.js";
 import { escapeHtml, safeColor } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { counters, filterTasks, initials, isOpen, isoDay, STATUS_LABELS } from "./logic.js";
-import { renderBoard, bindBoard, tickTimers, updatePeek } from "./board.js";
+import { counters, filterTasks, initials, isOpen, isoDay, STATUS_LABELS, formatClock, trackedNow } from "./logic.js";
+import { renderBoard, bindBoard, tickTimers, timerData, updatePeek } from "./board.js";
 import { renderList, bindList } from "./list.js";
 import { renderCalendar, bindCalendar, afterCalendarRender } from "./calendar.js";
 import { calendarState, eventTime, loadCalendarAccounts, loadToday, openMeeting } from "./meetings.js";
@@ -344,6 +344,7 @@ export function render() {
     for (const zone of view.querySelectorAll("[data-drop]")) zone.scrollTop = keep.columns[zone.dataset.drop] || 0;
   }
   updatePeek(view);
+  renderTimerDock();
   if (store.view === "calendar") afterCalendarRender(view);
   paint(root);
 }
@@ -390,7 +391,8 @@ function shellHtml() {
     <div class="filters" id="filters" role="group" aria-label="Filtry"></div>
     <section class="view" aria-live="polite"></section>
   </div>
-  <button type="button" class="fab" data-action="new-task" aria-label="Nowe zadanie">${icon("plus", 26)}</button>`;
+  <button type="button" class="fab" data-action="new-task" aria-label="Nowe zadanie">${icon("plus", 26)}</button>
+  <aside class="timer-dock" aria-live="polite" hidden></aside>`;
 }
 
 function closePopups(except) {
@@ -405,6 +407,22 @@ function closePopups(except) {
 function toggleSidebar(open) {
   store.sidebarOpen = open;
   root.classList.toggle("sidebar-open", open);
+}
+
+// The task being worked on (its timer runs), always in sight in the bottom right corner: title, time, stop.
+function renderTimerDock() {
+  const dock = root.querySelector(".timer-dock");
+  const task = store.tasks.find(t => t.timerStartedAt);
+  dock.hidden = !task;
+  root.classList.toggle("has-timer-dock", Boolean(task));
+  if (!task) { dock.innerHTML = ""; return; }
+  dock.innerHTML = `
+    <button type="button" class="timer-dock__open" data-action="dock-open" data-id="${task.id}" title="Otwórz zadanie">
+      <i class="timer-dock__pulse" aria-hidden="true"></i>
+      <span class="timer-dock__text"><small>Pracujesz nad</small><strong>${escapeHtml(task.title)}</strong></span>
+      <span class="timer-dock__time" ${timerData(task)}><span>${formatClock(trackedNow(task, store.fetchedAt))}</span></span>
+    </button>
+    <button type="button" class="icon-btn timer-dock__stop" data-action="dock-stop" data-id="${task.id}" aria-label="Zatrzymaj licznik: ${escapeHtml(task.title)}" title="Zatrzymaj licznik">${icon("pauseCircle", 22)}</button>`;
 }
 
 async function handleAction(target, event) {
@@ -471,6 +489,10 @@ async function handleAction(target, event) {
     toggleSidebar(true);
   } else if (action === "sidebar-close") {
     toggleSidebar(false);
+  } else if (action === "dock-open") {
+    openDrawer(Number(target.dataset.id));
+  } else if (action === "dock-stop") {
+    await runTask(() => api.timer(Number(target.dataset.id), "stop"), "Nie udało się zatrzymać licznika.");
   } else if (action === "logout") {
     if (!(await confirmDialog("Wylogować się z Mytko Tasks?", "Wyloguj"))) return;
     markLoggedOut();
