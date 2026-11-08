@@ -36,7 +36,9 @@ try {
   check("installable app: manifest served and the service worker active", pwa?.active && pwa.scope === BASE + "/" && /manifest\+json/.test(pwa.type) && pwa.name === "Mytko Tasks", JSON.stringify(pwa));
   // collapsible sidebar: a rail of icons, remembered after a reload
   await click('[data-action="sidebar-collapse"]'); await sleep(400);
-  check("the sidebar collapses to a rail", await evaluate("Math.round(document.querySelector('.sidebar').getBoundingClientRect().width)") === 76);
+  // 4.75rem: 76 px at 100%, 57 px at the default 75%
+  const rail = await evaluate("[Math.round(document.querySelector('.sidebar').getBoundingClientRect().width), Math.round(4.75 * parseFloat(getComputedStyle(document.documentElement).fontSize))]");
+  check("the sidebar collapses to a rail", rail[0] === rail[1], JSON.stringify(rail));
   await send("Page.reload"); await sleep(2500);
   check("the collapsed sidebar is remembered", await evaluate("document.querySelector('#app').classList.contains('sidebar-collapsed')"));
   await click('[data-action="sidebar-collapse"]'); await sleep(400);

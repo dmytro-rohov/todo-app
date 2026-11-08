@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  addDays, applyMove, boardCanonical, counters, dueLabel, dueState, filterTasks, formatDuration, initials, monthGrid,
+  addDays, applyMove, boardCanonical, counters, dueLabel, dueState, filterTasks, formatClock, formatDuration, initials, monthGrid,
   shiftMonth, titleError, trackedNow, yearsAhead, goalLabel, isOpen
 } from "../js/app/logic.js";
 
@@ -33,7 +33,9 @@ test("durations and initials match the cards", () => {
   assert.equal(formatDuration(12000), "3 h 20 min");
   assert.equal(formatDuration(6300), "1 h 45 min");
   assert.equal(formatDuration(7200), "2 h");
-  assert.equal(formatDuration(59), "0 min");
+  assert.equal(formatDuration(59), "59 s"); // a short session is not "0 min"
+  assert.equal(formatDuration(0), "0 min");
+  assert.deepEqual([formatClock(7), formatClock(750), formatClock(3909)], ["0:07", "12:30", "1:05:09"]);
   assert.equal(trackedNow({ trackedSeconds: 60, timerStartedAt: "x" }, 1000, 61000), 120);
   assert.equal(trackedNow({ trackedSeconds: 60, timerStartedAt: null }, 1000, 61000), 60);
   // each task counts from when it was read, not from the store's last write

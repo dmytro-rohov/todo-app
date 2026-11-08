@@ -2,7 +2,7 @@
 import { api, sha256Hex } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { applyMove, boardCanonical, byPosition, columns, dueLabel, dueState, formatDuration, goalLabel, initials, STATUSES,
+import { applyMove, boardCanonical, byPosition, columns, dueLabel, dueState, formatClock, formatDuration, goalLabel, initials, PRIORITY_LABELS, STATUSES,
   STATUS_LABELS, trackedNow } from "./logic.js";
 import { lookup, reload, render, runTask, store, visibleTasks } from "./app.js";
 import { openDrawer } from "./drawer.js";
@@ -25,7 +25,14 @@ export function workflowLabel(task) {
   return WORKFLOW[task.workflowStatus] || "W Workflow";
 }
 
+// P0, P1 and P3 are marked on the card; the default P2 is not (it would be on every card).
+function priorityHtml(task) {
+  if (!["P0", "P1", "P3"].includes(task.priority)) return "";
+  return `<span class="chip chip--priority chip--${task.priority.toLowerCase()}" title="Priorytet ${task.priority}">${icon("flag", 14)}${PRIORITY_LABELS[task.priority]}</span>`;
+}
+
 export function chipsHtml(task) {
+  const priorityChip = priorityHtml(task);
   const project = lookup.project(task.projectId);
   const client = lookup.client(lookup.clientOf(task));
   const clientChip = client ? `<span class="chip chip--client" data-c="${escapeHtml(client.color)}">${icon("user", 14)}${escapeHtml(client.name)}</span>` : "";
@@ -34,7 +41,8 @@ export function chipsHtml(task) {
     `<span class="chip chip--label" data-c="${escapeHtml(label.color)}"><i class="dot"></i>${escapeHtml(label.name)}</span>`).join("");
   const flow = workflowLabel(task);
   const workflowChip = flow ? `<span class="chip chip--workflow" title="Mytko Workflow">${icon("layers", 14)}${escapeHtml(flow)}</span>` : "";
-  return clientChip || projectChip || labels || workflowChip ? `<div class="chips">${workflowChip}${clientChip}${projectChip}${labels}</div>` : "";
+  return priorityChip || clientChip || projectChip || labels || workflowChip
+    ? `<div class="chips">${priorityChip}${workflowChip}${clientChip}${projectChip}${labels}</div>` : "";
 }
 
 export function avatarHtml(task) {
@@ -51,10 +59,28 @@ export function dueHtml(task) {
   return `<span class="due${state ? ` due--${state}` : ""}">${icon("calendar", 17)}${escapeHtml(dueLabel(task.dueDate))}</span>`;
 }
 
-function timerHtml(task) {
+// A running timer ticks every second (tickTimers); recorded time shows in every column, done tasks included.
+export function timerHtml(task) {
   const seconds = trackedNow(task, store.fetchedAt);
-  if (task.status !== "in_progress" || (!seconds && !task.timerStartedAt)) return "";
-  return `<span class="timer${task.timerStartedAt ? " is-running" : ""}"${task.timerStartedAt ? " data-timer" : ""}>${icon("clock", 16)}${formatDuration(seconds)}</span>`;
+  if (!seconds && !task.timerStartedAt) return "";
+  return task.timerStartedAt
+    ? `<span class="timer is-running" ${timerData(task)}>${icon("clock", 16)}<span>${formatClock(seconds)}</span></span>`
+    : `<span class="timer" title="Zarejestrowany czas">${icon("clock", 16)}${formatDuration(seconds)}</span>`;
+}
+
+// What tickTimers needs: seconds recorded when the task was read, and when it was read.
+export function timerData(task) {
+  return `data-timer data-base="${task.trackedSeconds || 0}" data-at="${task.fetchedAt ?? store.fetchedAt ?? Date.now()}"`;
+}
+
+// Updates every running timer's text in place (no re-render: drags, focus and scroll stay untouched).
+export function tickTimers(root) {
+  const now = Date.now();
+  for (const node of root.querySelectorAll("[data-timer]")) {
+    const seconds = Number(node.dataset.base) + Math.max(0, (now - Number(node.dataset.at)) / 1000);
+    const text = node.querySelector(":scope > span") || node;
+    text.textContent = formatClock(seconds);
+  }
 }
 
 function actionHtml(task) {

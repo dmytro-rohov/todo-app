@@ -44,8 +44,18 @@ export function dueState(task, today = isoDay()) {
   return task.dueDate <= addDays(today, 6) ? "soon" : "later";
 }
 
-// "3 h 20 min", "45 min", "0 min".
+// A running timer: "0:07", "12:30", "1:05:09".
+export function formatClock(seconds) {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+// Recorded time: "3 h 20 min", "45 min", "40 s" (under a minute: seconds, so a short session is not "0 min").
 export function formatDuration(seconds) {
+  if (seconds > 0 && seconds < 60) return `${Math.floor(seconds)} s`;
   const minutes = Math.max(0, Math.floor(seconds / 60));
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;

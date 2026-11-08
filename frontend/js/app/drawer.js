@@ -3,9 +3,9 @@
 import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { formatDuration, PRIORITY_LABELS, STATUS_LABELS, titleError, trackedNow, yearsAhead } from "./logic.js";
+import { formatClock, formatDuration, PRIORITY_LABELS, STATUS_LABELS, titleError, trackedNow, yearsAhead } from "./logic.js";
 import { isMember, lookup, paint, reload, runTask, store } from "./app.js";
-import { moveTask, workflowLabel } from "./board.js";
+import { moveTask, timerData, workflowLabel } from "./board.js";
 import { confirmDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
 
@@ -79,7 +79,7 @@ function bodyHtml(task) {
         <dt>${icon("flag", 18)}Priorytet</dt>
         <dd><label class="select select--sm"><select data-field="priority" aria-label="Priorytet">${Object.entries(PRIORITY_LABELS).map(([k, v]) => `<option value="${k}"${task.priority === k ? " selected" : ""}>${v}</option>`).join("")}</select>${icon("chevronDown", 16)}</label></dd>
         <dt>${icon("clock", 18)}Czas pracy</dt>
-        <dd class="props__timer"><span${task.timerStartedAt ? ' class="is-running" data-timer' : ""}>${formatDuration(tracked)}</span>${timerButton}</dd>
+        <dd class="props__timer">${task.timerStartedAt ? `<span class="is-running" ${timerData(task)}>${formatClock(tracked)}</span>` : `<span>${formatDuration(tracked)}</span>`}${timerButton}</dd>
       </dl>
       <fieldset class="label-picker"><legend>${icon("tag", 18)}Etykiety</legend>
         ${store.labels.length ? store.labels.map(label => `<label class="chip chip--label chip--toggle" data-c="${escapeHtml(label.color)}">

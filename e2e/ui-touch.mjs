@@ -28,7 +28,8 @@ const q = await ev(`(() => { const r = document.querySelector('.card[data-id="${
 await send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: q.x, y: q.y }] });
 await sleep(450);
 console.log((await ev("Boolean(document.querySelector('.card--ghost'))") ? "PASS" : "FAIL") + " press and hold picks the card up");
-for (let i = 1; i <= 25; i++) { await send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: Math.min(350, q.x + i * 8), y: q.y }] }); await sleep(30); }
+// to the right edge of a 390 px phone, inside the 48 px auto-scroll band whatever the interface size
+for (let i = 1; i <= 30; i++) { await send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: Math.min(372, q.x + i * 9), y: q.y }] }); await sleep(30); }
 await sleep(700); // finger resting at the right edge: the board keeps scrolling
 const scrolled = await ev("document.querySelector('.board').scrollLeft");
 console.log((scrolled > 100 ? "PASS" : "FAIL") + ` resting at the edge scrolls the board (scrollLeft=${scrolled})`);
