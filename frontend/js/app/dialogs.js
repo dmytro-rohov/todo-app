@@ -44,7 +44,7 @@ export function openLanguageDialog() {
   const element = dialog("dialog--confirm dialog--scale", `<form class="dialog__body" novalidate>
     <header class="dialog__head"><h2>Język interfejsu</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
     <p class="muted">Ustawienie tego urządzenia.</p>
-    <div class="scale-options">${Object.entries(LANGUAGES).map(([value, label]) => `<label class="check" translate="no"><input type="radio" name="lang" value="${value}"${value === LANG ? " checked" : ""}>${label}</label>`).join("")}</div>
+    <div class="scale-options">${Object.entries(LANGUAGES).map(([value, label]) => `<label class="check" translate="no" lang="${value}"><input type="radio" name="lang" value="${value}"${value === LANG ? " checked" : ""}>${label}<span class="scale-options__code">${value === "uk" ? "УКР" : "PL"}</span></label>`).join("")}</div>
     <div class="dialog__actions"><button type="button" class="btn btn--primary" data-close>Gotowe</button></div>
   </form>`);
   element.addEventListener("click", event => { if (event.target.closest("[data-close]")) element.close(); });
