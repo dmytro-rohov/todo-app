@@ -13,8 +13,9 @@ import { openAccounts, openPassword } from "./accounts.js";
 import { bindMail, loadMail, mailAddress, mailBadge, renderMail, showMail } from "./mail.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
-import { openNewTask, openManage, confirmDialog, openScaleDialog } from "./dialogs.js";
+import { openNewTask, openManage, confirmDialog, openLanguageDialog, openScaleDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
+import { LANG } from "../i18n.js";
 
 const PREFS = "mytko-tasks-prefs";
 const VIEWS = { board: ["board", "Tablica"], list: ["list", "Lista"], calendar: ["calendar", "Kalendarz"], archive: ["archive", "Archiwum"], mail: ["mail", "Poczta"] };
@@ -115,6 +116,7 @@ export function visibleTasks() {
 // Colours never go into style attributes (CSP style-src 'self'): elements carry data-c and get a CSS variable.
 export function paint(element) {
   for (const node of element.querySelectorAll("[data-c]")) node.style.setProperty("--c", safeColor(node.dataset.c, "#7d8a80"));
+  for (const node of element.querySelectorAll("[data-pc]")) node.style.setProperty("--pc", safeColor(node.dataset.pc, "#7d8a80"));
 }
 
 // A member account (not the owner, the only administrator): the task app without clients, meetings and accounts.
@@ -215,6 +217,7 @@ function sidebarHtml() {
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees" title="Wykonawcy">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
       ${isMember() ? "" : `<button type="button" class="nav-item nav-item--sub" data-action="accounts" title="Konta">${icon("lock", 18)}<span>Konta</span></button>`}
       <button type="button" class="nav-item nav-item--sub" data-action="ui-scale" title="Rozmiar interfejsu">${icon("sliders", 18)}<span>Rozmiar interfejsu</span></button>
+      <button type="button" class="nav-item nav-item--sub" data-action="language" title="Język">${icon("globe", 18)}<span>Język</span><em translate="no">${LANG === "uk" ? "УКР" : "PL"}</em></button>
     </nav>
     <div class="sidebar__foot">
       <div class="profile">
@@ -263,6 +266,12 @@ function crumbsHtml() {
     ${parts.map(p => `<span class="crumb-sep">/</span>${p}`).join("")}<span class="crumb-sep">/</span><strong>Tasks</strong>`;
 }
 
+// Any filter narrowing the tasks (the space chosen in the sidebar and "Pokaż zakończone" are not filters here).
+function filtered() {
+  const f = store.filters;
+  return Boolean(f.status || f.projectId || f.clientId || f.labelId || f.assigneeId || f.quick || f.search);
+}
+
 function filtersHtml() {
   const f = store.filters;
   const option = (value, label, selected) => `<option value="${value}"${selected ? " selected" : ""}>${escapeHtml(label)}</option>`;
@@ -284,7 +293,7 @@ function filtersHtml() {
       ${option("", "Wszyscy wykonawcy", !f.assigneeId)}${option("none", "Bez wykonawcy", f.assigneeId === "none")}${store.assignees.map(a => option(a.id, a.name, f.assigneeId === a.id)).join("")}
     </select>${icon("chevronDown", 18)}</label>
     <span class="filters__spacer"></span>
-    <button type="button" class="icon-btn icon-btn--box" data-action="clear-filters" aria-label="Wyczyść filtry" title="Wyczyść filtry">${icon("sliders")}</button>
+    <button type="button" class="btn btn--ghost btn--sm filters__clear" data-action="clear-filters"${filtered() ? "" : " hidden"}>${icon("x", 16)}Wyczyść filtry</button>
     <label class="switch"><input type="checkbox" data-filter="showDone"${f.showDone ? " checked" : ""}><span class="switch__track"></span><span>Pokaż zakończone</span></label>`;
 }
 
@@ -317,6 +326,7 @@ export function render() {
   root.querySelector(".filters-toggle").setAttribute("aria-expanded", String(store.filtersOpen));
   const filters = root.querySelector(".filters");
   if (!filters.contains(document.activeElement)) filters.innerHTML = filtersHtml();
+  filters.querySelector('[data-action="clear-filters"]').hidden = !filtered();
   const hasDue = store.tasks.some(t => isOpen(t) && t.dueDate && t.dueDate <= isoDay());
   root.querySelector(".bell").classList.toggle("has-dot", hasDue || calendarState.today.length > 0);
   root.querySelector('.menu [data-action="new-meeting"]').hidden = !(calendarState.configured && calendarState.accounts.length);
@@ -455,6 +465,8 @@ async function handleAction(target, event) {
     setFilter({ clientId: Number(target.dataset.client), spaceId: null, projectId: null });
   } else if (action === "ui-scale") {
     openScaleDialog();
+  } else if (action === "language") {
+    openLanguageDialog();
   } else if (action === "accounts") {
     openAccounts();
   } else if (action === "password") {
@@ -471,8 +483,11 @@ async function handleAction(target, event) {
     closePopups();
     openDrawer(Number(target.dataset.id));
   } else if (action === "clear-filters") {
-    setFilter({ status: "", labelId: null, assigneeId: null, quick: null, search: "" });
+    // the filter bar is not redrawn while focus is inside it: let go of the button, then land on the first filter
+    target.blur();
     root.querySelector("#search").value = "";
+    setFilter({ status: "", projectId: null, clientId: null, labelId: null, assigneeId: null, quick: null, search: "" });
+    root.querySelector(".filters select")?.focus();
   } else if (action === "sidebar-collapse") {
     store.sidebarCollapsed = !store.sidebarCollapsed;
     savePrefs();

@@ -97,7 +97,9 @@ function actionHtml(task) {
 }
 
 export function cardHtml(task) {
-  return `<article class="card card--${task.status}" data-id="${task.id}" tabindex="0" aria-roledescription="karta zadania"
+  // a task in a project gets a pale tint of the project's folder colour
+  const project = lookup.project(task.projectId);
+  return `<article class="card card--${task.status}${project ? " card--project" : ""}" data-id="${task.id}"${project ? ` data-pc="${escapeHtml(project.color)}"` : ""} tabindex="0" aria-roledescription="karta zadania"
       aria-label="${escapeHtml(task.title)}. ${STATUS_LABELS[task.status]}. Alt i strzałki przenoszą, Enter otwiera.">
     <h3 class="card__title">${escapeHtml(task.title)}</h3>
     ${chipsHtml(task)}
@@ -112,6 +114,8 @@ export function cardHtml(task) {
 
 export function renderBoard() {
   const cols = columns(visibleTasks());
+  // "Pokaż zakończone" off hides the whole Zakończone column (unless the status filter asks for finished tasks)
+  const shown = store.filters.showDone || store.filters.status === "done" ? STATUSES : STATUSES.filter(s => s !== "done");
   return `<div class="board-wrap">
     <div class="board__bar">
       <button type="button" class="board__peek" data-card="peek" aria-label="Przewiń do kolumny Plany długoterminowe">
@@ -119,7 +123,7 @@ export function renderBoard() {
       <button type="button" class="board__peek board__peek--back" data-card="peek-back" aria-label="Wróć do początku tablicy">
         ${icon("chevronLeft", 17)}<span>Wróć do tablicy</span></button>
     </div>
-    <div class="board">${STATUSES.map(status => `
+    <div class="board${shown.includes("done") ? "" : " board--no-done"}">${shown.map(status => `
     <section class="column column--${status}" data-status="${status}" aria-label="${STATUS_LABELS[status]}">
       <header class="column__head">
         <span class="column__icon">${icon(COLUMN_ICONS[status], 22)}</span>

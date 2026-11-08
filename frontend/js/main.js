@@ -6,8 +6,10 @@ function shared() {
 import { startApp } from "./app/app.js";
 import { finishStartup, markWelcome, startupStep } from "./startup.js";
 import { applyScale } from "./ui-scale.js";
+import { startTranslation } from "./i18n.js";
 
 applyScale();
+startTranslation();
 
 const authRoot = document.querySelector("#auth");
 const appRoot = document.querySelector("#app");

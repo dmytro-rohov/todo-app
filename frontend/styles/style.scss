@@ -321,6 +321,7 @@
         align-items: start; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 0.625rem;
         scrollbar-width: thin; scrollbar-color: #2f3e31 transparent;
         .column { scroll-snap-align: start; }
+        &--no-done { grid-auto-columns: max(13.75rem, calc((100% - 2rem) / 3)); }
     }
     .board__bar { display: flex; justify-content: flex-end; margin: -0.375rem 0 0.625rem; }
     .board__peek {
@@ -369,6 +370,12 @@
         &--in_progress { border-left: 0.1875rem solid var(--accent); }
         &--needs_review { border-left: 0.1875rem solid var(--warning); }
         &--done { border-left: 0.1875rem solid var(--success); .card__title { color: #dfe8e0; } }
+        // pale tint of the project's colour: the folder chip keeps the strong colour
+        // (top, right and bottom only: the left edge keeps the status colour)
+        &--project { --pc-line: color-mix(in srgb, var(--pc) 24%, var(--border));
+            background: color-mix(in srgb, var(--pc) 11%, var(--surface-2)); border-top-color: var(--pc-line); border-right-color: var(--pc-line); border-bottom-color: var(--pc-line);
+            &:hover { --pc-line: color-mix(in srgb, var(--pc) 36%, var(--border)); background: color-mix(in srgb, var(--pc) 16%, var(--surface-2));
+                border-top-color: var(--pc-line); border-right-color: var(--pc-line); border-bottom-color: var(--pc-line); } }
         &--planned { border-left: 0.1875rem dashed #7d9a5a; }
         &.is-dragging { opacity: .35; }
         &--ghost { position: fixed; z-index: 100; top: 0; left: 0; pointer-events: none; box-shadow: var(--shadow); border-color: #b7e34d80; cursor: grabbing; }
@@ -823,6 +830,7 @@
     .chip--p0 { border-color: #f8717180; background: #f871711f; color: #fca5a5; }
     .chip--p1 { border-color: #fb923c80; background: #fb923c1a; color: #fdba74; }
     .chip--p3 { border-color: var(--border-strong); color: var(--muted); }
+    .priority-picker .chip--toggle:has(input:checked) { border-color: currentColor; box-shadow: inset 0 0 0 1px currentColor; }
     .scale-options { display: grid; gap: 0.625rem; margin: 0.25rem 0 0.5rem; }
     .chip--workflow { border-color: #818cf866; color: #c7cbff; .i { color: #a5b4fc; } }
     .workflow-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; small { flex-basis: 100%; } }
@@ -900,6 +908,8 @@
 
     // Snapping would pull every small programmatic scroll back while a card is dragged to an off-screen column.
     body.is-dragging .board { scroll-snap-type: none; }
+    // a card can be dropped at the bottom of a column under the timer dock
+    body.is-dragging .timer-dock { opacity: .3; pointer-events: none; }
     @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation: none !important; transition: none !important; }
     }

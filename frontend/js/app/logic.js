@@ -1,4 +1,5 @@
 // Pure board logic: no DOM, no network. Everything here is unit tested.
+import { LANG } from "../i18n.js";
 
 // The fifth column holds long-term plans and dreams (a year, two, five): off the daily counters, to the right.
 export const STATUSES = ["todo", "in_progress", "needs_review", "done", "planned"];
@@ -10,10 +11,13 @@ export function isOpen(task) {
   return task.status !== "done" && task.status !== "planned";
 }
 export const PRIORITY_LABELS = { P0: "Krytyczny", P1: "Wysoki", P2: "Normalny", P3: "Niski" };
-const MONTHS_SHORT = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
-export const MONTHS = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień",
+const UK = LANG === "uk";
+export const MONTHS_SHORT = UK ? ["січ", "лют", "бер", "квіт", "трав", "черв", "лип", "серп", "вер", "жовт", "лист", "груд"]
+  : ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+export const MONTHS = UK ? ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень",
+  "Жовтень", "Листопад", "Грудень"] : ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień",
   "Październik", "Listopad", "Grudzień"];
-export const WEEKDAYS = ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"];
+export const WEEKDAYS = UK ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"] : ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"];
 
 // Local calendar date as YYYY-MM-DD (deadlines are calendar days, not instants).
 export function isoDay(date = new Date()) {

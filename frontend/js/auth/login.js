@@ -2,6 +2,7 @@
 import { request, ApiError } from "../api/http.js";
 import { markWelcome } from "../startup.js";
 import { escapeHtml } from "../utils/helpers.js";
+import { LANG, setLang } from "../i18n.js";
 
 const FEATURES = [
   { icon: "board", title: "Tablica, lista i kalendarz", text: "Cztery kolumny pracy, przeciąganie i kolejność jako priorytet." },
@@ -123,6 +124,8 @@ export function renderLogin(root, state, { notice = null, onAuthenticated }) {
         <footer class="auth-card__foot">
           <p>Potrzebujesz dostępu? <button type="button" class="auth-link" aria-expanded="false" aria-controls="auth-help">Skontaktuj się z operatorem.</button></p>
           <p id="auth-help" class="auth-card__help" hidden>Mytko Tasks ma jedno konto właściciela, konfigurowane po stronie serwera. Nowych kont nie można tu utworzyć.</p>
+          <p class="auth-lang" role="group" aria-label="Język" translate="no">${Object.entries({ pl: "PL", uk: "УКР" }).map(([value, label]) =>
+            `<button type="button" data-lang="${value}" aria-pressed="${value === LANG}" lang="${value}">${label}</button>`).join("")}</p>
         </footer>
       </div>
     </main>
@@ -150,6 +153,11 @@ export function renderLogin(root, state, { notice = null, onAuthenticated }) {
     toggle.setAttribute("aria-pressed", String(visible));
     toggle.setAttribute("aria-label", visible ? "Ukryj hasło" : "Pokaż hasło");
     toggle.innerHTML = icon(visible ? "eye" : "eyeOff", 21);
+  });
+
+  root.querySelector(".auth-lang").addEventListener("click", event => {
+    const lang = event.target.closest("[data-lang]")?.dataset.lang;
+    if (lang && lang !== LANG) setLang(lang);
   });
 
   root.querySelector(".auth-link").addEventListener("click", event => {

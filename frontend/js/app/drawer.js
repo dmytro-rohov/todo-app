@@ -8,6 +8,7 @@ import { isMember, lookup, paint, reload, runTask, store } from "./app.js";
 import { moveTask, timerData, workflowLabel } from "./board.js";
 import { confirmDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
+import { LOCALE } from "../i18n.js";
 
 const FIELD_NAMES = {
   created: "Utworzono", title: "Tytuł", description: "Opis", status: "Status", priority: "Priorytet", date: "Data",
@@ -19,7 +20,7 @@ let panel = null;
 let current = null; // { id, notes, subtasks, history, trigger }
 
 function when(value) {
-  return new Date(value).toLocaleString("pl-PL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(value).toLocaleString(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function historyValue(field, value) {

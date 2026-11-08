@@ -5,6 +5,7 @@ import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { confirmDialog, dialog } from "./dialogs.js";
 import { toast } from "./toast.js";
+import { LOCALE } from "../i18n.js";
 
 const PASSWORD_MIN = 12;
 
@@ -15,7 +16,7 @@ function generatePassword() {
   return [...bytes].map(b => alphabet[b % alphabet.length]).join("").replace(/(.{4})(?!$)/g, "$1-");
 }
 
-const when = iso => (iso ? new Date(iso).toLocaleString("pl-PL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "jeszcze nie");
+const when = iso => (iso ? new Date(iso).toLocaleString(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "jeszcze nie");
 
 const MESSAGES = {
   "This login is taken": "Ten login jest już zajęty.",

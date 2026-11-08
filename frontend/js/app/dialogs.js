@@ -3,12 +3,13 @@ import { api } from "../api/client.js";
 import { SCALES, savedScale, saveScale } from "../ui-scale.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { isoDay, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
+import { isoDay, PRIORITY_LABELS, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
 import { isMember, lookup, paint, reload, render, store, upsertTask } from "./app.js";
 import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.js";
 import { openClient } from "./clients.js";
 import { openDrawer } from "./drawer.js";
 import { toast } from "./toast.js";
+import { LANG, LANGUAGES, LOCALE, setLang } from "../i18n.js";
 
 const PALETTE = ["#b7e34d", "#84cc16", "#22c55e", "#14b8a6", "#38bdf8", "#818cf8", "#f2c463", "#fb923c", "#f87171", "#e879f9"];
 
@@ -38,6 +39,18 @@ export function openScaleDialog() {
   element.addEventListener("change", event => { if (event.target.name === "scale") saveScale(event.target.value); });
 }
 
+// "Język": Polish or Ukrainian interface, on this device; the page reloads in the chosen language.
+export function openLanguageDialog() {
+  const element = dialog("dialog--confirm dialog--scale", `<form class="dialog__body" novalidate>
+    <header class="dialog__head"><h2>Język interfejsu</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
+    <p class="muted">Ustawienie tego urządzenia.</p>
+    <div class="scale-options">${Object.entries(LANGUAGES).map(([value, label]) => `<label class="check" translate="no"><input type="radio" name="lang" value="${value}"${value === LANG ? " checked" : ""}>${label}</label>`).join("")}</div>
+    <div class="dialog__actions"><button type="button" class="btn btn--primary" data-close>Gotowe</button></div>
+  </form>`);
+  element.addEventListener("click", event => { if (event.target.closest("[data-close]")) element.close(); });
+  element.addEventListener("change", event => { if (event.target.name === "lang" && event.target.value !== LANG) setLang(event.target.value); });
+}
+
 export function confirmDialog(message, confirmLabel = "OK") {
   return new Promise(resolve => {
     const element = dialog("dialog--confirm", `
@@ -59,7 +72,7 @@ function choices(list, selected, empty) {
 }
 
 // mailId / meetingId link the task to an e-mail / a meeting; onCreated(task) runs after it is saved.
-export function openNewTask({ status = "todo", dueDate = null, clientId = null, meetingId = null, mailId = null, spaceId = null, title = "", description = "",
+export function openNewTask({ status = "todo", priority = "P2", dueDate = null, clientId = null, meetingId = null, mailId = null, spaceId = null, title = "", description = "",
   onCreated = null } = {}) {
   const privateSpace = lookup.privateSpace();
   const project = lookup.project(store.filters.projectId);
@@ -78,6 +91,8 @@ export function openNewTask({ status = "todo", dueDate = null, clientId = null, 
       <div class="horizon" data-horizon${status === "planned" ? "" : " hidden"}><span>Cel za:</span>
         ${[[1, "rok"], [2, "2 lata"], [5, "5 lat"]].map(([years, label]) => `<button type="button" class="chip chip--toggle-btn" data-years="${years}">${label}</button>`).join("")}
         <button type="button" class="chip chip--toggle-btn" data-years="0">kiedyś</button></div>
+      <fieldset class="label-picker priority-picker"><legend>Priorytet</legend>${Object.entries(PRIORITY_LABELS).map(([value, label]) =>
+        `<label class="chip chip--toggle chip--priority chip--${value.toLowerCase()}"><input type="radio" name="priority" value="${value}"${value === priority ? " checked" : ""}>${icon("flag", 14)}${label}</label>`).join("")}</fieldset>
       <div class="field-row">
         <label class="field"><span>Przestrzeń</span><span class="select"><select name="spaceId">${choices(store.spaces, spaceId)}</select>${icon("chevronDown", 16)}</span></label>
         <label class="field"><span>Projekt</span><span class="select"><select name="projectId">${choices(projectsFor(spaceId), project?.id, "Bez projektu")}</select>${icon("chevronDown", 16)}</span></label>
@@ -124,6 +139,7 @@ export function openNewTask({ status = "todo", dueDate = null, clientId = null, 
         title: title.trim(),
         date: isoDay(),
         status: form.status.value,
+        priority: form.elements.priority.value || "P2",
         dueDate: form.dueDate.value || null,
         spaceId: Number(form.spaceId.value) || null,
         projectId: Number(form.projectId.value) || null,
@@ -182,7 +198,7 @@ function itemHtml(kind, item) {
     ? ""
     : account
       ? `<div class="cal-link">${icon("calendar", 16)}<span><strong>${escapeHtml(account.accountEmail)}</strong>
-          <small class="${account.lastError ? "is-error" : "muted"}">${account.lastError ? escapeHtml(account.lastError) : account.lastSyncAt ? `zsynchronizowano ${new Date(account.lastSyncAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}` : "synchronizacja…"}</small></span>
+          <small class="${account.lastError ? "is-error" : "muted"}">${account.lastError ? escapeHtml(account.lastError) : account.lastSyncAt ? `zsynchronizowano ${new Date(account.lastSyncAt).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" })}` : "synchronizacja…"}</small></span>
           <button type="button" class="btn btn--ghost btn--sm" data-cal-action="sync" data-account="${account.id}">Synchronizuj</button>
           <button type="button" class="btn btn--ghost btn--sm" data-cal-action="connect" data-space="${item.id}">Zmień konto</button>
           <button type="button" class="icon-btn" data-cal-action="disconnect" data-account="${account.id}" aria-label="Odłącz kalendarz" title="Odłącz kalendarz">${icon("x", 18)}</button></div>`

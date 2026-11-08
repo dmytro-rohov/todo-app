@@ -64,10 +64,13 @@
 .auth-form .auth-alert{margin-top:1.125rem}
 .auth-card__foot{margin-top:2.5rem;padding-top:1.75rem;border-top:1px solid var(--auth-line);color:var(--auth-muted);font-size:0.9375rem;text-align:center}
 .auth-card__foot p{margin:0}
+.auth-lang{display:flex;justify-content:center;gap:0.375rem;margin-top:1.25rem!important}
+.auth-lang button{min-width:3.25rem;padding:0.375rem 0.75rem;border:1px solid var(--auth-line);border-radius:999px;background:transparent;color:var(--auth-muted);font:inherit;font-size:0.8125rem;font-weight:600}
+.auth-lang button[aria-pressed="true"]{border-color:#79bf55;color:var(--auth-ink);background:#eef7e8}
 .auth-link{padding:0;border:0;background:none;color:#2f7a1e;font-weight:600;text-decoration:underline;text-underline-offset:0.1875rem}
 .auth-link:hover{color:#1f5a12}
 .auth-card__help{margin:0.875rem 0 0!important;color:var(--auth-muted);font-size:0.875rem;line-height:1.5}
-.auth-quick:focus-visible,.auth-submit:focus-visible,.auth-password__toggle:focus-visible,.auth-link:focus-visible{outline:0.1875rem solid #79bf55;outline-offset:0.1875rem}
+.auth-quick:focus-visible,.auth-submit:focus-visible,.auth-password__toggle:focus-visible,.auth-link:focus-visible,.auth-lang button:focus-visible{outline:0.1875rem solid #79bf55;outline-offset:0.1875rem}
 .auth-spinner{width:1.25rem;height:1.25rem;border:2.5px solid #ffffff55;border-top-color:#fff;border-radius:50%;animation:orbit-spin .8s linear infinite}
 .auth-spinner--dark{border-color:#14220d40;border-top-color:#14220d}
 
