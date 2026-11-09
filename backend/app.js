@@ -128,7 +128,7 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   // Poczta: the mailbox source can be replaced in tests (options.mailSource); the sync runs every few minutes.
   const mailSource = config.mail ? (options.mailSource || createImapSource(config.mail)) : null;
   const mailSync = config.mail ? scheduleMailSync(pool, mailSource, config.mail, { firstRunMs: options.mailFirstRunMs ?? 15000,
-    afterSync: async () => processGeminiMail(pool, await settings.ai(), { fetchImpl: options.fetchImpl }) }) : null;
+    afterSync: () => processGeminiMail(pool, () => settings.ai(), { fetchImpl: options.fetchImpl }) }) : null;
   if (mailSync) stoppables.push(mailSync);
   api.use("/mail", ownerOnly, createMailRouter(pool, { mail: config.mail, source: mailSource, sync: mailSync, ai: () => settings.ai(), google,
     key: calendarConfig?.key, fetchImpl: options.fetchImpl }));

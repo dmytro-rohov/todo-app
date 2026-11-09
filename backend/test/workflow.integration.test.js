@@ -347,6 +347,45 @@ describe("Mytko Workflow ToDo", { skip, concurrency: false }, () => {
       for (const t of [first, second]) await as(`/api/tasks/${t.id}`, "DELETE");
     });
 
+    test("Gemini notes: turning AI off during a batch stops the rest of the batch", async () => {
+      const { processGeminiMail } = require("../briefs");
+      for (const [uid, title] of [[1, "Strona dla piekarni"], [2, "Sklep dla kwiaciarni"]]) {
+        await owner.query(`INSERT INTO mail_messages (uid_validity, uid, from_address, from_name, subject, sent_at, body_text)
+          VALUES (1, $1, 'gemini-notes@google.com', 'Gemini', $2, now(), 'Ustalenia: strona z galerią i formularzem.')`, [9000 + uid, `Notes: „${title}”`]);
+      }
+      const ai = { provider: "anthropic", apiKey: "k", model: "claude-sonnet-5-5", apiBase: "https://api.anthropic.com" };
+      let on = true;
+      const before = asked.length;
+      // the first brief's request turns AI off (as the owner would in Porządek); the second never reaches the AI
+      const gemini = async (url, init) => { const answer = await fakeClaude(url, init); on = false; return answer; };
+      const briefs = await processGeminiMail(appPool, async () => (on ? ai : null), { fetchImpl: gemini });
+      assert.equal(briefs.length, 2);
+      assert.equal(asked.length, before + 1, "one request, then AI was off");
+      await owner.query("DELETE FROM meeting_briefs; DELETE FROM mail_messages");
+    });
+
+    test("sending to Workflow works with a pool of one connection (the switch is read outside the transaction)", async () => {
+      const single = createPool({ connectionString: APP_URL, max: 1 });
+      const one = await startApp({ pool: single, migrationVersions: VERSIONS,
+        env: { WORKFLOW_TOKEN_SHA256: crypto.createHash("sha256").update(TOKEN).digest("hex") } });
+      try {
+        const res = await one.request("/api/tasks", { method: "POST", headers: SAME_ORIGIN_JSON,
+          body: JSON.stringify({ title: "Wysłać przez jedno połączenie", date: "2026-11-09", spaceId: work.id, workflow: true }), signal: AbortSignal.timeout(8000) });
+        assert.equal(res.status, 201);
+        const task = await res.json();
+        const patch = await one.request(`/api/tasks/${task.id}`, { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ workflow: false }),
+          signal: AbortSignal.timeout(8000) });
+        assert.equal(patch.status, 200);
+        const again = await one.request(`/api/tasks/${task.id}`, { method: "PATCH", headers: SAME_ORIGIN_JSON, body: JSON.stringify({ workflow: true }),
+          signal: AbortSignal.timeout(8000) });
+        assert.equal(again.status, 200);
+        await as(`/api/tasks/${task.id}`, "DELETE");
+      } finally {
+        await one.close();
+        await single.end();
+      }
+    });
+
     test("an AI error after an answer in the same pass is still shown", async () => {
       const a = (await as("/api/tasks", "POST", { title: "Poprawić kod menu", date: "2026-11-09", spaceId: work.id })).body;
       const b = (await as("/api/tasks", "POST", { title: "Poprawić kod stopki", date: "2026-11-09", spaceId: work.id })).body;

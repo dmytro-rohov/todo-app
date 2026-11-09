@@ -149,6 +149,7 @@ function sendWriteError(res, error) {
 }
 
 module.exports = function createTasksRouter(pool, { settings = null } = {}) {
+  // read before a transaction starts: the settings query takes its own pool connection
   const workflowOn = async () => (settings ? settings.workflowEnabled() : true);
   const router = express.Router();
 
@@ -207,6 +208,7 @@ module.exports = function createTasksRouter(pool, { settings = null } = {}) {
     if (extraValidation.error) return res.status(400).json({ message: extraValidation.error });
     const domain = extraValidation.value;
     const labelIds = domain.labelIds ? [...new Set([value.categoryId, ...domain.labelIds].filter(id => id !== null))] : null;
+    const workflowEnabled = domain.workflow === true ? await workflowOn() : true;
     try {
       const task = await withTransaction(pool, async client => {
         const spaces = await defaultSpaces(client, req.user);
@@ -235,7 +237,7 @@ module.exports = function createTasksRouter(pool, { settings = null } = {}) {
         );
         const id = inserted.rows[0].id;
         if (labelIds && labelIds.length > 1) await setLabels(client, id, labelIds);
-        if (domain.workflow === true) await setWorkflow(client, id, true, req.user.actor, { enabled: await workflowOn() });
+        if (domain.workflow === true) await setWorkflow(client, id, true, req.user.actor, { enabled: workflowEnabled });
         const created = await loadTask(client, id);
         await recordTaskChanges(client, id, taskChanges(null, created), req.user.actor);
         return created;
@@ -279,6 +281,7 @@ module.exports = function createTasksRouter(pool, { settings = null } = {}) {
     if (id === null) return res.status(400).json({ message: "Invalid task id" });
     const { error, value } = validateTaskPatch(req.body);
     if (error) return res.status(400).json({ message: error });
+    const workflowEnabled = value.workflow === true ? await workflowOn() : true;
     try {
       const task = await withTransaction(pool, async client => {
         if (!(await canSeeTask(client, req.user, id))) return null;
@@ -309,7 +312,7 @@ module.exports = function createTasksRouter(pool, { settings = null } = {}) {
           await client.query("DELETE FROM task_labels WHERE task_id = $1 AND category_id = $2", [id, value.categoryId]);
         }
         if (status !== undefined) await stopTimerUnlessInProgress(client, id, status);
-        if (workflow !== undefined) await setWorkflow(client, id, workflow, req.user.actor, { enabled: await workflowOn() });
+        if (workflow !== undefined) await setWorkflow(client, id, workflow, req.user.actor, { enabled: workflowEnabled });
         // a new title or description is looked at by Claude's routing again
         if ("title" in plain || "description" in plain) await client.query("UPDATE tasks SET ai_checked_at = NULL, ai_coding = NULL, ai_reason = NULL WHERE id = $1", [id]);
         const after = await loadTask(client, id);
