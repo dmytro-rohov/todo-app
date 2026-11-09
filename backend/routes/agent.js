@@ -3,7 +3,9 @@
 //   GET  /api/agent/workflow/tasks       tasks sent to Workflow (or withdrawn after it took them), with context
 //   POST /api/agent/workflow/tasks/:id   { status, ref?, url? }: Workflow took the task / its status changed;
 //        todo / in_progress / needs_attention / done are mirrored on the board, cancelled ends the link.
-// Only tasks in spaces visible to agents are ever shown (never a private space or a member's).
+// Only tasks in spaces visible to agents are ever shown (never a private space or a member's). With the connection
+// turned off in Tasks (Porządek → AI i Workflow) every call gets 503; each authorised call is noted as Workflow's
+// last contact (shown there as "active").
 const crypto = require("node:crypto");
 const express = require("express");
 const { withTransaction } = require("../db");
@@ -19,7 +21,7 @@ const ACTOR = "workflow";
 
 const sha256 = value => crypto.createHash("sha256").update(String(value)).digest();
 
-module.exports = function createAgentRouter(pool, { tokenSha256, publicOrigin }) {
+module.exports = function createAgentRouter(pool, { tokenSha256, publicOrigin, settings = null }) {
   const router = express.Router();
   const expected = Buffer.from(tokenSha256, "hex");
 
@@ -27,11 +29,17 @@ module.exports = function createAgentRouter(pool, { tokenSha256, publicOrigin })
     res.set("Cache-Control", "no-store");
     const match = /^Bearer ([A-Za-z0-9._~+/=-]{20,200})$/.exec(req.get("authorization") || "");
     if (!match || !crypto.timingSafeEqual(sha256(match[1]), expected)) return res.status(401).json({ message: "Invalid token" });
-    next();
+    if (!settings) return next();
+    settings.workflowEnabled().then(async enabled => {
+      if (!enabled) return res.status(503).json({ message: "The Mytko Workflow connection is turned off in Mytko Tasks" });
+      await settings.notePoll().catch(() => console.error("could not note the Workflow poll"));
+      next();
+    }, next);
   });
 
   const SELECT = `SELECT t.id, t.title, t.description, ${statusSql("t")} AS status, t.priority, TO_CHAR(t.due_date, 'YYYY-MM-DD') AS "dueDate",
-      t.workflow_requested_at AS "requestedAt", t.workflow_ref AS ref, t.workflow_status AS "workflowStatus", t.updated_at AS "updatedAt",
+      t.workflow_requested_at AS "requestedAt", COALESCE(t.workflow_requested_by, 'owner') AS "requestedBy",
+      CASE WHEN t.workflow_requested_by = 'ai' THEN t.ai_reason END AS "aiReason", t.workflow_ref AS ref, t.workflow_status AS "workflowStatus", t.updated_at AS "updatedAt",
       s.name AS space, p.name AS project, c.name AS client, e.title AS "meetingTitle", e.start_at AS "meetingAt", m.subject AS "mailSubject",
       m.from_address AS "mailFrom",
       ARRAY(SELECT cat.name FROM categories cat WHERE cat.id = t.category_id OR cat.id IN (SELECT l.category_id FROM task_labels l WHERE l.task_id = t.id)) AS labels,

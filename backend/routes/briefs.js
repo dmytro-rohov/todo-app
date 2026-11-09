@@ -12,10 +12,12 @@ const parse = row => {
   return { ...row, result };
 };
 
-module.exports = function createBriefsRouter(pool, { ai, fetchImpl }) {
+module.exports = function createBriefsRouter(pool, { ai: aiFor, fetchImpl }) {
   const router = express.Router();
+  // Claude when it may be used now (configured and not turned off in Porządek → AI i Workflow), else null
+  router.use(async (req, res, next) => { try { req.ai = await aiFor(); next(); } catch (error) { next(error); } });
 
-  async function full(id) {
+  async function full(id, ai) {
     const row = (await pool.query(`SELECT ${COLUMNS}, b.notes FROM meeting_briefs b WHERE b.id = $1`, [id])).rows[0];
     if (!row) return null;
     const event = row.eventId ? (await pool.query(
@@ -38,12 +40,12 @@ module.exports = function createBriefsRouter(pool, { ai, fetchImpl }) {
     if (req.query.unassigned === "true") conditions.push("b.event_id IS NULL");
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const { rows } = await pool.query(`SELECT ${COLUMNS} FROM meeting_briefs b ${where} ORDER BY b.created_at DESC, b.id DESC LIMIT 100`, params);
-    res.json({ ai: Boolean(ai), briefs: rows.map(parse) });
+    res.json({ ai: Boolean(req.ai), briefs: rows.map(parse) });
   });
 
   router.get("/:id", async (req, res) => {
     const id = parseId(req.params.id);
-    const brief = id && await full(id);
+    const brief = id && await full(id, req.ai);
     if (!brief) return res.status(404).json({ message: "Brief not found" });
     res.json(brief);
   });
@@ -59,16 +61,16 @@ module.exports = function createBriefsRouter(pool, { ai, fetchImpl }) {
       return res.status(400).json({ message: "Meeting does not exist" });
     }
     const id = await createBrief(pool, { eventId, notes: body.notes, source: "paste" });
-    await runBrief(pool, ai, id, { fetchImpl });
-    res.status(201).json(await full(id));
+    await runBrief(pool, req.ai, id, { fetchImpl });
+    res.status(201).json(await full(id, req.ai));
   });
 
   router.post("/:id/run", async (req, res) => {
     const id = parseId(req.params.id);
     if (!id || !(await pool.query("SELECT 1 FROM meeting_briefs WHERE id = $1", [id])).rowCount) return res.status(404).json({ message: "Brief not found" });
-    if (!ai) return res.status(400).json({ message: "Claude is not configured" });
-    await runBrief(pool, ai, id, { fetchImpl });
-    res.json(await full(id));
+    if (!req.ai) return res.status(400).json({ message: "AI is not configured or turned off" });
+    await runBrief(pool, req.ai, id, { fetchImpl });
+    res.json(await full(id, req.ai));
   });
 
   // { eventId }: assign the meeting (its client comes along)
@@ -81,7 +83,7 @@ module.exports = function createBriefsRouter(pool, { ai, fetchImpl }) {
     const result = await pool.query("UPDATE meeting_briefs SET event_id = $1, client_id = COALESCE($2, client_id), updated_at = now() WHERE id = $3",
       [eventId, event.client_id, id]);
     if (!result.rowCount) return res.status(404).json({ message: "Brief not found" });
-    res.json(await full(id));
+    res.json(await full(id, req.ai));
   });
 
   router.delete("/:id", async (req, res) => {

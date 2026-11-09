@@ -1,37 +1,7 @@
-// Claude (Anthropic Messages API) for proposals: tasks from an e-mail (Poczta) and a meeting brief (C5). Proposals
-// are only suggestions; the owner accepts each one. The answer is forced into a tool call, so it is always JSON
-// of the given schema; it is validated again here.
-const API_VERSION = "2023-06-01";
-const TIMEOUT_MS = 90000;
-
-class AiError extends Error {}
-
-async function callTool(ai, { system, content, tool, maxTokens = 2000, fetchImpl = fetch }) {
-  let response;
-  try {
-    response = await fetchImpl(`${ai.apiBase}/v1/messages`, {
-      method: "POST",
-      headers: { "x-api-key": ai.apiKey, "anthropic-version": API_VERSION, "content-type": "application/json" },
-      body: JSON.stringify({ model: ai.model, max_tokens: maxTokens, system, tools: [tool], tool_choice: { type: "tool", name: tool.name },
-        messages: [{ role: "user", content }] }),
-      signal: AbortSignal.timeout(TIMEOUT_MS)
-    });
-  } catch {
-    throw new AiError("Claude nie odpowiada. Spróbuj za chwilę.");
-  }
-  if (response.status === 401 || response.status === 403) throw new AiError("Klucz API Claude jest nieprawidłowy.");
-  if (response.status === 429) throw new AiError("Limit zapytań do Claude: spróbuj za chwilę.");
-  if (response.status === 400) {
-    const body = await response.json().catch(() => ({}));
-    if (/credit|billing/i.test(body?.error?.message || "")) throw new AiError("Brak środków na koncie Anthropic API.");
-    throw new AiError("Claude odrzucił zapytanie.");
-  }
-  if (!response.ok) throw new AiError("Claude nie odpowiada. Spróbuj za chwilę.");
-  const data = await response.json();
-  const call = (data.content || []).find(block => block.type === "tool_use" && block.name === tool.name);
-  if (!call || !call.input || typeof call.input !== "object" || Array.isArray(call.input)) throw new AiError("Claude nie zwrócił propozycji.");
-  return call.input;
-}
+// AI proposals: tasks from an e-mail (Poczta) and a meeting brief (C5). Proposals are only suggestions; the owner
+// accepts each one. The answer comes from structured() (./index.js), so it is JSON of the given schema whichever
+// provider answers; it is validated again here.
+const { structured, AiError } = require("./index");
 
 const text = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -59,7 +29,7 @@ const TASKS_SCHEMA = {
 };
 
 async function proposeFromMail(ai, mail, { today, clientName = null, fetchImpl } = {}) {
-  const input = await callTool(ai, {
+  const input = await structured(ai, {
     fetchImpl,
     system: "Jesteś asystentem studia webowego Mytko (strony i aplikacje dla klientów). Z e-maila wyciągasz konkretne zadania do " +
       "zrobienia dla właściciela studia. Nie wymyślaj zadań, których nie ma w treści. Newslettery, reklamy i powiadomienia " +
@@ -67,7 +37,7 @@ async function proposeFromMail(ai, mail, { today, clientName = null, fetchImpl }
     content: `Dzisiaj jest ${today}.${clientName ? ` Nadawca to klient: ${clientName}.` : ""}\n\nOd: ${mail.fromName} <${mail.fromAddress}>\n` +
       `Temat: ${mail.subject}\nData: ${mail.sentAt}\n\n${String(mail.bodyText).slice(0, 20000)}`,
     tool: { name: "propose_tasks", description: "Zwraca streszczenie e-maila i proponowane zadania",
-      input_schema: { type: "object", required: ["summary", "tasks", "needsReply"], properties: {
+      schema: { type: "object", required: ["summary", "tasks", "needsReply"], properties: {
         summary: { type: "string", description: "Streszczenie w 1–2 zdaniach" },
         needsReply: { type: "boolean", description: "Czy nadawca czeka na odpowiedź" },
         tasks: TASKS_SCHEMA
@@ -96,7 +66,7 @@ function cleanSiteBrief(value) {
 }
 
 async function proposeBrief(ai, { notes, meeting = null, clientName = null, today, fetchImpl } = {}) {
-  const input = await callTool(ai, {
+  const input = await structured(ai, {
     fetchImpl, maxTokens: 4000,
     system: "Jesteś asystentem studia webowego Mytko (strony i aplikacje dla klientów). Z notatek ze spotkania z klientem (np. notatki " +
       "Gemini z Google Meet) przygotowujesz brief: co ustalono, czego brakuje, zadania dla studia i czy potrzebne jest kolejne spotkanie. " +
@@ -107,7 +77,7 @@ async function proposeBrief(ai, { notes, meeting = null, clientName = null, toda
       `Notatki ze spotkania:
 ${String(notes).slice(0, 40000)}`,
     tool: { name: "meeting_brief", description: "Zwraca brief ze spotkania",
-      input_schema: { type: "object", required: ["summary", "decisions", "openQuestions", "tasks", "nextMeeting"], properties: {
+      schema: { type: "object", required: ["summary", "decisions", "openQuestions", "tasks", "nextMeeting"], properties: {
         summary: { type: "string", description: "Streszczenie spotkania w 2–4 zdaniach" },
         decisions: { type: "array", items: STR, description: "Co ustalono" },
         openQuestions: { type: "array", items: STR, description: "Czego brakuje, o co dopytać klienta" },
@@ -137,4 +107,4 @@ ${String(notes).slice(0, 40000)}`,
   };
 }
 
-module.exports = { callTool, proposeFromMail, proposeBrief, cleanTasks, cleanSiteBrief, TASKS_SCHEMA, AiError };
+module.exports = { proposeFromMail, proposeBrief, cleanTasks, cleanSiteBrief, TASKS_SCHEMA, AiError };

@@ -13,6 +13,7 @@ import { openAccounts, openPassword } from "./accounts.js";
 import { bindMail, loadMail, mailAddress, mailBadge, renderMail, showMail } from "./mail.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { afterGoalsRender, bindGoals, renderGoals } from "./goals.js";
+import { openAiSettings } from "./ai-settings.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog, openLanguageDialog, openScaleDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
@@ -123,12 +124,29 @@ export function paint(element) {
 // A member account (not the owner, the only administrator): the task app without clients, meetings and accounts.
 export const isMember = () => store.session?.user?.role === "member";
 
+// Tasks can go to the Mytko Workflow ToDo: the owner, with the connection set up on the server and not turned off in
+// Porządek → AI i Workflow (store.settings, GET /api/settings).
+export const workflowReady = () => !isMember() && Boolean(store.settings?.workflow.configured && store.settings.workflow.enabled);
+
+// green: Workflow asked recently; grey: no contact or turned off
+function settingsDot() {
+  const w = store.settings?.workflow;
+  if (!w?.configured) return "";
+  return `<i class="nav-dot nav-dot--${w.enabled && w.active ? "ok" : "off"}" title="${w.enabled && w.active ? "Mytko Workflow: aktywne" : "Mytko Workflow: brak kontaktu"}"></i>`;
+}
+
+export async function loadSettings() {
+  if (isMember()) return;
+  try { store.settings = await api.settings(); } catch { /* the board works without it */ }
+}
+
 export async function reload({ quiet = false } = {}) {
   try {
     const [tasks, spaces, projects, labels, assignees, clients] = await Promise.all([
       api.tasks(), api.list("spaces"), api.list("projects?archived=true"), api.list("categories"), api.list("assignees"),
       isMember() ? [] : api.list("clients?archived=true")
     ]);
+    await loadSettings();
     const now = Date.now();
     Object.assign(store, { tasks: tasks.map(t => ({ ...t, fetchedAt: now })), spaces, projects, labels, assignees, clients, fetchedAt: now });
     if (store.filters.clientId && !lookup.client(store.filters.clientId)) store.filters.clientId = null;
@@ -216,7 +234,8 @@ function sidebarHtml() {
       <p class="nav-heading"><span>Porządek</span></p>
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="categories" title="Etykiety">${icon("tag", 18)}<span>Etykiety</span><em>${store.labels.length}</em></button>
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees" title="Wykonawcy">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
-      ${isMember() ? "" : `<button type="button" class="nav-item nav-item--sub" data-action="accounts" title="Konta">${icon("lock", 18)}<span>Konta</span></button>`}
+      ${isMember() ? "" : `<button type="button" class="nav-item nav-item--sub" data-action="accounts" title="Konta">${icon("lock", 18)}<span>Konta</span></button>
+      <button type="button" class="nav-item nav-item--sub" data-action="ai-settings" title="AI i Workflow">${icon("sparkles", 18)}<span>AI i Workflow</span>${settingsDot()}</button>`}
       <button type="button" class="nav-item nav-item--sub" data-action="ui-scale" title="Rozmiar interfejsu">${icon("sliders", 18)}<span>Rozmiar interfejsu</span></button>
       <button type="button" class="nav-item nav-item--sub" data-action="language" title="Język">${icon("globe", 18)}<span>Język</span><em translate="no">${LANG === "uk" ? "УКР" : "PL"}</em></button>
     </nav>
@@ -473,6 +492,8 @@ async function handleAction(target, event) {
     setFilter({ clientId: Number(target.dataset.client), spaceId: null, projectId: null });
   } else if (action === "ui-scale") {
     openScaleDialog();
+  } else if (action === "ai-settings") {
+    openAiSettings();
   } else if (action === "language") {
     openLanguageDialog();
   } else if (action === "accounts") {

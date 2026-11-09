@@ -1,11 +1,11 @@
 // Poczta (owner only): the mailbox (hello@, IMAP) as a list and a reader. From a message: a task (linked to it), a
-// lead from the sender, Claude's proposed tasks, an invitation into the Praca calendar, a reply in the mail program.
+// lead from the sender, the AI's proposed tasks, an invitation into the Praca calendar, a reply in the mail program.
 // "Załatwione" hides a message here only; opening one marks it read on the server too.
 import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { isoDay, STATUS_LABELS } from "./logic.js";
-import { isMember, lookup, reload, render, store, upsertTask } from "./app.js";
+import { isMember, lookup, reload, render, store, upsertTask, workflowReady } from "./app.js";
 import { openNewTask } from "./dialogs.js";
 import { openDrawer } from "./drawer.js";
 import { openClient } from "./clients.js";
@@ -108,9 +108,9 @@ function inviteHtml(invite) {
 function suggestionHtml(m, ai) {
   const s = m.suggestion;
   if (!ai && !s) return "";
-  if (!s) return `<button type="button" class="btn btn--ghost mail__ai" data-mail="suggest"${mailState.busy === "suggest" ? " disabled" : ""}>${icon("target", 16)}${mailState.busy === "suggest" ? "Claude czyta wiadomość…" : "Zaproponuj zadania (Claude)"}</button>`;
+  if (!s) return `<button type="button" class="btn btn--ghost mail__ai" data-mail="suggest"${mailState.busy === "suggest" ? " disabled" : ""}>${icon("target", 16)}${mailState.busy === "suggest" ? "AI czyta wiadomość…" : "Zaproponuj zadania (AI)"}</button>`;
   return `<section class="mail-card mail-card--ai">
-    <h3>${icon("target", 18)}Claude proponuje${ai ? `<button type="button" class="btn btn--ghost btn--sm" data-mail="suggest"${mailState.busy === "suggest" ? " disabled" : ""}>Jeszcze raz</button>` : ""}</h3>
+    <h3>${icon("target", 18)}AI proponuje${ai ? `<button type="button" class="btn btn--ghost btn--sm" data-mail="suggest"${mailState.busy === "suggest" ? " disabled" : ""}>Jeszcze raz</button>` : ""}</h3>
     <p>${escapeHtml(s.summary)}${s.needsReply ? ' <span class="badge badge--warn">czeka na odpowiedź</span>' : ""}</p>
     ${s.tasks.length ? `<ul class="mail-proposals">${s.tasks.map((t, i) => `<li>
       <span><strong>${escapeHtml(t.title)}</strong>${t.description ? `<small class="muted">${escapeHtml(t.description)}</small>` : ""}
@@ -153,7 +153,7 @@ export function renderMail() {
   if (!data) return '<p class="empty">Wczytywanie poczty…</p>';
   if (!data.configured) {
     return `<div class="empty mail-off"><p>${icon("mail", 28)}</p><h2>Poczta nie jest podłączona</h2>
-      <p class="muted">Tasks może pokazywać skrzynkę hello@mytko.dev (IMAP na OVH Zimbra): z wiadomości robisz zadania i leady, a Claude podpowiada,
+      <p class="muted">Tasks może pokazywać skrzynkę hello@mytko.dev (IMAP na OVH Zimbra): z wiadomości robisz zadania i leady, a AI podpowiada,
       co z nich wynika. Podłączenie to kilka ustawień na serwerze (MAIL_IMAP_HOST, MAIL_IMAP_USER, MAIL_IMAP_PASSWORD).</p></div>`;
   }
   return `<div class="mail${mailState.openId ? " is-reading" : ""}">${listHtml(data)}${readerHtml(data)}</div>`;
@@ -162,7 +162,7 @@ export function renderMail() {
 const taskDescription = m => `E-mail od ${m.fromName ? `${m.fromName} <${m.fromAddress}>` : m.fromAddress}, ${full(m.sentAt)}: „${m.subject}”\n\n${m.bodyText.trim().slice(0, 1500)}`;
 const workSpace = () => store.spaces.find(s => s.key === "work")?.id ?? null;
 // Coding proposals go to the Mytko Workflow ToDo at once (Praca is visible to agents unless switched off).
-const toWorkflow = proposal => proposal.coding && Boolean(store.spaces.find(s => s.key === "work")?.agentVisible);
+const toWorkflow = proposal => proposal.coding && workflowReady() && Boolean(store.spaces.find(s => s.key === "work")?.agentVisible);
 
 async function markHandled(m, handled, { quiet = false } = {}) {
   await api.mailUpdate(m.id, { handled });

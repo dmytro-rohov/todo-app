@@ -6,7 +6,7 @@ const { withTransaction } = require("../db");
 const { parseId } = require("../validation");
 const { validateClient, companyDomain } = require("../clients");
 const { parseInvite } = require("../ics");
-const { proposeFromMail, AiError } = require("../claude");
+const { proposeFromMail, AiError } = require("../ai/proposals");
 const { decrypt } = require("../secrets");
 const { toRow: eventRow, upsertEvent } = require("../calendar-sync");
 const { zonedDay } = require("../booking");
@@ -22,8 +22,10 @@ const VIEWS = {
 };
 const json = (value, fallback) => { try { return value ? JSON.parse(value) : fallback; } catch { return fallback; } };
 
-module.exports = function createMailRouter(pool, { mail, source, sync, ai, google, key, fetchImpl }) {
+module.exports = function createMailRouter(pool, { mail, source, sync, ai: aiFor, google, key, fetchImpl }) {
   const router = express.Router();
+  // Claude when it may be used now (configured and not turned off in Porządek → AI i Workflow), else null
+  router.use(async (req, res, next) => { try { req.ai = await aiFor(); next(); } catch (error) { next(error); } });
   const read = async id => (await pool.query(`SELECT ${LIST_COLUMNS}, m.uid, m.to_addresses AS "toAddresses", m.body_text AS "bodyText",
     m.attachments, m.invite, m.suggestion FROM mail_messages m WHERE m.id = $1`, [id])).rows[0] || null;
 
@@ -40,7 +42,7 @@ module.exports = function createMailRouter(pool, { mail, source, sync, ai, googl
     const { rows } = await pool.query(`SELECT ${LIST_COLUMNS} FROM mail_messages m WHERE ${conditions.join(" AND ")} ORDER BY m.sent_at DESC, m.id DESC LIMIT 300`, params);
     const counts = (await pool.query(`SELECT count(*) FILTER (WHERE handled_at IS NULL)::int AS open, count(*) FILTER (WHERE handled_at IS NULL AND NOT seen)::int AS unread,
       count(*) FILTER (WHERE handled_at IS NULL AND client_id IS NOT NULL)::int AS clients FROM mail_messages`)).rows[0];
-    res.json({ configured: true, address: mail.address, ai: Boolean(ai), status: { lastSyncAt: sync.status.lastSyncAt, error: sync.status.error },
+    res.json({ configured: true, address: mail.address, ai: Boolean(req.ai), status: { lastSyncAt: sync.status.lastSyncAt, error: sync.status.error },
       counts, messages: rows });
   });
 
@@ -131,13 +133,13 @@ module.exports = function createMailRouter(pool, { mail, source, sync, ai, googl
 
   // Claude's proposals (summary, whether a reply is expected, tasks), stored with the message.
   router.post("/:id/suggest", async (req, res) => {
-    if (!ai) return res.status(400).json({ message: "Claude is not configured" });
+    if (!req.ai) return res.status(400).json({ message: "AI is not configured or turned off" });
     const id = parseId(req.params.id);
     const message = id && await read(id);
     if (!message) return res.status(404).json({ message: "E-mail not found" });
     const clientName = message.clientId ? (await pool.query("SELECT name FROM clients WHERE id = $1", [message.clientId])).rows[0]?.name : null;
     try {
-      const suggestion = await proposeFromMail(ai, message, { today: zonedDay(Date.now(), "Europe/Warsaw"), clientName, fetchImpl });
+      const suggestion = await proposeFromMail(req.ai, message, { today: zonedDay(Date.now(), "Europe/Warsaw"), clientName, fetchImpl });
       await pool.query("UPDATE mail_messages SET suggestion = $1 WHERE id = $2", [JSON.stringify(suggestion), id]);
       res.json(suggestion);
     } catch (error) {

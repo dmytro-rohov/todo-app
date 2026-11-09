@@ -20,7 +20,8 @@ const TASK_COLUMNS = `
   space_id AS "spaceId", project_id AS "projectId", assignee_id AS "assigneeId", review_requested_at AS "reviewRequestedAt",
   planned_at AS "plannedAt", client_id AS "clientId", meeting_id AS "meetingId", mail_id AS "mailId",
   workflow_requested_at AS "workflowRequestedAt", workflow_ref AS "workflowRef", workflow_status AS "workflowStatus",
-  workflow_url AS "workflowUrl", workflow_updated_at AS "workflowUpdatedAt",
+  workflow_url AS "workflowUrl", workflow_updated_at AS "workflowUpdatedAt", workflow_requested_by AS "workflowRequestedBy",
+  ai_coding AS "aiCoding", ai_reason AS "aiReason",
   ARRAY_REMOVE(ARRAY[category_id] || ARRAY(
     SELECT l.category_id FROM task_labels l
     WHERE l.task_id = tasks.id AND l.category_id IS DISTINCT FROM tasks.category_id ORDER BY l.id), NULL) AS "labelIds",
@@ -110,15 +111,17 @@ async function checkReferences(db, user, value) {
 
 // Sends a task to (true) or withdraws it from (false) the Mytko Workflow ToDo. Only tasks in spaces visible to agents
 // go (never a private space); Workflow picks them up from /api/agent/workflow (routes/agent.js).
-async function setWorkflow(db, taskId, requested, actor) {
+// `by`: "owner" (a click) or "ai" (Claude's routing, workflow-ai.js). Refused while the Workflow connection is off.
+async function setWorkflow(db, taskId, requested, actor, { by = "owner", enabled = true } = {}) {
   const task = (await db.query(
     `SELECT t.workflow_requested_at, t.workflow_ref, s.agent_visible FROM tasks t LEFT JOIN spaces s ON s.id = t.space_id WHERE t.id = $1`, [taskId])).rows[0];
   if (requested && !task.agent_visible) throw new TaskInputError("This space is not visible to agents");
+  if (requested && !enabled) throw new TaskInputError("The Mytko Workflow connection is turned off");
   if (requested === Boolean(task.workflow_requested_at)) return;
   await db.query(
-    `UPDATE tasks SET workflow_requested_at = ${requested ? "now()" : "NULL"},
+    `UPDATE tasks SET workflow_requested_at = ${requested ? "now()" : "NULL"}, workflow_requested_by = ${requested ? "$3" : "workflow_requested_by"},
        workflow_status = CASE WHEN $2::boolean THEN COALESCE(workflow_status, 'requested') WHEN workflow_ref IS NULL THEN NULL ELSE 'withdrawn' END,
-       workflow_updated_at = now(), updated_at = now() WHERE id = $1`, [taskId, requested]);
+       workflow_updated_at = now(), updated_at = now() WHERE id = $1`, requested ? [taskId, requested, by] : [taskId, requested]);
   await recordTaskChanges(db, taskId, [{ field: "workflow", oldValue: task.workflow_requested_at ? "requested" : null, newValue: requested ? "requested" : "withdrawn" }], actor);
 }
 
@@ -145,7 +148,8 @@ function sendWriteError(res, error) {
   throw error;
 }
 
-module.exports = function createTasksRouter(pool) {
+module.exports = function createTasksRouter(pool, { settings = null } = {}) {
+  const workflowOn = async () => (settings ? settings.workflowEnabled() : true);
   const router = express.Router();
 
   router.post("/move", async (req, res) => {
@@ -231,7 +235,7 @@ module.exports = function createTasksRouter(pool) {
         );
         const id = inserted.rows[0].id;
         if (labelIds && labelIds.length > 1) await setLabels(client, id, labelIds);
-        if (domain.workflow === true) await setWorkflow(client, id, true, req.user.actor);
+        if (domain.workflow === true) await setWorkflow(client, id, true, req.user.actor, { enabled: await workflowOn() });
         const created = await loadTask(client, id);
         await recordTaskChanges(client, id, taskChanges(null, created), req.user.actor);
         return created;
@@ -305,7 +309,9 @@ module.exports = function createTasksRouter(pool) {
           await client.query("DELETE FROM task_labels WHERE task_id = $1 AND category_id = $2", [id, value.categoryId]);
         }
         if (status !== undefined) await stopTimerUnlessInProgress(client, id, status);
-        if (workflow !== undefined) await setWorkflow(client, id, workflow, req.user.actor);
+        if (workflow !== undefined) await setWorkflow(client, id, workflow, req.user.actor, { enabled: await workflowOn() });
+        // a new title or description is looked at by Claude's routing again
+        if ("title" in plain || "description" in plain) await client.query("UPDATE tasks SET ai_checked_at = NULL, ai_coding = NULL, ai_reason = NULL WHERE id = $1", [id]);
         const after = await loadTask(client, id);
         await recordTaskChanges(client, id, taskChanges(before, after), req.user.actor);
         return after;
@@ -379,5 +385,6 @@ module.exports = function createTasksRouter(pool) {
 };
 
 module.exports.TASK_COLUMNS = TASK_COLUMNS;
+module.exports.setWorkflow = setWorkflow;
 module.exports.loadTask = loadTask;
 module.exports.stopTimerUnlessInProgress = stopTimerUnlessInProgress;
