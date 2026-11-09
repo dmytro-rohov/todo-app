@@ -6,6 +6,9 @@ const createSpacesRouter = require("./routes/spaces");
 const createProjectsRouter = require("./routes/projects");
 const createAssigneesRouter = require("./routes/assignees");
 const createGoalsRouter = require("./routes/goals");
+const createSettingsRouter = require("./routes/settings");
+const { createSettings } = require("./settings");
+const { createWorkflowAi } = require("./workflow-ai");
 const createArchiveRouter = require("./routes/archive");
 const createClientsRouter = require("./routes/clients");
 const createBookingRouter = require("./routes/booking");
@@ -106,7 +109,12 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use((req, res, next) => { req.user ??= OWNER; next(); });
   api.use(csrf);
   api.use(json);
-  api.use("/tasks", createTasksRouter(pool));
+  // The owner's switches (AI on/off, task routing, the Workflow connection) and Claude's routing of tasks to Workflow.
+  const settings = createSettings(pool, config.ai);
+  const routing = config.ai && config.workflow ? createWorkflowAi(pool, settings, { fetchImpl: options.fetchImpl,
+    firstRunMs: options.routingFirstRunMs ?? 30000, everyMs: options.routingEveryMs ?? 60000 }) : null;
+  if (routing) stoppables.push(routing);
+  api.use("/tasks", createTasksRouter(pool, { settings }));
   api.use("/tasks", createTaskDetailsRouter(pool));
   api.use("/categories", createCategoriesRouter(pool));
   api.use("/spaces", createSpacesRouter(pool));
@@ -120,18 +128,19 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   // Poczta: the mailbox source can be replaced in tests (options.mailSource); the sync runs every few minutes.
   const mailSource = config.mail ? (options.mailSource || createImapSource(config.mail)) : null;
   const mailSync = config.mail ? scheduleMailSync(pool, mailSource, config.mail, { firstRunMs: options.mailFirstRunMs ?? 15000,
-    afterSync: () => processGeminiMail(pool, config.ai, { fetchImpl: options.fetchImpl }) }) : null;
+    afterSync: async () => processGeminiMail(pool, await settings.ai(), { fetchImpl: options.fetchImpl }) }) : null;
   if (mailSync) stoppables.push(mailSync);
-  api.use("/mail", ownerOnly, createMailRouter(pool, { mail: config.mail, source: mailSource, sync: mailSync, ai: config.ai, google,
+  api.use("/mail", ownerOnly, createMailRouter(pool, { mail: config.mail, source: mailSource, sync: mailSync, ai: () => settings.ai(), google,
     key: calendarConfig?.key, fetchImpl: options.fetchImpl }));
-  api.use("/briefs", ownerOnly, createBriefsRouter(pool, { ai: config.ai, fetchImpl: options.fetchImpl }));
+  api.use("/briefs", ownerOnly, createBriefsRouter(pool, { ai: () => settings.ai(), fetchImpl: options.fetchImpl }));
+  api.use("/settings", ownerOnly, createSettingsRouter(pool, { settings, ai: config.ai, workflow: config.workflow, router: routing }));
   api.use("/users", ownerOnly, createUsersRouter(pool, { sessions, reserved: [config.auth.username, ssoLogin, "dev", "owner"].filter(Boolean) }));
   api.use((req, res) => {
     res.status(404).json({ message: "Not found" });
   });
   // Mytko Workflow polls its ToDo with a Bearer token, never a session (routes/agent.js).
   if (config.workflow) {
-    app.use("/api/agent", express.json({ limit: "20kb", inflate: false }), createAgentRouter(pool, { ...config.workflow, publicOrigin: config.publicOrigin }));
+    app.use("/api/agent", express.json({ limit: "20kb", inflate: false }), createAgentRouter(pool, { ...config.workflow, publicOrigin: config.publicOrigin, settings }));
   }
   // The booking form on mytko.dev: public, before the session-guarded API (routes/booking.js).
   if (google && config.booking) {

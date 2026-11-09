@@ -3,7 +3,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
 const { isGeminiNotes } = require("../briefs");
-const { proposeBrief } = require("../claude");
+const { proposeBrief } = require("../ai/proposals");
 
 test("Gemini's notes e-mails are recognised; look-alikes are not", () => {
   const gemini = { fromAddress: "gemini-notes@google.com", fromName: "Gemini", subject: "Notes: “Omówienie sklepu” Nov 7, 2026" };

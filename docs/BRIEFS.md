@@ -22,6 +22,6 @@ proposed tasks and the next meeting. Claude writes it from the meeting notes; yo
   "kod → Workflow" for stage C6);
 - the next meeting: "Zaplanuj spotkanie" opens the meeting dialog with the title, date and guests.
 
-Without `ANTHROPIC_API_KEY` the notes are kept, without a brief. Data: `meeting_briefs` (migration `0008_briefs`),
+Without an AI key (`AI_API_KEY`, `AI.md`) or with AI turned off, the notes are kept, without a brief. Data: `meeting_briefs` (migration `0008_briefs`),
 `backend/briefs.js`, `routes/briefs.js`. Tests: `briefs.test.js`, the Gemini case in `mail.integration.test.js`,
 `e2e/ui-mail.mjs`.

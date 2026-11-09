@@ -24,7 +24,7 @@ describe("Mytko Workflow ToDo", { skip, concurrency: false }, () => {
   before(async () => {
     owner = createPool({ connectionString: OWNER_URL, max: 2, statementTimeoutMs: 0 });
     appPool = createPool({ connectionString: APP_URL, max: 5 });
-    await owner.query(`DROP TABLE IF EXISTS public.goals, public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts,
+    await owner.query(`DROP TABLE IF EXISTS public.app_settings, public.goals, public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts,
       public.auth_sessions, public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes, public.task_labels, public.tasks,
       public.projects, public.spaces, public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
@@ -115,5 +115,139 @@ describe("Mytko Workflow ToDo", { skip, concurrency: false }, () => {
     assert.equal((await call(`/api/tasks/${other.id}`, "PATCH", { workflow: true })).body.workflowStatus, "requested");
     assert.equal((await call(`/api/tasks/${other.id}`, "PATCH", { workflow: false })).body.workflowStatus, null);
     assert.deepEqual((await agent("/api/agent/workflow/tasks")).body.tasks, []);
+  });
+
+  // ---- Porządek → AI i Workflow: the connection switch and Claude's routing --------------------------------------
+  describe("settings and the AI routing", () => {
+    let ai;
+    let failClaude = false;
+    const asked = [];
+    // a fake Anthropic API: coding work when the title talks about code
+    const fakeClaude = async (url, init) => {
+      if (!String(url).endsWith("/v1/messages")) return fetch(url, init);
+      const body = JSON.parse(init.body);
+      asked.push(body.messages[0].content);
+      if (failClaude) return new Response(JSON.stringify({ error: { message: "Your credit balance is too low" } }), { status: 400 });
+      const coding = /stron|formularz|kod|wdroż/i.test(body.messages[0].content) && !/domofon/i.test(body.messages[0].content);
+      return new Response(JSON.stringify({ content: [{ type: "tool_use", name: "route_task",
+        input: { coding, confidence: coding ? 0.9 : 0.95, reason: coding ? "Zmiana w kodzie strony." : "To nie jest praca programistyczna." } }] }), { status: 200 });
+    };
+    const as = async (url, method = "GET", body) => {
+      const res = await ai.request(url, method === "GET" ? {} : { method, headers: SAME_ORIGIN_JSON, body: JSON.stringify(body) });
+      return { status: res.status, body: await res.json() };
+    };
+    const poll = async () => {
+      const res = await ai.request("/api/agent/workflow/tasks", { auth: null, headers: { authorization: `Bearer ${TOKEN}` } });
+      return { status: res.status, body: await res.json() };
+    };
+    // the routing looks only at tasks untouched for 20 s
+    const age = () => owner.query("UPDATE tasks SET updated_at = now() - interval '1 minute'");
+    let work, priv;
+
+    before(async () => {
+      ai = await startApp({ pool: appPool, migrationVersions: VERSIONS,
+        env: { WORKFLOW_TOKEN_SHA256: crypto.createHash("sha256").update(TOKEN).digest("hex"), ANTHROPIC_API_KEY: "sk-ant-test-key" },
+        appOptions: { fetchImpl: fakeClaude, routingFirstRunMs: 3600000, routingEveryMs: 3600000 } });
+      const spaces = (await as("/api/spaces")).body;
+      work = spaces.find(s => s.key === "work");
+      priv = spaces.find(s => s.key === "private");
+    });
+    after(() => ai.close());
+
+    test("the state: Workflow's last contact makes the connection active; AI is configured, routing manual by default", async () => {
+      assert.equal((await poll()).status, 200);
+      const state = (await as("/api/settings")).body;
+      assert.equal(state.workflow.configured, true);
+      assert.equal(state.workflow.enabled, true);
+      assert.equal(state.workflow.active, true);
+      assert.ok(Date.now() - Date.parse(state.workflow.lastPollAt) < 60000);
+      assert.deepEqual([state.ai.configured, state.ai.enabled, state.ai.workflowMode], [true, true, "manual"]);
+      for (const body of [{}, { workflowMode: "always" }, { aiEnabled: "yes" }, { other: true }]) {
+        assert.equal((await as("/api/settings", "PATCH", body)).status, 400, JSON.stringify(body));
+      }
+      // manual: nothing is sent to Claude
+      assert.equal((await as("/api/settings/ai/scan", "POST", {})).status, 409);
+    });
+
+    test("the connection turned off: Workflow is refused and nothing can be sent", async () => {
+      assert.equal((await as("/api/settings", "PATCH", { workflowEnabled: false })).body.workflow.active, false);
+      assert.equal((await poll()).status, 503);
+      const task = (await as("/api/tasks", "POST", { title: "Poprawić stopkę strony", date: "2026-11-09", spaceId: work.id })).body;
+      assert.equal((await as(`/api/tasks/${task.id}`, "PATCH", { workflow: true })).status, 400);
+      assert.equal((await as("/api/tasks", "POST", { title: "Też do Workflow", date: "2026-11-09", spaceId: work.id, workflow: true })).status, 400);
+      await as("/api/settings", "PATCH", { workflowEnabled: true });
+      assert.equal((await poll()).status, 200);
+      await as(`/api/tasks/${task.id}`, "DELETE");
+    });
+
+    test("AI turned off: no call to Claude", async () => {
+      await as("/api/settings", "PATCH", { aiEnabled: false, workflowMode: "auto" });
+      assert.equal((await as("/api/settings/ai/scan", "POST", {})).status, 409);
+      assert.equal(asked.length, 0);
+      await as("/api/settings", "PATCH", { aiEnabled: true, workflowMode: "manual" });
+    });
+
+    test("suggest: coding work in Praca is marked, nothing is sent; private and members' tasks are never looked at", async () => {
+      const code = (await as("/api/tasks", "POST", { title: "Naprawić formularz kontaktowy na stronie", date: "2026-11-09", spaceId: work.id })).body;
+      const call2 = (await as("/api/tasks", "POST", { title: "Zadzwonić do księgowej", date: "2026-11-09", spaceId: work.id })).body;
+      const home = (await as("/api/tasks", "POST", { title: "Zmienić kod domofonu na stronie klatki", date: "2026-11-09", spaceId: priv.id })).body;
+      await age();
+      await as("/api/settings", "PATCH", { workflowMode: "suggest" });
+      const run = (await as("/api/settings/ai/scan", "POST", {})).body;
+      assert.equal(run.sent, 0);
+      const tasks = (await as("/api/tasks")).body;
+      const pick = id => tasks.find(t => t.id === id);
+      assert.deepEqual([pick(code.id).aiCoding, pick(code.id).aiReason, Boolean(pick(code.id).workflowRequestedAt)], [true, "Zmiana w kodzie strony.", false]);
+      assert.equal(pick(call2.id).aiCoding, false);
+      assert.equal(pick(home.id).aiCoding, null);
+      assert.ok(!asked.some(content => /domofon/.test(content)), "a private task never reaches Claude");
+      assert.equal(run.settings.ai.suggested >= 1, true);
+      // looked at once: a second pass asks nothing new
+      const before = asked.length;
+      await as("/api/settings/ai/scan", "POST", {});
+      assert.equal(asked.length, before);
+      // a new title is looked at again
+      await as(`/api/tasks/${call2.id}`, "PATCH", { title: "Zadzwonić do księgowej w sprawie faktury" });
+      assert.equal((await as("/api/tasks")).body.find(t => t.id === call2.id).aiCoding, null);
+      for (const t of [code, call2, home]) await as(`/api/tasks/${t.id}`, "DELETE");
+    });
+
+    test("auto: coding work is sent by AI (marked and in the history); a withdrawn task is not sent again", async () => {
+      const code = (await as("/api/tasks", "POST", { title: "Wdrożyć nową stronę główną", date: "2026-11-09", spaceId: work.id })).body;
+      const meeting = (await as("/api/tasks", "POST", { title: "Spotkanie z klientem", date: "2026-11-09", spaceId: work.id })).body;
+      await age();
+      await as("/api/settings", "PATCH", { workflowMode: "auto" });
+      const run = (await as("/api/settings/ai/scan", "POST", {})).body;
+      assert.equal(run.sent, 1);
+      const sent = (await as("/api/tasks")).body.find(t => t.id === code.id);
+      assert.deepEqual([Boolean(sent.workflowRequestedAt), sent.workflowRequestedBy, sent.workflowStatus], [true, "ai", "requested"]);
+      assert.equal((await as("/api/tasks")).body.find(t => t.id === meeting.id).workflowRequestedAt, null);
+      const history = (await as(`/api/tasks/${code.id}/history`)).body.find(h => h.field === "workflow");
+      assert.equal(history.actor, "ai");
+      const queued = (await poll()).body.tasks.find(t => t.id === code.id);
+      assert.deepEqual([queued.requestedBy, queued.aiReason], ["ai", "Zmiana w kodzie strony."]);
+      // the owner withdraws it: it stays withdrawn
+      await as(`/api/tasks/${code.id}`, "PATCH", { workflow: false });
+      await age();
+      await as("/api/settings/ai/scan", "POST", {});
+      assert.equal((await as("/api/tasks")).body.find(t => t.id === code.id).workflowRequestedAt, null);
+      for (const t of [code, meeting]) await as(`/api/tasks/${t.id}`, "DELETE");
+    });
+
+    test("Claude failing (no credit): the reason is shown and routing pauses until the settings change", async () => {
+      const code = (await as("/api/tasks", "POST", { title: "Poprawić kod koszyka", date: "2026-11-09", spaceId: work.id })).body;
+      await age();
+      failClaude = true;
+      const run = (await as("/api/settings/ai/scan", "POST", {})).body;
+      assert.equal(run.checked, 0);
+      assert.equal(run.settings.ai.lastError, "Brak środków na koncie API AI.");
+      assert.ok(run.settings.ai.pausedUntil);
+      assert.equal((await as("/api/tasks")).body.find(t => t.id === code.id).aiCoding, null); // tried again later
+      failClaude = false;
+      const resumed = (await as("/api/settings", "PATCH", { workflowMode: "auto" })).body;
+      assert.deepEqual([resumed.ai.lastError, resumed.ai.pausedUntil], [null, null]);
+      assert.equal((await as("/api/settings/ai/scan", "POST", {})).body.sent, 1);
+      await as("/api/settings", "PATCH", { workflowMode: "manual" });
+    });
   });
 });

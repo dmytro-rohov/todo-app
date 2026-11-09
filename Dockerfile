@@ -25,6 +25,7 @@ FROM ${NODE_IMAGE} AS assemble
 WORKDIR /out
 COPY backend/package.json backend/*.js backend/
 COPY backend/routes/ backend/routes/
+COPY backend/ai/ backend/ai/
 COPY backend/drizzle/ backend/drizzle/
 COPY backend/scripts/ backend/scripts/
 COPY --from=deps /build/backend/node_modules/ backend/node_modules/

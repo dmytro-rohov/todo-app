@@ -1,10 +1,10 @@
-// Meeting brief: what was said (Gemini's notes from Poczta, or pasted notes) and Claude's brief: summary, decisions,
+// Meeting brief: what was said (Gemini's notes from Poczta, or pasted notes) and the AI's brief: summary, decisions,
 // open questions, the client's site brief (Website Factory's brief.json terms), proposed tasks and the next meeting.
 import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { addDays, isoDay, STATUS_LABELS } from "./logic.js";
-import { lookup, reload, store, upsertTask } from "./app.js";
+import { lookup, reload, store, upsertTask, workflowReady } from "./app.js";
 import { dialog } from "./dialogs.js";
 import { openDrawer } from "./drawer.js";
 import { eventDay, eventTime, openMeeting } from "./meetings.js";
@@ -33,7 +33,7 @@ function bodyHtml(brief) {
   const error = brief.error ? `<p class="field-error">${escapeHtml(brief.error)} ${brief.ai ? '<button type="button" class="btn btn--ghost btn--sm" data-brief="run">Spróbuj ponownie</button>' : ""}</p>` : "";
   const notes = `<details class="brief__notes"><summary>Notatki ze spotkania</summary><pre>${escapeHtml(brief.notes)}</pre></details>`;
   if (!r) {
-    return `${head}${error}${brief.ai ? (brief.error ? "" : '<p class="muted">Claude przygotowuje brief…</p>') : '<p class="muted">Claude nie jest skonfigurowany (ANTHROPIC_API_KEY): zapisano same notatki.</p>'}${notes}`;
+    return `${head}${error}${brief.ai ? (brief.error ? "" : '<p class="muted">AI przygotowuje brief…</p>') : '<p class="muted">AI jest wyłączone albo nie jest skonfigurowane: zapisano same notatki.</p>'}${notes}`;
   }
   const next = r.nextMeeting?.needed ? `<section class="brief__section brief__next"><h3>${icon("calendar", 18)}Kolejne spotkanie</h3>
     <p><strong>${escapeHtml(r.nextMeeting.title)}</strong>${r.nextMeeting.date ? ` · ${escapeHtml(r.nextMeeting.date)}` : ""} · ${r.nextMeeting.durationMinutes} min</p>
@@ -61,7 +61,7 @@ function pasteHtml(event, ai) {
   return `<p class="muted">${event ? `${escapeHtml(event.title)} · ${escapeHtml(eventDay(event))}` : ""}</p>
     <p>Notatki Gemini z Google Meet trafiają tu same (przez Pocztę). Z innego spotkania (Zoom, telefon, na żywo) wklej notatki lub transkrypcję:</p>
     <textarea class="textarea" name="notes" rows="10" maxlength="100000" placeholder="Notatki ze spotkania…"></textarea>
-    <div class="dialog__actions"><button type="submit" class="btn btn--primary">${ai ? `${icon("target", 16)}Przygotuj brief (Claude)` : "Zapisz notatki"}</button></div>`;
+    <div class="dialog__actions"><button type="submit" class="btn btn--primary">${ai ? `${icon("target", 16)}Przygotuj brief (AI)` : "Zapisz notatki"}</button></div>`;
 }
 
 // { event } (a meeting; the newest brief of it, or the paste form) or { briefId }
@@ -95,7 +95,7 @@ export async function openBrief({ event = null, briefId = null } = {}) {
   const work = () => store.spaces.find(s => s.key === "work");
   const taskBody = proposal => ({ title: proposal.title, date: isoDay(), description: proposal.description || "", priority: proposal.priority,
     dueDate: proposal.dueDate, spaceId: work()?.id ?? null, clientId: brief.clientId, meetingId: brief.eventId,
-    workflow: proposal.coding && Boolean(work()?.agentVisible) });
+    workflow: proposal.coding && workflowReady() && Boolean(work()?.agentVisible) });
 
   element.addEventListener("click", async e => {
     if (e.target.closest("[data-close]")) return element.close();
@@ -115,7 +115,7 @@ export async function openBrief({ event = null, briefId = null } = {}) {
         toast(`Dodano zadania: ${brief.result.tasks.length}.`);
       }
       if (kind === "run") {
-        box.innerHTML = '<p class="muted">Claude przygotowuje brief…</p>';
+        box.innerHTML = '<p class="muted">AI przygotowuje brief…</p>';
         brief = await api.runBrief(brief.id);
       }
       if (kind === "copy") {
@@ -143,7 +143,7 @@ export async function openBrief({ event = null, briefId = null } = {}) {
     e.preventDefault();
     const notes = form.notes?.value.trim() || "";
     if (notes.length < 20) return toast("Wklej notatki (co najmniej kilka zdań).", { tone: "error" });
-    box.innerHTML = `<p class="muted">${ai ? "Claude czyta notatki i przygotowuje brief… (do minuty)" : "Zapisuję…"}</p>`;
+    box.innerHTML = `<p class="muted">${ai ? "AI czyta notatki i przygotowuje brief… (do minuty)" : "Zapisuję…"}</p>`;
     try {
       brief = await api.createBrief({ eventId: event?.id ?? null, notes });
       box.innerHTML = bodyHtml(brief);

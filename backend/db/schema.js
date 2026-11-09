@@ -146,6 +146,12 @@ const tasks = pgTable("tasks", {
   workflowStatus: varchar("workflow_status", { length: 30 }),
   workflowUrl: varchar("workflow_url", { length: 500 }),
   workflowUpdatedAt: timestamptz("workflow_updated_at"),
+  // who sent it: "owner" (a click) or "ai" (Claude's routing, settings.js)
+  workflowRequestedBy: varchar("workflow_requested_by", { length: 10 }),
+  // Claude's routing (workflow-ai.js): checked once per title/description; is it coding work for Workflow, and why
+  aiCheckedAt: timestamptz("ai_checked_at"),
+  aiCoding: boolean("ai_coding"),
+  aiReason: varchar("ai_reason", { length: 300 }),
 }, (table) => [
   check("tasks_status_check", sql`${table.status} IN ('todo', 'in_progress', 'done')`),
   check("tasks_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2', 'P3')`),
@@ -349,7 +355,16 @@ const goals = pgTable("goals", {
   index("goals_period").on(table.userId, table.year, table.month, table.position),
 ]);
 
+// Owner's switches (settings.js): AI on/off, how tasks reach Mytko Workflow, the Workflow connection on/off, and
+// when Workflow last asked. Plain key/value text.
+const appSettings = pgTable("app_settings", {
+  key: varchar("key", { length: 60 }).primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+});
+
 module.exports = {
+  appSettings,
   goals,
   meetingBriefs,
   mailMessages,
