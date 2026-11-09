@@ -326,6 +326,27 @@ describe("Mytko Workflow ToDo", { skip, concurrency: false }, () => {
       for (const t of [done, moved]) await as(`/api/tasks/${t.id}`, "DELETE");
     });
 
+    test("a task moved to a private space while an earlier answer is pending never reaches the AI", async () => {
+      const first = (await as("/api/tasks", "POST", { title: "Poprawić kod galerii", date: "2026-11-09", spaceId: work.id })).body;
+      const second = (await as("/api/tasks", "POST", { title: "Sekretny kod sejfu na stronie", date: "2026-11-09", spaceId: work.id })).body;
+      await owner.query("UPDATE tasks SET updated_at = now() - interval '2 minutes' WHERE id = $1", [first.id]); // asked first
+      await owner.query("UPDATE tasks SET updated_at = now() - interval '1 minute' WHERE id = $1", [second.id]);
+      await owner.query("UPDATE tasks SET updated_at = now() WHERE id NOT IN ($1, $2)", [first.id, second.id]);
+      await as("/api/settings", "PATCH", { workflowMode: "suggest" });
+      const gate = holding();
+      const scan = as("/api/settings/ai/scan", "POST", {});
+      await gate.reached;
+      assert.match(asked.at(-1), /galerii|sejfu/);
+      const later = /galerii/.test(asked.at(-1)) ? second : first;
+      await as(`/api/tasks/${later.id}`, "PATCH", { spaceId: priv.id });
+      gate.release();
+      await scan;
+      const name = later === second ? /sejfu/ : /galerii/;
+      assert.equal(asked.filter(content => name.test(content)).length, 0, "the moved task was never sent to the AI");
+      await as("/api/settings", "PATCH", { workflowMode: "manual" });
+      for (const t of [first, second]) await as(`/api/tasks/${t.id}`, "DELETE");
+    });
+
     test("an AI error after an answer in the same pass is still shown", async () => {
       const a = (await as("/api/tasks", "POST", { title: "Poprawić kod menu", date: "2026-11-09", spaceId: work.id })).body;
       const b = (await as("/api/tasks", "POST", { title: "Poprawić kod stopki", date: "2026-11-09", spaceId: work.id })).body;

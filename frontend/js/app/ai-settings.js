@@ -11,7 +11,7 @@ import { LOCALE } from "../i18n.js";
 const MODES = [
   ["manual", "Ręcznie", "Tylko przycisk na karcie i w szczegółach zadania."],
   ["suggest", "AI podpowiada", "AI oznacza zadania programistyczne w Praca, a Ty wysyłasz je jednym kliknięciem."],
-  ["auto", "AI wysyła sama", "AI sama wysyła zadania, co do których jest pewna. Każde możesz wycofać."]
+  ["auto", "AI wysyła sama", "AI sama wysyła nowe zadania, co do których jest pewna. Każde możesz wycofać, a już podświetlone wyślesz przyciskiem."]
 ];
 
 export function since(iso) {

@@ -26,9 +26,14 @@ its own and sent tasks simply wait until Fujitsu is up.
   - *AI podpowiada*: the AI looks at each new open task in a space visible to agents once (again after its title or
     description changes); coding work lights up the card's button with the AI's reason. You send it.
   - *AI wysyła sama*: the same, and coding work the AI is sure about (confidence ≥ 0.7) is sent at once, marked
-    "AI → Workflow" and `ai` in the history. A task you withdraw is not sent again.
+    "AI → Workflow" and `ai` in the history. A task that was ever in Workflow (sent by a click or by AI, then
+    withdrawn) is never looked at again. Tasks already marked under *AI podpowiada* stay marked when you switch to
+    *AI wysyła sama*; send them with the button.
   - Runs every minute, a few tasks at a time; "Przeanalizuj teraz" runs it at once. After an API error (no credit,
-    bad key) it shows the reason and waits 15 minutes (a settings change resumes it).
+    bad key) it shows the reason and waits 15 minutes (a settings change resumes it). The switches are read again
+    before each AI request, and each task is read again right before it is sent to the AI. Turning AI or the
+    connection off, choosing *Ręcznie*, or moving a task to a private space takes effect at once, also mid-run. With the
+    connection off nothing goes to the AI.
   - Never a private space or a member's task: they never reach the AI or Workflow.
 
 Data: `app_settings` (`ai.enabled`, `ai.workflow`, `workflow.enabled`, `workflow.last_poll_at`) and

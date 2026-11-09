@@ -202,7 +202,7 @@ const UK = {
   "Zadania do Mytko Workflow": "Завдання до Mytko Workflow", "Ręcznie": "Вручну", "AI podpowiada": "AI підказує", "AI wysyła sama": "AI надсилає сам",
   "Tylko przycisk na karcie i w szczegółach zadania.": "Лише кнопка на картці та в деталях завдання.",
   "AI oznacza zadania programistyczne w Praca, a Ty wysyłasz je jednym kliknięciem.": "AI позначає програмістські завдання в «Робота», а ви надсилаєте їх одним кліком.",
-  "AI sama wysyła zadania, co do których jest pewna. Każde możesz wycofać.": "AI сам надсилає завдання, щодо яких певен. Кожне можна відкликати.",
+  "AI sama wysyła nowe zadania, co do których jest pewna. Każde możesz wycofać, a już podświetlone wyślesz przyciskiem.": "AI сам надсилає нові завдання, щодо яких певен. Кожне можна відкликати, а вже підсвічені надішлете кнопкою.",
   "Analiza wstrzymana na 15 minut (zmiana ustawień wznawia ją od razu).": "Аналіз призупинено на 15 хвилин (зміна налаштувань одразу його відновлює).",
   "Przeanalizuj teraz": "Проаналізувати зараз", "AI analizuje…": "AI аналізує…",
   "Tylko przestrzenie widoczne dla agentów (np. Praca). Prywatne zadania i konta innych osób nigdy nie trafiają do AI ani do Workflow.":

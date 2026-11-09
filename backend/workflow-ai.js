@@ -59,15 +59,20 @@ function createWorkflowAi(pool, settings, { fetchImpl, everyMs = EVERY_MS, first
     let state = await now();
     if (stopped(state)) return { checked: 0, sent: 0, skipped: stopped(state) };
     if (!force && Date.now() < status.pausedUntil) return { checked: 0, sent: 0, skipped: "paused" };
-    const { rows } = await pool.query(
-      `SELECT t.id, t.title, t.description, p.name AS project, c.name AS client FROM tasks t
-       LEFT JOIN projects p ON p.id = t.project_id LEFT JOIN clients c ON c.id = t.client_id
-       WHERE ${ELIGIBLE} AND t.ai_checked_at IS NULL AND t.updated_at < now() - interval '20 seconds'
-       ORDER BY t.updated_at DESC LIMIT $1`, [limit]);
+    const candidates = (await pool.query(
+      `SELECT t.id FROM tasks t WHERE ${ELIGIBLE} AND t.ai_checked_at IS NULL AND t.updated_at < now() - interval '20 seconds'
+       ORDER BY t.updated_at DESC LIMIT $1`, [limit])).rows;
     let checked = 0, sent = 0, failed = false;
-    for (const task of rows) {
+    for (const { id } of candidates) {
       state = await now();
       if (stopped(state)) break;
+      // read again right before the request: a task moved to a private space (or finished, sent, …) while an earlier
+      // answer was pending never reaches the AI
+      const task = (await pool.query(
+        `SELECT t.id, t.title, t.description, p.name AS project, c.name AS client FROM tasks t
+         LEFT JOIN projects p ON p.id = t.project_id LEFT JOIN clients c ON c.id = t.client_id
+         WHERE t.id = $1 AND ${ELIGIBLE} AND t.ai_checked_at IS NULL`, [id])).rows[0];
+      if (!task) continue;
       let verdict;
       try {
         verdict = await classify(state.ai, task, { fetchImpl });
