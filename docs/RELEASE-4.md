@@ -1,6 +1,7 @@
 # Release 4: tasks to Mytko Workflow by hand or by AI; AI and Workflow switches
 
-Production runs release 3 (`ca8e15a`, migrations up to 0010). This release adds migration **0011_workflow_ai**,
+Production runs release 3 (`ca8e15a`, migrations up to 0010). Mytko Workflow should also be deployed with
+mytko-workflow#36 (AI flag on items, readable message when the connection is off); Tasks works without it. This release adds migration **0011_workflow_ai**,
 additive only: the `app_settings` table and four nullable columns on `tasks`. Existing data is untouched.
 
 ## What changes
