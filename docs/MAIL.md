@@ -9,7 +9,7 @@ From a message:
 - **Utwórz zadanie**: the new task dialog with the subject, the sender and the text, in Praca, linked to the e-mail and
   its client; the e-mail is then marked handled (undo in the toast). The task shows "Otwórz wiadomość".
 - **Zaproponuj zadania (Claude)**: a summary, whether a reply is expected, and tasks; "Dodaj" adds one. Coding tasks are
-  marked "kod → Workflow" (sent to the Mytko Workflow ToDo in stage C6). Needs `ANTHROPIC_API_KEY`.
+  marked "kod → Workflow" (sent to the Mytko Workflow ToDo in stage C6). Needs an AI key (`AI_API_KEY`, see `AI.md`).
 - **Nowy lead z nadawcy** / client select: e-mails are matched to clients by the sender's address, then the company
   domain (never gmail.com and other public mailboxes).
 - **Dodaj do kalendarza Praca**: an invitation (text/calendar) is imported into the Praca Google Calendar as the
@@ -25,8 +25,8 @@ From a message:
 | `MAIL_IMAP_PASSWORD` | the mailbox password | env file only, `chmod 600` |
 | `MAIL_IMAP_PORT` | `993` | TLS always in production |
 | `MAIL_MAILBOX` | `INBOX` | |
-| `ANTHROPIC_API_KEY` | `sk-ant-…` | optional, Claude proposals |
-| `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | optional |
+| `AI_API_KEY` | provider key | optional, AI proposals (any provider, `AI.md`) |
+| `AI_PROVIDER`, `AI_MODEL` | `anthropic`, `claude-sonnet-5-5` | optional (`AI.md`) |
 
 Tests: `backend/test/mail.test.js` (invitations, parsing, settings, Claude), `backend/test/mail.integration.test.js`
 (a real IMAP server: GreenMail, `TEST_IMAP_PORT`), `CALENDAR=1 MAIL=1 TEST=e2e/ui-mail.mjs e2e/ui-run.sh …`.

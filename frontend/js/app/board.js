@@ -4,7 +4,7 @@ import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { applyMove, boardCanonical, byPosition, columns, dueLabel, dueState, formatClock, formatDuration, goalLabel, initials, PRIORITY_LABELS, STATUSES,
   STATUS_LABELS, trackedNow } from "./logic.js";
-import { lookup, reload, render, runTask, store, visibleTasks } from "./app.js";
+import { lookup, reload, render, runTask, store, visibleTasks, workflowReady } from "./app.js";
 import { openDrawer } from "./drawer.js";
 import { retentionNote } from "./archive.js";
 import { toast } from "./toast.js";
@@ -22,7 +22,28 @@ const WORKFLOW = { requested: "Czeka na Workflow", todo: "W Workflow", in_progre
   done: "Workflow: zrobione", withdrawn: "Wycofane z Workflow" };
 export function workflowLabel(task) {
   if (!task.workflowStatus || task.workflowStatus === "cancelled") return "";
+  if (task.workflowStatus === "requested" && task.workflowRequestedBy === "ai") return "AI → Workflow";
   return WORKFLOW[task.workflowStatus] || "W Workflow";
+}
+
+// The small "to the Workflow ToDo" button on a card: open, unsent tasks of the owner in a space visible to agents.
+// The AI routing marks coding work (aiCoding): the button is then highlighted with the reason.
+export function canSendToWorkflow(task) {
+  return workflowReady() && Boolean(lookup.space(task.spaceId)?.agentVisible) && !task.workflowRequestedAt && !task.workflowRef
+    && task.status !== "done";
+}
+function flowButtonHtml(task) {
+  if (!canSendToWorkflow(task)) return "";
+  const hint = task.aiCoding ? `AI: ${task.aiReason || "to wygląda na pracę programistyczną"} Wyślij do ToDo w Mytko Workflow` : "Wyślij do ToDo w Mytko Workflow";
+  return `<button type="button" class="round-btn round-btn--flow${task.aiCoding ? " is-suggested" : ""}" data-card="workflow"
+    aria-label="Wyślij do ToDo w Mytko Workflow: ${escapeHtml(task.title)}" title="${escapeHtml(hint)}">${icon("layers", 15)}</button>`;
+}
+
+export async function sendToWorkflow(id) {
+  const task = await runTask(() => api.updateTask(id, { workflow: true }), "Nie udało się wysłać do Workflow.");
+  if (!task) return;
+  toast(`„${task.title}” → ToDo w Mytko Workflow.`, { action: "Cofnij",
+    onAction: () => runTask(() => api.updateTask(id, { workflow: false }), "Nie udało się wycofać.") });
 }
 
 // P0, P1 and P3 are marked on the card; the default P2 is not (it would be on every card).
@@ -107,7 +128,7 @@ export function cardHtml(task) {
     <div class="card__foot">
       <span class="card__who">${avatarHtml(task)}</span>
       ${timerHtml(task) || dueHtml(task)}
-      <span class="card__action">${actionHtml(task)}</span>
+      <span class="card__action">${flowButtonHtml(task)}${actionHtml(task)}</span>
     </div>
   </article>`;
 }
@@ -185,6 +206,7 @@ async function cardAction(button) {
     return board.scrollTo({ left: kind === "peek" ? board.scrollWidth : 0, behavior: "smooth" });
   }
   if (kind === "to-todo") return moveTask(id, "todo", null);
+  if (kind === "workflow") return sendToWorkflow(id);
   if (kind === "only") {
     store.filters.status = store.filters.status === button.dataset.status ? "" : button.dataset.status;
     return render();

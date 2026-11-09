@@ -2,6 +2,7 @@ const path = require("node:path");
 const { isIP } = require("node:net");
 
 const { parsePasswordHash } = require("./security");
+const { loadAi } = require("./ai");
 
 // Reads configuration from the environment. Fails fast in production when
 // anything security-relevant is missing instead of falling back to defaults.
@@ -207,16 +208,6 @@ function loadMail(env, errors, { isProduction }) {
   };
 }
 
-// Claude (Anthropic API) for proposals from e-mails and meeting briefs; off without ANTHROPIC_API_KEY.
-function loadAi(env, errors, { isProduction }) {
-  if (!env.ANTHROPIC_API_KEY) return null;
-  const model = env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
-  if (!/^[a-z0-9.-]{3,80}$/.test(model)) errors.push("ANTHROPIC_MODEL must be a model id, e.g. claude-sonnet-5-5");
-  const ai = { apiKey: env.ANTHROPIC_API_KEY, model, apiBase: "https://api.anthropic.com" };
-  // Local testing only (a fake Anthropic API): never in production.
-  if (!isProduction && env.ANTHROPIC_DEV_BASE) ai.apiBase = env.ANTHROPIC_DEV_BASE;
-  return ai;
-}
 
 function parseDays(value) {
   const days = new Set();
