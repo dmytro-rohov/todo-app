@@ -1,7 +1,7 @@
-// Meeting briefs: notes from a meeting -> Claude's brief (claude.js proposeBrief). Notes come pasted in the meeting, or
+// Meeting briefs: notes from a meeting -> the AI's brief (ai/proposals.js proposeBrief). Notes come pasted in the meeting, or
 // by e-mail: Gemini in Google Meet ("Take notes for me") mails "Notes: “<meeting>” …" to the organizer, hello@, which
 // lands in Poczta; after each mail sync such e-mails become briefs of the matching meeting and are marked handled.
-const { proposeBrief, AiError } = require("./claude");
+const { proposeBrief, AiError } = require("./ai/proposals");
 const { zonedDay } = require("./booking");
 
 const TITLE = /[“"„«]([^”"»]{1,300})[”"»]/;
@@ -53,7 +53,9 @@ async function runBrief(pool, ai, id, { fetchImpl } = {}) {
   return id;
 }
 
-// After a mail sync: new Gemini notes e-mails (last 14 days) become briefs; Claude runs on them when configured.
+// After a mail sync: new Gemini notes e-mails (last 14 days) become briefs; the AI runs on them when it may.
+// `ai`: the AI settings, or a function returning them (or null when AI is off), asked again before each brief, so
+// turning AI off stops a batch that is already running.
 async function processGeminiMail(pool, ai, { fetchImpl } = {}) {
   const { rows } = await pool.query(
     `SELECT m.id, m.from_address AS "fromAddress", m.from_name AS "fromName", m.subject, m.sent_at AS "sentAt", m.body_text AS "bodyText"
@@ -68,7 +70,7 @@ async function processGeminiMail(pool, ai, { fetchImpl } = {}) {
       [mail.id, event?.client_id ?? null]);
     created.push(id);
   }
-  for (const id of created) await runBrief(pool, ai, id, { fetchImpl });
+  for (const id of created) await runBrief(pool, typeof ai === "function" ? await ai() : ai, id, { fetchImpl });
   return created;
 }
 

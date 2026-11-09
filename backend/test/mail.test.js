@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const { parseInvite } = require("../ics");
 const { toRow, describe: describeError, searchedUids, syncMail } = require("../mail-sync");
 const { loadConfig } = require("../config");
-const { proposeFromMail, cleanTasks, AiError } = require("../claude");
+const { proposeFromMail, cleanTasks, AiError } = require("../ai/proposals");
 
 const base = { NODE_ENV: "development", DATABASE_URL: "postgres://x@127.0.0.1/x", AUTH_DISABLED: "true" };
 
@@ -75,7 +75,7 @@ test("sync errors are described without secrets", () => {
   assert.match(describeError(new Error("weird")), /nie powiodła/);
 });
 
-test("MAIL_*, ANTHROPIC_* and WORKFLOW_TOKEN_SHA256 settings", () => {
+test("MAIL_*, AI (ANTHROPIC_*) and WORKFLOW_TOKEN_SHA256 settings", () => {
   assert.equal(loadConfig(base).mail, null);
   assert.equal(loadConfig(base).ai, null);
   const mail = loadConfig({ ...base, MAIL_IMAP_HOST: "ssl0.ovh.net", MAIL_IMAP_USER: "hello@mytko.dev", MAIL_IMAP_PASSWORD: "x" }).mail;
@@ -93,7 +93,7 @@ test("MAIL_*, ANTHROPIC_* and WORKFLOW_TOKEN_SHA256 settings", () => {
   assert.throws(() => loadConfig({ ...base, WORKFLOW_TOKEN_SHA256: "plain-token" }), /64 hex/);
 });
 
-test("Claude's proposals are forced into the tool and validated; API errors become readable", async () => {
+test("AI proposals are forced into the tool and validated; API errors become readable", async () => {
   const requests = [];
   const fake = answer => async (url, init) => { requests.push({ url, body: JSON.parse(init.body), headers: init.headers }); return answer; };
   const ok = { ok: true, status: 200, json: async () => ({ content: [{ type: "tool_use", name: "propose_tasks", input: {

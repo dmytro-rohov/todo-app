@@ -4,7 +4,7 @@ import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { formatClock, formatDuration, PRIORITY_LABELS, STATUS_LABELS, titleError, trackedNow, yearsAhead } from "./logic.js";
-import { isMember, lookup, paint, reload, runTask, store } from "./app.js";
+import { isMember, lookup, paint, reload, runTask, store, workflowReady } from "./app.js";
 import { moveTask, timerData, workflowLabel } from "./board.js";
 import { confirmDialog } from "./dialogs.js";
 import { toast } from "./toast.js";
@@ -165,11 +165,15 @@ function workflowRowHtml(task) {
   const requested = Boolean(task.workflowRequestedAt);
   const action = requested
     ? `<button type="button" class="btn btn--ghost btn--sm" data-d="workflow-off">Wycofaj</button>`
-    : space?.agentVisible ? `<button type="button" class="btn btn--ghost btn--sm" data-d="workflow-on">${icon("layers", 15)}Wyślij do Workflow</button>`
-      : `<small class="muted">Ta przestrzeń nie jest widoczna dla agentów</small>`;
+    : !space?.agentVisible ? `<small class="muted">Ta przestrzeń nie jest widoczna dla agentów</small>`
+      : !workflowReady() ? `<small class="muted">Połączenie z Mytko Workflow jest wyłączone (Porządek → AI i Workflow)</small>`
+        : `<button type="button" class="btn btn--ghost btn--sm" data-d="workflow-on">${icon("layers", 15)}Wyślij do Workflow</button>`;
+  // why the AI routing thinks so (sent by AI, or only marked)
+  const ai = task.aiReason && (task.aiCoding || task.workflowRequestedBy === "ai")
+    ? `<small class="workflow-ai">${icon("sparkles", 14)}${task.workflowRequestedBy === "ai" && requested ? "Wysłane przez AI" : "AI: praca dla Workflow"} · ${escapeHtml(task.aiReason)}</small>` : "";
   const link = task.workflowUrl && requested ? `<a class="btn btn--ghost btn--sm" href="${escapeHtml(task.workflowUrl)}" target="_blank" rel="noopener noreferrer">Otwórz w Workflow</a>` : "";
   const hint = requested && !task.workflowRef ? '<small class="muted">Workflow pobierze je, gdy Fujitsu będzie włączone.</small>' : "";
-  return `<dt>${icon("layers", 18)}Workflow</dt><dd class="workflow-cell">${label ? `<span class="chip chip--workflow">${escapeHtml(label)}</span>` : ""}${action}${link}${hint}</dd>`;
+  return `<dt>${icon("layers", 18)}Workflow</dt><dd class="workflow-cell">${label ? `<span class="chip chip--workflow">${escapeHtml(label)}</span>` : ""}${action}${link}${hint}${ai}</dd>`;
 }
 
 async function save(body, failure) {

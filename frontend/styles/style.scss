@@ -148,6 +148,9 @@
         &--warn { border-color: var(--warning); color: var(--warning); &:hover { background: var(--warning-soft); } }
         &--done { border-color: var(--accent); color: var(--accent); cursor: default; &:hover { background: none; } }
         &--plan { border-color: #7d9a5a; color: #b9d98c; }
+        // to the Mytko Workflow ToDo (indigo, like the Workflow chip); lit up when Claude marked it as coding work
+        &--flow { border-color: #818cf880; color: #a5b4fc; &:hover { background: #818cf81f; border-color: #a5b4fc; }
+            &.is-suggested { border-color: #a5b4fc; background: #818cf826; box-shadow: 0 0 0 0.1875rem #818cf826; } }
     }
 
     .due {
@@ -366,7 +369,7 @@
         &__meta { display: flex; align-items: center; gap: 0.375rem; color: var(--muted); font-size: 0.8125rem; margin-top: -0.25rem; }
         &__foot { display: flex; align-items: center; gap: 0.75rem; min-height: 2.125rem; min-width: 0; }
         &__who { display: flex; align-items: center; gap: 0.5rem; margin-right: auto; }
-        &__action { margin-left: auto; }
+        &__action { display: inline-flex; align-items: center; gap: 0.375rem; margin-left: auto; }
         &--in_progress { border-left: 0.1875rem solid var(--accent); }
         &--needs_review { border-left: 0.1875rem solid var(--warning); }
         &--done { border-left: 0.1875rem solid var(--success); .card__title { color: #dfe8e0; } }
@@ -796,6 +799,33 @@
         .mail__back { display: inline-flex; }
         .mail__reader { padding: 1rem; }
     }
+
+    // ---- AI i Workflow (settings) --------------------------------------------------------------------------------
+    .dialog--settings { width: min(40rem, calc(100vw - 1.5rem)); [data-settings] { display: grid; gap: 0.875rem; } }
+    .settings-block {
+        display: grid; gap: 0.75rem; padding: 1rem 1.125rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);
+        p { margin: 0; font-size: 0.875rem; line-height: 1.5; }
+        h4 { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--muted); font-weight: 700; }
+        &__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+            h3 { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 1.0625rem; .i { color: var(--accent); } } }
+        &__note { color: var(--faint); font-size: 0.8125rem !important; strong { color: var(--muted); } }
+        &__note--icon { display: flex; align-items: flex-start; gap: 0.375rem; .i { flex: none; margin-top: 0.125rem; } }
+        &__run { display: grid; gap: 0.5rem; justify-items: start; padding-top: 0.25rem; }
+        .switch { justify-self: start; }
+    }
+    .status-pill {
+        display: inline-flex; align-items: center; gap: 0.4375rem; padding: 0.25rem 0.625rem; border: 1px solid var(--border-strong); border-radius: 999px;
+        color: var(--muted); font-size: 0.8125rem; font-weight: 700; white-space: nowrap;
+        i { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--faint); }
+        &--ok { border-color: #b7e34d66; color: var(--accent); i { background: var(--accent); box-shadow: 0 0 0 0.1875rem #b7e34d33; } }
+        &--idle { border-color: #f5c56b66; color: var(--warning); i { background: var(--warning); } }
+    }
+    .scale-options--described .check { align-items: flex-start; input[type=radio] { margin-top: 0.125rem; } }
+    .scale-options.is-disabled { opacity: .5; .check { cursor: not-allowed; } }
+    .check__text { display: grid; gap: 0.1875rem; small { color: var(--muted); font-size: 0.8125rem; font-weight: 400; line-height: 1.4; } }
+    .nav-dot { flex: none; width: 0.5rem; height: 0.5rem; margin-left: auto; border-radius: 50%; background: var(--faint);
+        &--ok { background: var(--accent); box-shadow: 0 0 0 0.1875rem #b7e34d2e; } }
+    .workflow-ai { display: flex; align-items: center; gap: 0.3125rem; color: #c7cbff; .i { color: #a5b4fc; flex: none; } }
 
     // ---- Cele / Marzenia ------------------------------------------------------------------------------------------
     // goals in the accent green, dreams in violet; a done item stays in the list, crossed out and dimmed
