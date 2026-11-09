@@ -49,13 +49,15 @@ async function classify(ai, task, { fetchImpl } = {}) {
 function createWorkflowAi(pool, settings, { fetchImpl, everyMs = EVERY_MS, firstRunMs = 30000 } = {}) {
   const status = { lastRunAt: null, lastError: null, checked: 0, sent: 0, pausedUntil: 0, running: null };
 
-  // the switches as they are now: read again before each AI request and before each send, so turning AI or the
-  // connection off (or routing to manual) stops a pass that is already running
+  // the switches as they are now: read again before each AI request and after each answer, so turning AI or the
+  // Workflow connection off (or routing to manual) stops a pass that is already running. With the connection off
+  // routing has no purpose: nothing goes to the AI, and tasks stay unchecked until it is on again.
   const now = async () => ({ ai: await settings.ai(), mode: await settings.workflowMode(), enabled: await settings.workflowEnabled() });
+  const stopped = state => (!state.ai ? "ai-off" : state.mode === "manual" ? "manual" : !state.enabled ? "workflow-off" : null);
 
   async function pass({ limit = PER_RUN, force = false } = {}) {
     let state = await now();
-    if (!state.ai || state.mode === "manual") return { checked: 0, sent: 0, skipped: !state.ai ? "ai-off" : "manual" };
+    if (stopped(state)) return { checked: 0, sent: 0, skipped: stopped(state) };
     if (!force && Date.now() < status.pausedUntil) return { checked: 0, sent: 0, skipped: "paused" };
     const { rows } = await pool.query(
       `SELECT t.id, t.title, t.description, p.name AS project, c.name AS client FROM tasks t
@@ -65,7 +67,7 @@ function createWorkflowAi(pool, settings, { fetchImpl, everyMs = EVERY_MS, first
     let checked = 0, sent = 0, failed = false;
     for (const task of rows) {
       state = await now();
-      if (!state.ai || state.mode === "manual") break;
+      if (stopped(state)) break;
       let verdict;
       try {
         verdict = await classify(state.ai, task, { fetchImpl });
@@ -77,9 +79,9 @@ function createWorkflowAi(pool, settings, { fetchImpl, everyMs = EVERY_MS, first
         break;
       }
       state = await now();
-      if (!state.ai || state.mode === "manual") break; // turned off while the AI was answering: its answer is dropped
+      if (stopped(state)) break; // turned off while the AI was answering: its answer is dropped, the task stays unchecked
       checked++;
-      const send = state.mode === "auto" && state.enabled && verdict.coding && verdict.confidence >= SURE;
+      const send = state.mode === "auto" && verdict.coding && verdict.confidence >= SURE;
       await withTransaction(pool, async db => {
         // still eligible and untouched since it was read: not edited, finished, archived, planned, moved to a private
         // space or sent/withdrawn by the owner meanwhile (the row is locked from here to the send)

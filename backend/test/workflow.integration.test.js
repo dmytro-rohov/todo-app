@@ -282,12 +282,21 @@ describe("Mytko Workflow ToDo", { skip, concurrency: false }, () => {
       gate = holding();
       const scan2 = as("/api/settings/ai/scan", "POST", {});
       await gate.reached;
+      const calls = asked.length;
       await as("/api/settings", "PATCH", { workflowEnabled: false });
       gate.release();
-      assert.equal((await scan2).body.sent, 0);
+      assert.deepEqual([(await scan2).body.checked, (await scan2).body.sent], [0, 0]);
+      assert.equal(asked.length, calls, "no further request with the connection off");
       tasks = (await as("/api/tasks")).body;
-      assert.ok([one, two].every(t => !tasks.find(x => x.id === t.id).workflowRequestedAt), "nothing sent with the connection off");
-      await as("/api/settings", "PATCH", { workflowEnabled: true, workflowMode: "manual" });
+      assert.ok([one, two].every(t => !tasks.find(x => x.id === t.id).workflowRequestedAt && tasks.find(x => x.id === t.id).aiCoding === null),
+        "nothing sent and nothing marked: the tasks stay for later");
+      // with the connection off nothing reaches the AI at all
+      assert.equal((await as("/api/settings/ai/scan", "POST", {})).status, 409);
+      assert.equal(asked.length, calls);
+      // on again: the tasks are looked at and sent
+      await as("/api/settings", "PATCH", { workflowEnabled: true });
+      assert.equal((await as("/api/settings/ai/scan", "POST", {})).body.sent, 2);
+      await as("/api/settings", "PATCH", { workflowMode: "manual" });
       for (const t of [one, two]) await as(`/api/tasks/${t.id}`, "DELETE");
     });
 

@@ -54,6 +54,7 @@ module.exports = function createSettingsRouter(pool, { settings, ai, workflow, r
   router.post("/ai/scan", async (req, res) => {
     if (!(await settings.ai())) return res.status(409).json({ message: "AI is turned off or not configured" });
     if ((await settings.workflowMode()) === "manual") return res.status(409).json({ message: "Task routing is set to manual" });
+    if (!(await settings.workflowEnabled())) return res.status(409).json({ message: "The Mytko Workflow connection is turned off" });
     const result = routing ? await routing.run({ limit: 10, force: true }) : { checked: 0, sent: 0 };
     res.json({ ...result, settings: await state() });
   });
