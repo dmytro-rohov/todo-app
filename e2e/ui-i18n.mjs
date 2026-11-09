@@ -63,7 +63,11 @@ try {
   check("Polish by default", await ev(`document.documentElement.lang`) === "pl" && await text('[data-action="new-task"]') === "Nowe zadanie", await text('[data-action="new-task"]'));
 
   await click('[data-action="language"]');
-  check("the language dialog lists Polski and Українська", await ev(`[...document.querySelectorAll('dialog[open] [name="lang"]')].map(i => i.parentElement.textContent.trim()).join("|")`) === "Polski|Українська");
+  check("the language dialog lists Polski and Українська", await ev(`[...document.querySelectorAll('dialog[open] [name="lang"]')].map(i => i.parentElement.textContent.trim()).join("|")`) === "PolskiPL|УкраїнськаУКР");
+  check("…as option cards: radio dots stay small, the chosen one is highlighted", await ev(`(() => { const r = document.querySelector('dialog[open] [name="lang"]').getBoundingClientRect();
+    const chosen = document.querySelector('dialog[open] .check:has(input:checked)'); return r.width <= 24 && r.height <= 24 && getComputedStyle(chosen).borderColor !== getComputedStyle(document.querySelector('dialog[open] .check:not(:has(input:checked))')).borderColor; })()`));
+  if (process.env.SHOTS) { const { result } = await send("Page.captureScreenshot", { format: "png" });
+    (await import("node:fs")).writeFileSync(`${process.env.SHOTS}/dialog-language.png`, Buffer.from(result.data, "base64")); }
   await click('dialog[open] [name="lang"][value="uk"]'); await sleep(3500);
   check("after choosing Українська the page is in Ukrainian", await ev(`document.documentElement.lang`) === "uk", await ev("document.documentElement.lang"));
   check("buttons are translated", await text('[data-action="new-task"]') === "Нове завдання", await text('[data-action="new-task"]'));
