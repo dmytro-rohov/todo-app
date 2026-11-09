@@ -121,13 +121,16 @@ describe("Mytko Workflow ToDo", { skip, concurrency: false }, () => {
   describe("settings and the AI routing", () => {
     let ai;
     let failClaude = false;
+    let failFrom = Infinity; // the n-th request onwards fails
+    let hold = null; // a promise the fake API waits for before answering
     const asked = [];
     // a fake Anthropic API: coding work when the title talks about code
     const fakeClaude = async (url, init) => {
       if (!String(url).endsWith("/v1/messages")) return fetch(url, init);
       const body = JSON.parse(init.body);
       asked.push(body.messages[0].content);
-      if (failClaude) return new Response(JSON.stringify({ error: { message: "Your credit balance is too low" } }), { status: 400 });
+      if (hold) await hold;
+      if (failClaude || asked.length >= failFrom) return new Response(JSON.stringify({ error: { message: "Your credit balance is too low" } }), { status: 400 });
       const coding = /stron|formularz|kod|wdroż/i.test(body.messages[0].content) && !/domofon/i.test(body.messages[0].content);
       return new Response(JSON.stringify({ content: [{ type: "tool_use", name: "route_task",
         input: { coding, confidence: coding ? 0.9 : 0.95, reason: coding ? "Zmiana w kodzie strony." : "To nie jest praca programistyczna." } }] }), { status: 200 });
@@ -234,9 +237,104 @@ describe("Mytko Workflow ToDo", { skip, concurrency: false }, () => {
       for (const t of [code, meeting]) await as(`/api/tasks/${t.id}`, "DELETE");
     });
 
+    // a fake API answer held until release(); resolves once the request reached it
+    const holding = () => {
+      let release;
+      hold = new Promise(resolve => { release = () => { hold = null; resolve(); }; });
+      const count = asked.length;
+      const reached = (async () => { while (asked.length === count) await new Promise(r => setTimeout(r, 20)); })();
+      return { release, reached };
+    };
+
+    test("a task once in Workflow (sent by hand, then withdrawn) is never routed, even after an edit", async () => {
+      const task = (await as("/api/tasks", "POST", { title: "Poprawić kod formularza", date: "2026-11-09", spaceId: work.id })).body;
+      await as(`/api/tasks/${task.id}`, "PATCH", { workflow: true });
+      await as(`/api/tasks/${task.id}`, "PATCH", { workflow: false });
+      await as(`/api/tasks/${task.id}`, "PATCH", { title: "Poprawić kod formularza kontaktowego" });
+      await age();
+      await as("/api/settings", "PATCH", { workflowMode: "auto" });
+      const before = asked.length;
+      await as("/api/settings/ai/scan", "POST", {});
+      const after = (await as("/api/tasks")).body.find(t => t.id === task.id);
+      assert.deepEqual([after.workflowRequestedAt, after.aiCoding], [null, null]);
+      assert.ok(!asked.slice(before).some(content => /formularza kontaktowego/.test(content)), "it never reaches the AI");
+      await as(`/api/tasks/${task.id}`, "DELETE");
+      await as("/api/settings", "PATCH", { workflowMode: "manual" });
+    });
+
+    test("switches changed while the AI answers: routing to manual drops the answer; the connection off sends nothing", async () => {
+      const one = (await as("/api/tasks", "POST", { title: "Wdrożyć poprawkę stopki strony", date: "2026-11-09", spaceId: work.id })).body;
+      const two = (await as("/api/tasks", "POST", { title: "Wdrożyć poprawkę nagłówka strony", date: "2026-11-09", spaceId: work.id })).body;
+      await age();
+      await as("/api/settings", "PATCH", { workflowMode: "auto" });
+      let gate = holding();
+      const before = asked.length;
+      const scan = as("/api/settings/ai/scan", "POST", {});
+      await gate.reached;
+      await as("/api/settings", "PATCH", { workflowMode: "manual" });
+      gate.release();
+      assert.deepEqual([(await scan).body.checked, (await scan).body.sent], [0, 0]);
+      assert.equal(asked.length, before + 1, "no further request after routing went manual");
+      let tasks = (await as("/api/tasks")).body;
+      assert.ok([one, two].every(t => !tasks.find(x => x.id === t.id).workflowRequestedAt && tasks.find(x => x.id === t.id).aiCoding === null));
+
+      await as("/api/settings", "PATCH", { workflowMode: "auto" });
+      gate = holding();
+      const scan2 = as("/api/settings/ai/scan", "POST", {});
+      await gate.reached;
+      await as("/api/settings", "PATCH", { workflowEnabled: false });
+      gate.release();
+      assert.equal((await scan2).body.sent, 0);
+      tasks = (await as("/api/tasks")).body;
+      assert.ok([one, two].every(t => !tasks.find(x => x.id === t.id).workflowRequestedAt), "nothing sent with the connection off");
+      await as("/api/settings", "PATCH", { workflowEnabled: true, workflowMode: "manual" });
+      for (const t of [one, two]) await as(`/api/tasks/${t.id}`, "DELETE");
+    });
+
+    test("a task finished or moved to a private space while the AI answers is not sent", async () => {
+      const done = (await as("/api/tasks", "POST", { title: "Wdrożyć nową stronę kontaktu", date: "2026-11-09", spaceId: work.id })).body;
+      await age();
+      await as("/api/settings", "PATCH", { workflowMode: "auto" });
+      let gate = holding();
+      let scan = as("/api/settings/ai/scan", "POST", {});
+      await gate.reached;
+      await as(`/api/tasks/${done.id}`, "PATCH", { status: "done" });
+      gate.release();
+      assert.equal((await scan).body.sent, 0);
+      assert.equal((await as("/api/tasks")).body.find(t => t.id === done.id).workflowRequestedAt, null);
+
+      const moved = (await as("/api/tasks", "POST", { title: "Wdrożyć stronę o nas", date: "2026-11-09", spaceId: work.id })).body;
+      await age();
+      gate = holding();
+      scan = as("/api/settings/ai/scan", "POST", {});
+      await gate.reached;
+      await as(`/api/tasks/${moved.id}`, "PATCH", { spaceId: priv.id });
+      gate.release();
+      assert.equal((await scan).body.sent, 0);
+      const after = (await as("/api/tasks")).body.find(t => t.id === moved.id);
+      assert.deepEqual([after.workflowRequestedAt, after.aiCoding], [null, null]);
+      await as("/api/settings", "PATCH", { workflowMode: "manual" });
+      for (const t of [done, moved]) await as(`/api/tasks/${t.id}`, "DELETE");
+    });
+
+    test("an AI error after an answer in the same pass is still shown", async () => {
+      const a = (await as("/api/tasks", "POST", { title: "Poprawić kod menu", date: "2026-11-09", spaceId: work.id })).body;
+      const b = (await as("/api/tasks", "POST", { title: "Poprawić kod stopki", date: "2026-11-09", spaceId: work.id })).body;
+      await age();
+      await as("/api/settings", "PATCH", { workflowMode: "suggest" });
+      failFrom = asked.length + 2; // the first request answers, the second fails
+      const run = (await as("/api/settings/ai/scan", "POST", {})).body;
+      failFrom = Infinity;
+      assert.equal(run.checked, 1);
+      assert.equal(run.settings.ai.lastError, "Brak środków na koncie API AI.");
+      await as("/api/settings", "PATCH", { workflowMode: "manual" });
+      for (const t of [a, b]) await as(`/api/tasks/${t.id}`, "DELETE");
+    });
+
     test("Claude failing (no credit): the reason is shown and routing pauses until the settings change", async () => {
       const code = (await as("/api/tasks", "POST", { title: "Poprawić kod koszyka", date: "2026-11-09", spaceId: work.id })).body;
       await age();
+      await as("/api/settings", "PATCH", { workflowMode: "auto" });
       failClaude = true;
       const run = (await as("/api/settings/ai/scan", "POST", {})).body;
       assert.equal(run.checked, 0);

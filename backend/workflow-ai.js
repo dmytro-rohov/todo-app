@@ -2,8 +2,8 @@
 // - "suggest": each new open task in a space visible to agents is looked at once (again after its title or
 //   description changes); coding work is marked (ai_coding, ai_reason) and the card offers the send button.
 // - "auto": the same, and coding work Claude is sure about is sent at once (workflow_requested_by = "ai").
-// Never a private space or a member's task; never with AI or the Workflow connection off; a task the owner withdrew is
-// not sent again. A few tasks per run; after an API error (no credit, bad key) it waits before trying again.
+// Never a private space or a member's task; never with AI or the Workflow connection off; a task that was ever in
+// Workflow (sent by a click or by AI, then withdrawn) is not looked at again. A few tasks per run; after an API error (no credit, bad key) it waits before trying again.
 const { structured, AiError } = require("./ai");
 const { setWorkflow } = require("./routes/tasks");
 const { withTransaction } = require("./db");
@@ -12,6 +12,13 @@ const EVERY_MS = 60000;
 const PER_RUN = 5;
 const BACKOFF_MS = 15 * 60000;
 const SURE = 0.7;
+
+// Tasks the routing may look at: the owner's open tasks in spaces visible to agents that were never in Workflow.
+// A task once sent (by a click or by AI) and withdrawn stays out for good, also after an edit: the owner decided.
+const ELIGIBLE = `t.user_id IS NULL AND t.archived_at IS NULL AND NOT t.completed AND t.planned_at IS NULL
+  AND t.workflow_requested_at IS NULL AND t.workflow_ref IS NULL AND t.workflow_requested_by IS NULL
+  AND t.space_id IN (SELECT id FROM spaces WHERE agent_visible)
+  AND NOT EXISTS (SELECT 1 FROM task_history h WHERE h.task_id = t.id AND h.field = 'workflow')`;
 
 const TOOL = {
   name: "route_task",
@@ -42,46 +49,50 @@ async function classify(ai, task, { fetchImpl } = {}) {
 function createWorkflowAi(pool, settings, { fetchImpl, everyMs = EVERY_MS, firstRunMs = 30000 } = {}) {
   const status = { lastRunAt: null, lastError: null, checked: 0, sent: 0, pausedUntil: 0, running: null };
 
+  // the switches as they are now: read again before each AI request and before each send, so turning AI or the
+  // connection off (or routing to manual) stops a pass that is already running
+  const now = async () => ({ ai: await settings.ai(), mode: await settings.workflowMode(), enabled: await settings.workflowEnabled() });
+
   async function pass({ limit = PER_RUN, force = false } = {}) {
-    const ai = await settings.ai();
-    const mode = await settings.workflowMode();
-    if (!ai || mode === "manual") return { checked: 0, sent: 0, skipped: !ai ? "ai-off" : "manual" };
+    let state = await now();
+    if (!state.ai || state.mode === "manual") return { checked: 0, sent: 0, skipped: !state.ai ? "ai-off" : "manual" };
     if (!force && Date.now() < status.pausedUntil) return { checked: 0, sent: 0, skipped: "paused" };
-    const enabled = await settings.workflowEnabled();
-    // the owner's open, unsent tasks in spaces visible to agents, not looked at since their last edit
     const { rows } = await pool.query(
       `SELECT t.id, t.title, t.description, p.name AS project, c.name AS client FROM tasks t
-       JOIN spaces s ON s.id = t.space_id AND s.agent_visible
        LEFT JOIN projects p ON p.id = t.project_id LEFT JOIN clients c ON c.id = t.client_id
-       WHERE t.user_id IS NULL AND t.archived_at IS NULL AND NOT t.completed AND t.planned_at IS NULL
-         AND t.ai_checked_at IS NULL AND t.workflow_requested_at IS NULL AND t.workflow_ref IS NULL
-         AND t.updated_at < now() - interval '20 seconds'
+       WHERE ${ELIGIBLE} AND t.ai_checked_at IS NULL AND t.updated_at < now() - interval '20 seconds'
        ORDER BY t.updated_at DESC LIMIT $1`, [limit]);
-    let checked = 0, sent = 0;
+    let checked = 0, sent = 0, failed = false;
     for (const task of rows) {
+      state = await now();
+      if (!state.ai || state.mode === "manual") break;
       let verdict;
       try {
-        verdict = await classify(ai, task, { fetchImpl });
+        verdict = await classify(state.ai, task, { fetchImpl });
       } catch (error) {
+        failed = true;
         status.lastError = error instanceof AiError ? error.message : "AI nie odpowiada.";
         status.pausedUntil = Date.now() + BACKOFF_MS;
         if (!(error instanceof AiError)) console.error("task routing failed");
         break;
       }
+      state = await now();
+      if (!state.ai || state.mode === "manual") break; // turned off while the AI was answering: its answer is dropped
       checked++;
-      const send = mode === "auto" && enabled && verdict.coding && verdict.confidence >= SURE;
+      const send = state.mode === "auto" && state.enabled && verdict.coding && verdict.confidence >= SURE;
       await withTransaction(pool, async db => {
-        // still untouched since it was read (the owner may have edited or sent it meanwhile)
+        // still eligible and untouched since it was read: not edited, finished, archived, planned, moved to a private
+        // space or sent/withdrawn by the owner meanwhile (the row is locked from here to the send)
         const fresh = await db.query(
-          `UPDATE tasks SET ai_checked_at = now(), ai_coding = $2, ai_reason = $3 WHERE id = $1 AND ai_checked_at IS NULL
-             AND workflow_requested_at IS NULL AND title = $4 AND description IS NOT DISTINCT FROM $5 RETURNING id`,
+          `UPDATE tasks t SET ai_checked_at = now(), ai_coding = $2, ai_reason = $3 WHERE t.id = $1 AND t.ai_checked_at IS NULL
+             AND ${ELIGIBLE} AND t.title = $4 AND t.description IS NOT DISTINCT FROM $5 RETURNING t.id`,
           [task.id, verdict.coding, verdict.reason || null, task.title, task.description]);
         if (!fresh.rowCount || !send) return;
-        await setWorkflow(db, task.id, true, "ai", { by: "ai", enabled });
+        await setWorkflow(db, task.id, true, "ai", { by: "ai", enabled: state.enabled });
         sent++;
       });
     }
-    if (checked) status.lastError = null;
+    if (checked && !failed) status.lastError = null;
     Object.assign(status, { lastRunAt: new Date().toISOString(), checked: status.checked + checked, sent: status.sent + sent });
     return { checked, sent };
   }
