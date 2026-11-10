@@ -29,7 +29,7 @@ COPY backend/ai/ backend/ai/
 COPY backend/drizzle/ backend/drizzle/
 COPY backend/scripts/ backend/scripts/
 COPY --from=deps /build/backend/node_modules/ backend/node_modules/
-COPY frontend/index.html frontend/
+COPY frontend/index.html frontend/privacy.html frontend/
 COPY frontend/js/ frontend/js/
 COPY frontend/icons/ frontend/icons/
 COPY frontend/manifest.webmanifest frontend/sw.js frontend/

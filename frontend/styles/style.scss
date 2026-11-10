@@ -345,6 +345,10 @@
         }
         &__icon { flex: 0 0 auto; color: #e3ebe4; }
         &__tools { display: flex; margin-left: auto; .icon-btn { color: #dbe4dc; } }
+        // sort by priority, next to the count: dim until hovered or on
+        &__sort { flex: 0 0 auto; color: var(--faint); border: 1px solid transparent;
+            &:hover { color: var(--text); border-color: var(--border-strong); }
+            &.is-on { color: var(--accent); border-color: #b7e34d66; background: var(--accent-soft); } }
         // About four cards; longer columns scroll inside, so the board never becomes a page-long stack.
         &__cards {
             display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; min-height: 5.625rem; max-height: 45rem; align-content: start; overflow-y: auto;
@@ -798,6 +802,21 @@
         .mail:not(.is-reading) .mail__reader { display: none; }
         .mail__back { display: inline-flex; }
         .mail__reader { padding: 1rem; }
+    }
+
+    // ---- privacy policy (privacy.html): a plain readable page
+    body.legal-page { overflow: auto; }
+    .legal {
+        max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; color: var(--text); font-size: 1rem; line-height: 1.65;
+        h1 { margin: 0.5rem 0 0.25rem; font-size: 2rem; }
+        h2 { margin: 2rem 0 0.5rem; font-size: 1.25rem; }
+        p, li { color: #d5ded6; }
+        ul { padding-left: 1.25rem; display: grid; gap: 0.375rem; list-style: disc; }
+        li::marker { color: var(--accent); }
+        a { color: var(--accent); }
+        code { padding: 0 0.25rem; border-radius: 0.25rem; background: var(--surface-2); font-size: 0.875rem; }
+        &__brand { display: flex; align-items: center; gap: 0.625rem; margin: 0; font-weight: 800; font-size: 1.25rem; img { border-radius: 0.625rem; } }
+        &__meta { color: var(--muted) !important; font-size: 0.875rem; }
     }
 
     // ---- AI i Workflow (settings) --------------------------------------------------------------------------------

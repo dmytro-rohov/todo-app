@@ -67,6 +67,26 @@ try {
   await click('[data-action="clear-filters"]'); await click('.switch'); await sleep(600);
   check("on again: the column is back", await columns() === "todo,in_progress,needs_review,done,planned", await columns());
 
+  // sort a column by priority (P0 on top), back to the manual order, remembered on this device
+  const low = await api("/api/tasks", "POST", { title: "Niski na górze", date: today, priority: "P3", position: 1 });
+  const top = await api("/api/tasks", "POST", { title: "Krytyczny na dole", date: today, priority: "P0" });
+  await send("Page.reload"); await sleep(3500);
+  const order = () => ev(`[...document.querySelectorAll('.column--todo .card')].map(c => Number(c.dataset.id))`);
+  const manual = await order();
+  check("each column has a sort button next to its count", await ev(`document.querySelectorAll('.column__head .count + .column__sort').length`) >= 4);
+  await click('.column--todo [data-card="sort"]');
+  const sorted = await order();
+  const priorities = await ev(`[...document.querySelectorAll('.column--todo .card')].map(c => (c.querySelector('.chip--priority')?.className.match(/chip--p(\\d)/) || [0, "2"])[1]).join("")`);
+  check("sorting puts the highest priority on top", sorted[0] === top.id && priorities === [...priorities].sort().join(""), priorities);
+  check("…the button shows it is on", await ev(`document.querySelector('.column--todo [data-card="sort"]').getAttribute("aria-pressed")`) === "true");
+  check("…other columns keep their manual order", await ev(`document.querySelector('.column--in_progress [data-card="sort"]').getAttribute("aria-pressed")`) === "false");
+  await send("Page.reload"); await sleep(3500);
+  check("…and it is remembered", (await order())[0] === top.id);
+  await click('.column--todo [data-card="sort"]');
+  check("clicking again brings back the manual order", JSON.stringify(await order()) === JSON.stringify(manual));
+  await api(`/api/tasks/${low.id}`, "DELETE"); await api(`/api/tasks/${top.id}`, "DELETE");
+  await send("Page.reload"); await sleep(3000);
+
   const look = id => ev(`(() => { const c = document.querySelector('.card[data-id="${id}"]'); const s = getComputedStyle(c);
     return { bg: s.backgroundColor, pc: s.getPropertyValue("--pc").trim(), left: s.borderLeftColor, project: c.classList.contains("card--project") }; })()`);
   const tinted = await look(inProject.id), plain = await look(loose.id);

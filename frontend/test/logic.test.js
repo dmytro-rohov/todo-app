@@ -115,3 +115,10 @@ test("title rules: 3–100 characters, an unchanged historical title stays valid
   assert.equal(titleError("x".repeat(255), "x".repeat(255)), "");
   assert.match(titleError("x".repeat(101)), /3 do 100/);
 });
+
+test("byPriority: P0 first, the manual order kept within a priority", async () => {
+  const { byPriority } = await import("../js/app/logic.js");
+  const list = [{ id: 1, priority: "P2" }, { id: 2, priority: "P3" }, { id: 3, priority: "P0" }, { id: 4, priority: "P2" }, { id: 5, priority: "P1" }, { id: 6 }];
+  assert.deepEqual(byPriority(list).map(t => t.id), [3, 5, 1, 4, 6, 2]);
+  assert.deepEqual(list.map(t => t.id), [1, 2, 3, 4, 5, 6]); // not changed in place
+});

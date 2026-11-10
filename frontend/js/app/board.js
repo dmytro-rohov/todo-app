@@ -2,9 +2,9 @@
 import { api, sha256Hex } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { applyMove, boardCanonical, byPosition, columns, dueLabel, dueState, formatClock, formatDuration, goalLabel, initials, PRIORITY_LABELS, STATUSES,
+import { applyMove, byPriority, boardCanonical, byPosition, columns, dueLabel, dueState, formatClock, formatDuration, goalLabel, initials, PRIORITY_LABELS, STATUSES,
   STATUS_LABELS, trackedNow } from "./logic.js";
-import { lookup, reload, render, runTask, store, visibleTasks, workflowReady } from "./app.js";
+import { lookup, reload, render, runTask, savePrefs, store, visibleTasks, workflowReady } from "./app.js";
 import { openDrawer } from "./drawer.js";
 import { retentionNote } from "./archive.js";
 import { toast } from "./toast.js";
@@ -133,8 +133,17 @@ export function cardHtml(task) {
   </article>`;
 }
 
+// Next to the count: show the column by priority (P0 on top) or in the manual order; per device.
+function sortButtonHtml(status) {
+  const on = store.columnSort[status] === "priority";
+  const label = on ? "Kolejność według priorytetu (kliknij: kolejność ręczna)" : "Sortuj według priorytetu (najwyższy na górze)";
+  return `<button type="button" class="icon-btn icon-btn--sm column__sort${on ? " is-on" : ""}" data-card="sort" data-status="${status}"
+    aria-pressed="${on}" aria-label="${label}" title="${label}">${icon("sortPriority", 16)}</button>`;
+}
+
 export function renderBoard() {
   const cols = columns(visibleTasks());
+  for (const status of STATUSES) if (store.columnSort[status] === "priority") cols[status] = byPriority(cols[status]);
   // "Pokaż zakończone" off hides the whole Zakończone column (unless the status filter asks for finished tasks)
   const shown = store.filters.showDone || store.filters.status === "done" ? STATUSES : STATUSES.filter(s => s !== "done");
   return `<div class="board-wrap">
@@ -148,7 +157,7 @@ export function renderBoard() {
     <section class="column column--${status}" data-status="${status}" aria-label="${STATUS_LABELS[status]}">
       <header class="column__head">
         <span class="column__icon">${icon(COLUMN_ICONS[status], 22)}</span>
-        <h2>${STATUS_LABELS[status]}</h2><span class="count">${cols[status].length}</span>
+        <h2>${STATUS_LABELS[status]}</h2><span class="count">${cols[status].length}</span>${sortButtonHtml(status)}
         <span class="column__tools">
           <button type="button" class="icon-btn" data-action="new-task" data-status="${status}" aria-label="Dodaj zadanie do kolumny ${STATUS_LABELS[status]}">${icon("plus")}</button>
           <button type="button" class="icon-btn" data-card="only" data-status="${status}" aria-label="Pokaż tylko kolumnę ${STATUS_LABELS[status]}" title="Pokaż tylko tę kolumnę">${icon("more")}</button>
@@ -207,6 +216,13 @@ async function cardAction(button) {
   }
   if (kind === "to-todo") return moveTask(id, "todo", null);
   if (kind === "workflow") return sendToWorkflow(id);
+  if (kind === "sort") {
+    const status = button.dataset.status;
+    if (store.columnSort[status] === "priority") delete store.columnSort[status];
+    else store.columnSort[status] = "priority";
+    savePrefs();
+    return render();
+  }
   if (kind === "only") {
     store.filters.status = store.filters.status === button.dataset.status ? "" : button.dataset.status;
     return render();

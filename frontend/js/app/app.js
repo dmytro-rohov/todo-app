@@ -31,6 +31,8 @@ export const store = {
   clients: [],
   view: "board",
   listSort: "position",
+  // board columns shown by priority (P0 first) instead of the manual order, per status; kept on this device
+  columnSort: {},
   month: isoDay(),
   calendarDay: isoDay(),
   calendarMode: "month",
@@ -73,16 +75,19 @@ function loadPrefs() {
     if (Number.isInteger(saved.spaceId)) store.filters.spaceId = saved.spaceId;
     if (Number.isInteger(saved.projectId)) store.filters.projectId = saved.projectId;
     if (saved.listSort) store.listSort = saved.listSort;
+    if (saved.columnSort && typeof saved.columnSort === "object") {
+      store.columnSort = Object.fromEntries(Object.entries(saved.columnSort).filter(([, v]) => v === "priority"));
+    }
     if (typeof saved.sidebarCollapsed === "boolean") store.sidebarCollapsed = saved.sidebarCollapsed;
     if (saved.calendarMode === "week") store.calendarMode = "week";
   } catch { /* preferences are a convenience only */ }
 }
 
-function savePrefs() {
+export function savePrefs() {
   try {
     const { spaceId, projectId, showDone } = store.filters;
     localStorage.setItem(PREFS, JSON.stringify({ view: store.view, showDone, spaceId, projectId, listSort: store.listSort,
-      sidebarCollapsed: store.sidebarCollapsed, calendarMode: store.calendarMode }));
+      sidebarCollapsed: store.sidebarCollapsed, calendarMode: store.calendarMode, columnSort: store.columnSort }));
   } catch { /* ignore */ }
 }
 

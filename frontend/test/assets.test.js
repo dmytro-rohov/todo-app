@@ -110,3 +110,17 @@ test("the app is installable: manifest, icons and a service worker that never to
   assert.match(worker, /startsWith\("\/auth\/"\)/);
   assert.match(readFileSync(join(frontendDir, "js", "main.js"), "utf8"), /serviceWorker\.register\("\/sw\.js"\)/);
 });
+
+test("the privacy policy page (Google OAuth) is a static page in the image, outside the app shell cache key", () => {
+  const page = readFileSync(join(frontendDir, "privacy.html"), "utf8");
+  assert.match(page, /<link rel="stylesheet" href="\.\/dist\/style\.css">/);
+  assert.match(page, /Limited Use/);
+  assert.match(page, /calendar\.events/);
+  assert.match(page, /hello@mytko\.dev/);
+  assert.doesNotMatch(page, /<script|style="/); // CSP: no inline script or style
+  const root = join(frontendDir, "..");
+  assert.match(readFileSync(join(root, "Dockerfile"), "utf8"), /COPY frontend\/index\.html frontend\/privacy\.html frontend\//);
+  assert.match(readFileSync(join(root, ".dockerignore"), "utf8"), /^!frontend\/privacy\.html$/m);
+  // only the app's own navigations share the "/" cache entry
+  assert.match(readFileSync(join(frontendDir, "sw.js"), "utf8"), /path === "\/" \|\| path === "\/index\.html"/);
+});
