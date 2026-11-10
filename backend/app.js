@@ -3,6 +3,7 @@ const express = require("express");
 const createTasksRouter = require("./routes/tasks");
 const createCategoriesRouter = require("./routes/categories");
 const createSpacesRouter = require("./routes/spaces");
+const { createAvatarsRouter } = require("./routes/avatars");
 const createProjectsRouter = require("./routes/projects");
 const createAssigneesRouter = require("./routes/assignees");
 const createGoalsRouter = require("./routes/goals");
@@ -108,6 +109,8 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   // With AUTH_DISABLED (local development only) every request is the owner's.
   api.use((req, res, next) => { req.user ??= OWNER; next(); });
   api.use(csrf);
+  // pictures come as base64 JSON, larger than anything else: their own body limit, before the general one
+  api.use("/avatars", express.json({ limit: "200kb", inflate: false }), createAvatarsRouter(pool));
   api.use(json);
   // The owner's switches (AI on/off, task routing, the Workflow connection) and Claude's routing of tasks to Workflow.
   const settings = createSettings(pool, config.ai);

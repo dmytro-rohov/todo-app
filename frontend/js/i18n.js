@@ -74,13 +74,13 @@ const UK = {
   "Nowy wykonawca…": "Новий виконавець…", "Dodaj": "Додати", "Nazwa": "Назва", "Kolor": "Колір", "Usuń": "Видалити", "Wbudowana": "Вбудована",
   "Jeszcze nic tu nie ma.": "Тут поки нічого немає.", "Dla agentów": "Для агентів", "Wspólna": "Спільна", "wspólne": "спільне", "Karta": "Картка",
   "Tylko takie przestrzenie mogą kiedyś zobaczyć integracje i agenci AI": "Лише такі простори зможуть бачити інтеграції та агенти ШІ",
-  "Wspólną przestrzeń widzą i edytują wszystkie konta (np. Dom, zakupy)": "Спільний простір бачать і редагують усі облікові записи (напр., Дім, покупки)",
+  "Wspólną przestrzeń widzą i edytują osoby, które do niej dodasz lub zaprosisz": "Спільний простір бачать і редагують люди, яких ви до нього додасте або запросите",
   "Należy do innego konta, widoczna przez wspólną przestrzeń": "Належить іншому обліковому запису, видно через спільний простір",
   "Zarchiwizowany projekt znika z list, jego zadania zostają": "Архівований проєкт зникає зі списків, його завдання залишаються",
   "Praca i Prywatne są wbudowane: można zmienić ich nazwę i kolor, nie można ich usunąć. Zadania z usuniętej przestrzeni trafiają do Prywatnych. Każda przestrzeń może mieć własny Kalendarz Google.":
     "«Робота» і «Приватне» вбудовані: їх можна перейменувати й змінити колір, але не видалити. Завдання з видаленого простору потрапляють до «Приватне». Кожен простір може мати власний Google Календар.",
-  "Prywatne są wbudowane. Własne przestrzenie możesz oznaczyć jako wspólne: wtedy widzą je i edytują wszystkie konta. Przestrzenie oznaczone ikoną osób udostępnił ktoś inny.":
-    "«Приватне» вбудоване. Власні простори можна позначити спільними: тоді їх бачать і редагують усі облікові записи. Простори з іконкою людей надав хтось інший.",
+  "Prywatne są wbudowane. Własną przestrzeń możesz oznaczyć jako wspólną i zaprosić do niej kogoś kodem lub linkiem. Przestrzenie oznaczone ikoną osób udostępnił Ci ktoś inny.":
+    "«Приватне» вбудоване. Власний простір можна позначити спільним і запросити до нього когось кодом або посиланням. Простори з іконкою людей вам надав хтось інший.",
   "Projekt to folder klienta w jednej przestrzeni. Jego zadania dostają jego etykietę. Usunięcie projektu zostawia zadania bez projektu.":
     "Проєкт — це папка в одному просторі. Його завдання отримують його мітку. Видалення проєкту залишає завдання без проєкту.",
   "Etykiety można łączyć: zadanie może mieć kilka. Usunięcie etykiety zdejmuje ją ze wszystkich zadań.":
@@ -252,9 +252,48 @@ const UK = {
   "Niedostępne:": "Недоступно:", "Mytko Workflow nie odpowiada": "Mytko Workflow не відповідає", "logowanie kontem Mytko nie jest skonfigurowane": "вхід через обліковий запис Mytko не налаштовано",
   "Użyj loginu i hasła.": "Використайте логін і пароль.", "lead": "лід", "zablokowane": "заблоковано", "Zakończ": "Завершити",
   "nie są usuwane": "не видаляються", "karta zadania": "картка завдання",
-  "Tylko Ty zarządzasz kontami. Osoba z kontem widzi wyłącznie swoje zadania oraz przestrzenie oznaczone jako":
-    "Лише ви керуєте обліковими записами. Людина з обліковим записом бачить лише свої завдання та простори, позначені як",
-  "(np. Dom). Nie widzi klientów, spotkań ani Twoich przestrzeni.": "(напр., Дім). Не бачить клієнтів, зустрічей і ваших просторів.",
+  "Tylko Ty zarządzasz kontami. Osoba z kontem widzi wyłącznie swoje zadania oraz wspólne przestrzenie, do których ją dodasz albo zaprosisz (np. Dom). Nie widzi klientów, spotkań ani innych kont.":
+    "Лише ви керуєте обліковими записами. Людина з обліковим записом бачить лише свої завдання та спільні простори, до яких ви її додасте або запросите (напр., Дім). Не бачить клієнтів, зустрічей та інших облікових записів.",
+  // shared spaces: people, invitation codes, joining; account pictures
+  "Kto jest w tej przestrzeni": "Хто є в цьому просторі", "Osoby": "Люди", "Mam kod zaproszenia": "Маю код запрошення",
+  "Masz kod od kogoś? Dołącz nim do jego przestrzeni.": "Маєте код від когось? Приєднайтеся ним до його простору.",
+  "Wspólną przestrzeń widzą i edytują tylko osoby, które do niej dodasz z listy kont albo zaprosisz kodem lub linkiem.":
+    "Спільний простір бачать і редагують лише люди, яких ви додасте зі списку облікових записів або запросите кодом чи посиланням.",
+  "Usuń z przestrzeni": "Видалити з простору", "zarządza przestrzenią": "керує простором", "w przestrzeni": "у просторі",
+  "zarządza przestrzenią · to Ty": "керує простором · це ви", "w przestrzeni · to Ty": "у просторі · це ви",
+  "Wspólną przestrzeń widzą i edytują tylko osoby z tej listy. Gdy ktoś odchodzi, jego zadania wracają do jego Prywatnych.":
+    "Спільний простір бачать і редагують лише люди з цього списку. Коли хтось іде, його завдання повертаються до його «Приватне».",
+  "Ta przestrzeń należy do innego konta. Widzisz i edytujesz ją razem z osobami z tej listy.":
+    "Цей простір належить іншому обліковому запису. Ви бачите й редагуєте його разом із людьми з цього списку.",
+  "Twoje konta": "Ваші облікові записи",
+  "Nie masz jeszcze innych kont. Dodasz je w Porządek → Konta albo zaprosisz kogoś kodem.":
+    "У вас ще немає інших облікових записів. Додайте їх у «Порядок → Облікові записи» або запросіть когось кодом.",
+  "Zaproś kodem lub linkiem": "Запросити кодом або посиланням", "Opuść przestrzeń": "Вийти з простору", "Opuść": "Вийти",
+  "Przekaż ten kod albo link jednej osobie. Po wpisaniu kodu (lub otwarciu linku) od razu dołączy do przestrzeni. Kod widzisz tylko teraz.":
+    "Передайте цей код або посилання одній людині. Після введення коду (або відкриття посилання) вона одразу приєднається до простору. Код видно лише зараз.",
+  "Kod zaproszenia": "Код запрошення", "Udostępnij": "Поділитися", "Kopiuj link": "Копіювати посилання", "Kopiuj kod": "Копіювати код",
+  "Link zaproszenia": "Посилання запрошення", "Czekające kody": "Коди, що очікують", "ten powyżej": "той, що вище", "Wycofaj kod": "Відкликати код",
+  "Link skopiowany.": "Посилання скопійовано.", "Kod skopiowany.": "Код скопійовано.", "Kod wycofany.": "Код відкликано.",
+  "Nie udało się skopiować. Zaznacz i skopiuj ręcznie.": "Не вдалося скопіювати. Виділіть і скопіюйте вручну.",
+  "Dołącz do wspólnej przestrzeni": "Приєднатися до спільного простору", "Sprawdź kod": "Перевірити код", "Dołącz": "Приєднатися",
+  "Już jesteś w tej przestrzeni.": "Ви вже в цьому просторі.",
+  "Zdjęcie profilowe": "Фото профілю", "Usuń zdjęcie": "Видалити фото", "Zmień zdjęcie": "Змінити фото", "Wybierz zdjęcie": "Вибрати фото",
+  "Każde zdjęcie zmniejszamy i zapisujemy jako małe, okrągłe zdjęcie. Widzisz je Ty, osoby ze wspólnych przestrzeni i administrator.":
+    "Кожне фото зменшуємо й зберігаємо як невелике кругле фото. Його бачите ви, люди зі спільних просторів і адміністратор.",
+  "Zdjęcie zapisane.": "Фото збережено.", "Zdjęcie usunięte.": "Фото видалено.",
+  "Nie udało się odczytać tego zdjęcia. Wybierz inne (JPG, PNG, WebP, HEIC z iPhone'a).": "Не вдалося прочитати це фото. Виберіть інше (JPG, PNG, WebP, HEIC з iPhone).",
+  "Przesuń zdjęcie palcem lub myszką i przybliż je: zapisze się to, co jest w kółku.": "Пересуньте фото пальцем або мишею й наблизьте: збережеться те, що в колі.",
+  "Kadrowanie zdjęcia": "Кадрування фото", "Przybliżenie": "Наближення", "Zapisz zdjęcie": "Зберегти фото",
+  "Nie udało się zapisać tego zdjęcia. Wybierz inne.": "Не вдалося зберегти це фото. Виберіть інше.",
+  "Ten kod nie działa: jest błędny, już użyty, wycofany albo wygasł.": "Цей код не працює: він помилковий, уже використаний, відкликаний або прострочений.",
+  "Za dużo błędnych kodów. Spróbuj ponownie za 15 minut.": "Забагато помилкових кодів. Спробуйте знову через 15 хвилин.",
+  "Ta przestrzeń ma już 20 czekających kodów. Wycofaj któryś.": "Цей простір уже має 20 кодів, що очікують. Відкличте якийсь.",
+  "W tej przestrzeni jest już komplet osób.": "У цьому просторі вже повний склад.", "To konto już jest w tej przestrzeni.": "Цей обліковий запис уже в цьому просторі.",
+  "Nie można dodać tego konta.": "Не можна додати цей обліковий запис.", "Tej osoby już nie ma w przestrzeni.": "Цієї людини вже немає в просторі.",
+  "Tego kodu już nie ma.": "Цього коду вже немає.", "Ta przestrzeń już nie istnieje albo nie masz do niej dostępu.": "Цей простір уже не існує або ви не маєте до нього доступу.",
+  "Wbudowanych przestrzeni (Praca, Prywatne) nie można udostępniać.": "Вбудованими просторами («Робота», «Приватне») не можна ділитися.",
+  "Tego zdjęcia nie da się zapisać. Wybierz inne.": "Це фото не можна зберегти. Виберіть інше.",
+  "Zadanie może trafić tylko do przestrzeni, którą widzi jego autor.": "Завдання може потрапити лише до простору, який бачить його автор."
 };
 
 // Sentences with names or numbers in them: [Polish pattern, Ukrainian template with $1, $2…, where]. "attr" patterns only
@@ -309,6 +348,12 @@ const PATTERNS = [
   [/^usuwane na zawsze po (\d+) dniach w archiwum$/, (m, days) => rule(m)],
   [/^(.+) · wiadomości, zadania i leady z e-maili$/, (m, box) => `${UK[box] || box} · листи, завдання й ліди з ел. пошти`],
   [/^Spotkanie: (.+)$/, "Зустріч: $1", "attr"],
+  [/^Osoby w „(.+)”$/, "Люди в «$1»"], [/^Zaproszenie do „(.+)”$/, "Запрошення до «$1»"], [/^Usuń z przestrzeni: (.+)$/, "Видалити з простору: $1", "attr"],
+  [/^Opuścić „(.+)”\? Przestrzeń zniknie z Twojej tablicy, a Twoje zadania z niej wrócą do Twoich Prywatnych\.$/,
+    "Вийти з «$1»? Простір зникне з вашої дошки, а ваші завдання з нього повернуться до вашого «Приватне»."],
+  [/^Opuszczono „(.+)”\.$/, "Ви вийшли з «$1»."], [/^Dołączono do „(.+)”\.$/, "Ви приєдналися до «$1»."],
+  [/^Usunąć (.+) z „(.+)”\? Zadania tej osoby z tej przestrzeni wrócą do jej Prywatnych\.$/, "Видалити $1 з «$2»? Завдання цієї людини з цього простору повернуться до її «Приватне»."],
+  [/^Jednorazowy, ważny do (.+)\.$/, "Одноразовий, дійсний до $1."], [/^Ważny do (.+)$/, "Дійсний до $1"], [/^Osób w przestrzeni: (\d+)$/, "Людей у просторі: $1"],
   [/^(\d+) min temu$/, "$1 хв тому"], [/^(\d+) godz\. temu$/, "$1 год тому"],
   [/^Ostatnia analiza: (.+) · do wysłania: (\d+) · wysłane przez AI: (\d+)$/, (m, when, todo, sent) => `Останній аналіз: ${UK[when] || when.replace(/^(\d+) min temu$/, "$1 хв тому").replace(/^(\d+) godz\. temu$/, "$1 год тому")} · до надсилання: ${todo} · надіслано AI: ${sent}`],
   [/^Sprawdzone zadania: (\d+), wysłane do Workflow: (\d+)\.$/, "Перевірено завдань: $1, надіслано до Workflow: $2."],
@@ -324,7 +369,7 @@ const PATTERNS = [
 const PROTECTED = [
   '[translate="no"]', ".card__title", ".row__title", ".agenda__title", ".subtasks span", ".notes p", ".event", ".week__event span",
   ".client-row > span", ".chip--client", ".chip--project", ".chip--label", '[data-action="scope"].nav-item--sub > span', '[data-action="client-scope"] > span:not(.folder)', ".crumb:not(.crumb--home)",
-  ".account__text strong", ".mail-row__from", ".mail-row__subject", ".mail-row__snippet", ".mail__reader h2", ".mail__from strong",
+  ".account__text strong", ".person__name", ".join-space strong", ".mail-row__from", ".mail-row__subject", ".mail-row__snippet", ".mail__reader h2", ".mail__from strong",
   ".mail__body", ".mail-proposals strong", ".brief__section > p", ".timer-dock__text strong", ".popover__item > span:last-child", ".goal__title", ".goal__desc",
 ].join(", ");
 const BUILT_IN = new Set(["Praca", "Prywatne"]);

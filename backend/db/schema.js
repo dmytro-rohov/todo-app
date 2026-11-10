@@ -51,7 +51,7 @@ const spaces = pgTable("spaces", {
   createdAt: timestamptz("created_at").defaultNow().notNull(),
   // A member's own spaces carry user_id; a member's built-in private space has key "private:<user id>".
   userId: ownerColumn(),
-  // Shared spaces (e.g. "Dom") are seen and edited by every account.
+  // A shared space (e.g. "Dom") is seen and edited by its creator and the accounts in space_members.
   shared: boolean("shared").default(false).notNull(),
 }, (table) => [
   check("spaces_position_check", sql`${table.position} >= 0`),
@@ -363,7 +363,52 @@ const appSettings = pgTable("app_settings", {
   updatedAt: timestamptz("updated_at").defaultNow().notNull(),
 });
 
+// Who besides its creator is in a shared space: accounts the owner picked from the list, or anyone who joined with an
+// invitation code. user_id NULL is the owner (in a member's space): at most one such row per space.
+const spaceMembers = pgTable("space_members", {
+  id: serial("id").primaryKey(),
+  spaceId: integer("space_id").notNull().references(() => spaces.id, { onDelete: "cascade" }),
+  userId: ownerColumn(),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("space_members_member").on(table.spaceId, table.userId).where(sql`${table.userId} IS NOT NULL`),
+  uniqueIndex("space_members_owner").on(table.spaceId).where(sql`${table.userId} IS NULL`),
+  index("space_members_user").on(table.userId),
+]);
+
+// One-time invitation codes to a shared space, made by its creator: only the code's sha256 is kept, for 7 days.
+// used_at set = used (used_by NULL then is the owner).
+const spaceInvites = pgTable("space_invites", {
+  id: serial("id").primaryKey(),
+  spaceId: integer("space_id").notNull().references(() => spaces.id, { onDelete: "cascade" }),
+  codeHash: varchar("code_hash", { length: 64 }).notNull(),
+  expiresAt: timestamptz("expires_at").notNull(),
+  usedAt: timestamptz("used_at"),
+  usedBy: integer("used_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("space_invites_code").on(table.codeHash),
+  index("space_invites_space").on(table.spaceId),
+  index("space_invites_used_by").on(table.usedBy),
+]);
+
+// Account pictures: a small square (WebP or JPEG, base64), shown round. account: "owner" or "user:<id>" (the owner is
+// not a users row); user_id carries the member for the cascade on delete.
+const avatars = pgTable("avatars", {
+  account: varchar("account", { length: 24 }).primaryKey(),
+  userId: ownerColumn(),
+  mime: varchar("mime", { length: 20 }).notNull(),
+  data: text("data").notNull(),
+  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("avatars_mime_check", sql`${table.mime} IN ('image/webp', 'image/jpeg')`),
+  index("avatars_user").on(table.userId),
+]);
+
 module.exports = {
+  avatars,
+  spaceMembers,
+  spaceInvites,
   appSettings,
   goals,
   meetingBriefs,

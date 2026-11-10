@@ -3,13 +3,15 @@ import { api } from "../api/client.js";
 import { logout, markLoggedOut } from "../auth/login.js";
 import { escapeHtml, safeColor } from "../utils/helpers.js";
 import { icon } from "./icons.js";
-import { counters, filterTasks, initials, isOpen, isoDay, STATUS_LABELS, formatClock, trackedNow } from "./logic.js";
+import { counters, filterTasks, isOpen, isoDay, STATUS_LABELS, formatClock, trackedNow } from "./logic.js";
 import { renderBoard, bindBoard, tickTimers, timerData, updatePeek } from "./board.js";
 import { renderList, bindList } from "./list.js";
 import { renderCalendar, bindCalendar, afterCalendarRender } from "./calendar.js";
 import { calendarState, eventTime, loadCalendarAccounts, loadToday, openMeeting } from "./meetings.js";
 import { openClient } from "./clients.js";
 import { openAccounts, openPassword } from "./accounts.js";
+import { avatarHtml, openAvatarMenu } from "./avatar.js";
+import { openJoin, rememberJoinLink, takeJoinLink } from "./sharing.js";
 import { bindMail, loadMail, mailAddress, mailBadge, renderMail, showMail } from "./mail.js";
 import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { afterGoalsRender, bindGoals, renderGoals } from "./goals.js";
@@ -128,6 +130,8 @@ export function paint(element) {
 
 // A member account (not the owner, the only administrator): the task app without clients, meetings and accounts.
 export const isMember = () => store.session?.user?.role === "member";
+// The signed-in account as a person (avatar.js): id null is the owner.
+const me = () => ({ id: store.session?.user?.id ?? null, name: store.session?.user?.name || store.session?.login || "", avatarAt: store.session?.user?.avatarAt ?? null });
 
 // Tasks can go to the Mytko Workflow ToDo: the owner, with the connection set up on the server and not turned off in
 // Porządek → AI i Workflow (store.settings, GET /api/settings).
@@ -246,7 +250,7 @@ function sidebarHtml() {
     </nav>
     <div class="sidebar__foot">
       <div class="profile">
-        <span class="avatar avatar--lime">${escapeHtml(initials(user))}</span>
+        <button type="button" class="avatar-edit" data-action="avatar" aria-label="Zdjęcie profilowe" title="Zdjęcie profilowe">${avatarHtml(me(), "avatar--lime")}<span class="avatar-edit__badge" aria-hidden="true">${icon("camera", 12)}</span></button>
         <span class="profile__text"><strong>${escapeHtml(user)}</strong><small>${isMember() ? escapeHtml(store.session.login) : store.session?.method === "mytko" ? "Administrator · konto Mytko" : "Administrator"}</small></span>
         ${isMember() ? `<button type="button" class="icon-btn" data-action="password" aria-label="Zmień hasło" title="Zmień hasło">${icon("lock")}</button>` : ""}
         <button type="button" class="icon-btn" data-action="logout" aria-label="Wyloguj" title="Wyloguj">${icon("logout")}</button>
@@ -501,6 +505,8 @@ async function handleAction(target, event) {
     openAiSettings();
   } else if (action === "language") {
     openLanguageDialog();
+  } else if (action === "avatar") {
+    openAvatarMenu({ person: me(), onChange: avatarAt => { store.session.user = { ...store.session.user, avatarAt }; render(); } });
   } else if (action === "accounts") {
     openAccounts();
   } else if (action === "password") {
@@ -607,7 +613,11 @@ export function startApp(element, session, { notice = null } = {}) {
 
   window.matchMedia("(max-width: 600px)").addEventListener("change", () => render());
   // Links (#calendar, #task-12, #manage-spaces…) also work in an open tab.
-  window.addEventListener("hashchange", () => { const view = store.view; readLink(); if (store.view !== view) render(); openLink(); });
+  window.addEventListener("hashchange", () => {
+    const code = rememberJoinLink(); // "#join=CODE": an invitation link opened in this tab
+    if (code) { takeJoinLink(); return openJoin(code); }
+    const view = store.view; readLink(); if (store.view !== view) render(); openLink();
+  });
   bindBoard(root);
   bindList(root);
   bindCalendar(root);
@@ -615,7 +625,8 @@ export function startApp(element, session, { notice = null } = {}) {
   bindGoals(root);
   bindMail(root);
   render();
-  const ready = reload();
+  // an invitation link ("#join=CODE", kept across signing in) opens once the board is there
+  const ready = reload().then(() => { const code = takeJoinLink(); if (code) openJoin(code); });
   loadArchive();
   if (!isMember()) {
     loadCalendarAccounts().then(loadToday).then(render);

@@ -19,7 +19,19 @@ const MESSAGES = {
   "Only open tasks can be timed": "Licznik działa tylko dla otwartych zadań.",
   "Board changed; refresh and retry": "Tablica zmieniła się w międzyczasie. Spróbuj ponownie.",
   "Task not found": "To zadanie już nie istnieje.",
-  "Invalid labels": "Zadanie może mieć najwyżej 10 różnych etykiet."
+  "Invalid labels": "Zadanie może mieć najwyżej 10 różnych etykiet.",
+  "Invalid code": "Ten kod nie działa: jest błędny, już użyty, wycofany albo wygasł.",
+  "Too many attempts": "Za dużo błędnych kodów. Spróbuj ponownie za 15 minut.",
+  "Too many invitations": "Ta przestrzeń ma już 20 czekających kodów. Wycofaj któryś.",
+  "Too many members": "W tej przestrzeni jest już komplet osób.",
+  "Already a member": "To konto już jest w tej przestrzeni.",
+  "Invalid member": "Nie można dodać tego konta.",
+  "Member not found": "Tej osoby już nie ma w przestrzeni.",
+  "Invitation not found": "Tego kodu już nie ma.",
+  "Space not found": "Ta przestrzeń już nie istnieje albo nie masz do niej dostępu.",
+  "Built-in spaces cannot be shared": "Wbudowanych przestrzeni (Praca, Prywatne) nie można udostępniać.",
+  "Invalid photo": "Tego zdjęcia nie da się zapisać. Wybierz inne.",
+  "A task can only move to a shared space or a space of its creator": "Zadanie może trafić tylko do przestrzeni, którą widzi jego autor."
 };
 
 export class ApiError extends Error {

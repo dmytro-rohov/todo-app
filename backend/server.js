@@ -4,6 +4,7 @@ const { createApp } = require("./app");
 const { listMigrations } = require("./migrations");
 const { scheduleRetention } = require("./retention");
 const { scheduleCalendarSync } = require("./calendar-sync");
+const { adoptSharedSpaces } = require("./routes/spaces");
 
 let config;
 try {
@@ -31,6 +32,16 @@ pool.query("SELECT 1").then(
   (error) => console.error("Database not reachable yet:", "database operation failed")
 );
 
+// Spaces shared before space members existed keep everybody in them (once; retried until the database answers).
+let adoptTimer = null;
+function adopt() {
+  adoptSharedSpaces(pool).then(
+    added => { if (added) console.log(`Shared spaces: ${added} memberships kept from before`); },
+    () => { adoptTimer = setTimeout(adopt, 30000); adoptTimer.unref(); }
+  );
+}
+adopt();
+
 let shuttingDown = false;
 
 function shutdown(signal) {
@@ -52,6 +63,7 @@ function shutdown(signal) {
     stop();
     retention.stop();
     calendarSync.stop();
+    clearTimeout(adoptTimer);
     try {
       await pool.end();
     } catch (poolError) {

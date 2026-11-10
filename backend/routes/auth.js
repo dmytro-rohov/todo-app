@@ -5,6 +5,7 @@ const express = require("express");
 const { readCookie } = require("../sessions");
 const { ownerSession, hashPassword, parsePasswordHash, verifyPassword } = require("../security");
 const { passwordProblem } = require("../users");
+const { avatarVersion } = require("./avatars");
 
 const MAX_LOGIN = 200;
 const MAX_PASSWORD = 1024;
@@ -35,6 +36,13 @@ function createAuthRouter({ credentials, sessions, cookie, authDisabled = false,
     return state({ login, method, expiresAt }, false, user);
   }
 
+  // The signed-in account's id (null: the owner) and picture version (the app shows it in the sidebar).
+  async function withAvatar(body, user) {
+    if (body.user) body.user.id = user ? user.id : null;
+    if (body.user && pool) body.user.avatarAt = await avatarVersion(pool, user);
+    return body;
+  }
+
   async function signedIn(req) {
     const session = await sessions.verify(readCookie(req, cookie.name));
     if (ownerSession(session, { username: credentials.username, ssoLogin })) return { session, user: null };
@@ -43,9 +51,9 @@ function createAuthRouter({ credentials, sessions, cookie, authDisabled = false,
   }
 
   router.get("/session", async (req, res) => {
-    if (authDisabled) return res.json({ ...state({ login: "dev", method: "password", expiresAt: null }) });
+    if (authDisabled) return res.json(await withAvatar(state({ login: "dev", method: "password", expiresAt: null }), null));
     const { session, user } = await signedIn(req);
-    res.json(state(session, !session && mytkoLogin && workflowUp ? await workflowUp() : false, user));
+    res.json(await withAvatar(state(session, !session && mytkoLogin && workflowUp ? await workflowUp() : false, user), user));
   });
 
   router.post("/login", async (req, res) => {

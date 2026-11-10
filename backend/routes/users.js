@@ -1,22 +1,24 @@
 // Member accounts, managed by the owner (mounted behind ownerOnly). A new member gets an empty board with their own
-// private space; shared spaces show up for them automatically.
+// private space; a shared space shows up for them once they are put in it or join it with a code.
 const express = require("express");
 const { withTransaction } = require("../db");
 const { hashPassword } = require("../security");
 const { validateUser, USER_COLUMNS, MAX_USERS } = require("../users");
-const { defaultSpaces } = require("../spaces");
+const { defaultSpaces, keepOwnReferences } = require("../spaces");
 const { memberUser } = require("../access");
 const { recordTaskChanges } = require("../task-history");
 const { parseId } = require("../validation");
 
-const LIST_COLUMNS = `${USER_COLUMNS}, (SELECT count(*)::int FROM tasks t WHERE t.user_id = users.id AND t.archived_at IS NULL) AS "openTasks"`;
+const LIST_COLUMNS = `${USER_COLUMNS}, (SELECT count(*)::int FROM tasks t WHERE t.user_id = users.id AND t.archived_at IS NULL) AS "openTasks",
+  (SELECT floor(extract(epoch FROM a.updated_at) * 1000)::bigint FROM avatars a WHERE a.account = 'user:' || users.id) AS "avatarAt"`;
+const present = row => (row ? { ...row, avatarAt: row.avatarAt === null ? null : Number(row.avatarAt) } : null);
 
 module.exports = function createUsersRouter(pool, { sessions, reserved }) {
   const router = express.Router();
-  const read = async id => (await pool.query(`SELECT ${LIST_COLUMNS} FROM users WHERE id = $1`, [id])).rows[0] || null;
+  const read = async id => present((await pool.query(`SELECT ${LIST_COLUMNS} FROM users WHERE id = $1`, [id])).rows[0]);
 
   router.get("/", async (req, res) => {
-    res.json((await pool.query(`SELECT ${LIST_COLUMNS} FROM users ORDER BY lower(name), id`)).rows);
+    res.json((await pool.query(`SELECT ${LIST_COLUMNS} FROM users ORDER BY lower(name), id`)).rows.map(present));
   });
 
   router.post("/", async (req, res) => {
@@ -78,6 +80,7 @@ module.exports = function createUsersRouter(pool, { sessions, reserved }) {
       for (const row of kept.rows) {
         await recordTaskChanges(db, row.id, [{ field: "space_id", oldValue: row.old_space === null ? null : String(row.old_space), newValue: String(row.space_id) }], "accounts");
       }
+      await keepOwnReferences(db, kept.rows.map(row => row.id), "accounts", recordTaskChanges);
       await db.query("DELETE FROM tasks WHERE user_id = $1", [id]);
       await db.query("DELETE FROM projects WHERE user_id = $1 OR space_id IN (SELECT id FROM spaces WHERE user_id = $1)", [id]);
       await db.query("DELETE FROM spaces WHERE user_id = $1", [id]);

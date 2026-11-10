@@ -4,6 +4,7 @@ function shared() {
   try { return localStorage; } catch { return null; }
 }
 import { startApp } from "./app/app.js";
+import { rememberJoinLink } from "./app/sharing.js";
 import { finishStartup, markWelcome, startupStep } from "./startup.js";
 import { applyScale } from "./ui-scale.js";
 import { startTranslation } from "./i18n.js";
@@ -15,6 +16,7 @@ const authRoot = document.querySelector("#auth");
 const appRoot = document.querySelector("#app");
 
 async function start() {
+  rememberJoinLink(); // "#join=CODE": kept for after signing in
   let state;
   try {
     state = await getSession();
@@ -36,7 +38,7 @@ async function start() {
     authRoot.hidden = false;
     renderLogin(authRoot, state, {
       notice: ssoNotice(window.location.search),
-      onAuthenticated: () => { markWelcome(); window.location.replace(window.location.pathname); }
+      onAuthenticated: () => { markWelcome(); window.location.replace(window.location.pathname + (/^#join=/.test(window.location.hash) ? window.location.hash : "")); }
     });
     return finishStartup();
   }

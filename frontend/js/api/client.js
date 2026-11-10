@@ -1,5 +1,5 @@
 // Every call the app makes. All go through request() (http.js): JSON, timeouts, ApiError, session-ended event.
-import { request } from "./http.js";
+import { API_BASE, request } from "./http.js";
 
 const json = (method, body) => ({ method, body });
 
@@ -59,6 +59,19 @@ export const api = {
   assignBrief: (id, eventId) => request(`/api/briefs/${id}`, json("PATCH", { eventId })),
 
   changePassword: (current, next) => request("/api/auth/password", json("POST", { current, next })),
+  // account pictures: one's own set or removed; anyone's (who may see it) by id (null = the owner), its version in the address
+  setAvatar: image => request("/api/avatars/me", { ...json("PUT", { image }), timeoutMs: 30000 }),
+  deleteAvatar: () => request("/api/avatars/me", { method: "DELETE" }),
+  avatarUrl: (id, version) => `${API_BASE}/api/avatars/${id === null || id === undefined ? "owner" : Number(id)}?v=${Number(version)}`,
+  // a shared space's people, the owner adding an account, taking out / leaving ("me"), invitation codes, joining
+  spaceMembers: id => request(`/api/spaces/${Number(id)}/members`),
+  addSpaceMember: (id, userId) => request(`/api/spaces/${Number(id)}/members`, json("POST", { userId })),
+  removeSpaceMember: (id, who) => request(`/api/spaces/${Number(id)}/members/${who === "me" || who === null ? (who ?? "owner") : Number(who)}`, { method: "DELETE" }),
+  createInvite: id => request(`/api/spaces/${Number(id)}/invites`, json("POST", {})),
+  spaceInvites: id => request(`/api/spaces/${Number(id)}/invites`),
+  withdrawInvite: (id, inviteId) => request(`/api/spaces/${Number(id)}/invites/${Number(inviteId)}`, { method: "DELETE" }),
+  joinPreview: code => request("/api/spaces/join/preview", json("POST", { code })),
+  joinSpace: code => request("/api/spaces/join", json("POST", { code })),
 
   list: kind => request(`/api/${kind}`),
   create: (kind, body) => request(`/api/${kind}`, json("POST", body)),
