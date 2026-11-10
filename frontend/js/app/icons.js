@@ -27,6 +27,8 @@ const PATHS = {
   more: '<path d="M6 12h.01M12 12h.01M18 12h.01"/>',
   chevronDown: '<path d="m7 10 5 5 5-5"/>',
   chevronLeft: '<path d="m14.5 6-6 6 6 6"/>',
+  // The same panel glyph as Mytko Finance and Mytko Workflow for collapsing the sidebar.
+  sidebar: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9 4.5v15"/>',
   chevronRight: '<path d="m9.5 6 6 6-6 6"/>',
   sortPriority: '<path d="M4 6.5h9M4 12h6.5M4 17.5h4"/><path d="M17.5 5v13.5M14.5 15.5l3 3 3-3"/>',
   sparkles: '<path d="M12 4.5 13.6 9l4.4 1.6-4.4 1.6L12 16.7l-1.6-4.5L6 10.6 10.4 9z"/><path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',

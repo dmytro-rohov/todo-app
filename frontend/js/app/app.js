@@ -215,7 +215,7 @@ function sidebarHtml() {
       <span><strong>Mytko</strong><small>Tasks</small></span>
       <button type="button" class="icon-btn sidebar__close" data-action="sidebar-close" aria-label="Zamknij menu">${icon("x")}</button>
       <button type="button" class="icon-btn sidebar__collapse" data-action="sidebar-collapse" aria-pressed="${store.sidebarCollapsed}"
-        aria-label="${store.sidebarCollapsed ? "Rozwiń panel boczny" : "Zwiń panel boczny"}" title="${store.sidebarCollapsed ? "Rozwiń panel" : "Zwiń panel"}">${icon(store.sidebarCollapsed ? "chevronRight" : "chevronLeft")}</button>
+        aria-label="${store.sidebarCollapsed ? "Rozwiń panel boczny" : "Zwiń panel boczny"}" title="${store.sidebarCollapsed ? "Rozwiń panel" : "Zwiń panel"}">${icon("sidebar")}</button>
     </div>
     <nav class="sidebar__nav" aria-label="Przestrzenie i projekty">
       <button type="button" class="nav-item${!filters.spaceId && !filters.projectId ? " is-active" : ""}" data-action="scope" data-space="" data-project="" title="Wszystkie zadania">
