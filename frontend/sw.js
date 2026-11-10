@@ -4,11 +4,13 @@
  *   is cached.
  * - Everything else of this origin (the app shell, /js, /dist, /icons, the manifest): network first, revalidated
  *   (cache: "no-cache"), so a release is picked up on the next load. Only when the network is down or the server
- *   answers 5xx (e.g. during a release) the last good copy is served, so the installed app still opens and shows
- *   its own "no connection" message.
+ *   answers 5xx the last good copy is served, so the installed app still opens and shows its own "no connection"
+ *   message.
+ * - Exception: a page load answered by the proxy's release page (5xx with X-Mytko-Maintenance, a deploy in progress)
+ *   shows that page. It tells the visitor what is happening and reloads itself once the app is back.
  * - VERSION changes only when this file's logic changes; old caches with the PREFIX are dropped on activation.
  */
-const VERSION = "2";
+const VERSION = "3";
 const PREFIX = "mytko-tasks-";
 const CACHE = `${PREFIX}shell-v${VERSION}`;
 
@@ -34,7 +36,11 @@ async function networkFirst(event) {
   const key = request.mode === "navigate" && (path === "/" || path === "/index.html") ? "/" : request;
   try {
     const response = await fetch(request, { cache: "no-cache" });
-    if (response.status >= 500) throw new Error("server unavailable");
+    if (response.status >= 500) {
+      // the proxy's release page (deploy in progress): show it rather than the cached shell; it reloads itself
+      if (request.mode === "navigate" && response.headers.has("X-Mytko-Maintenance")) return response;
+      throw new Error("server unavailable");
+    }
     if (cacheable(response)) {
       const copy = response.clone();
       event.waitUntil(caches.open(CACHE).then(cache => cache.put(key, copy)).catch(() => undefined));
