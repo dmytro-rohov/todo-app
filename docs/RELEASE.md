@@ -43,3 +43,5 @@ usual. The release then contains exactly that `main` plus the Session's own smal
 **Release 3** (Ukrainian, board fixes, Cele / Marzenia; migration 0010): see [RELEASE-3.md](RELEASE-3.md).
 
 **Release 4** (tasks to Workflow by hand or by AI, AI and Workflow switches; migration 0011): see [RELEASE-4.md](RELEASE-4.md).
+
+**Release 5** (sort columns by priority, privacy policy page; no migration): see [RELEASE-5.md](RELEASE-5.md).
