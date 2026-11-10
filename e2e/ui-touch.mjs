@@ -11,6 +11,9 @@ let target; for (let i = 0; i < 50 && !target; i++) { await sleep(200); try { ta
 ws = new WebSocket(target.webSocketDebuggerUrl); await new Promise(r => ws.addEventListener("open", r));
 ws.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description); });
 await send("Runtime.enable");
+  await send("Page.enable");
+  // e2e checks the Polish texts: a fresh test profile starts in Polish (Ukrainian is the default on a new device)
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (localStorage.getItem('mytko-tasks:lang') === null) localStorage.setItem('mytko-tasks:lang', 'pl'); } catch {}" });
 await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
 await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
 await send("Page.navigate", { url: BASE + "/#board" }); await sleep(2500);

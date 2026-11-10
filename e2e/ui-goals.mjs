@@ -41,6 +41,9 @@ try {
       else send("Fetch.continueRequest", { requestId: m.params.requestId });
     } });
   await send("Runtime.enable");
+  await send("Page.enable");
+  // e2e checks the Polish texts: a fresh test profile starts in Polish (Ukrainian is the default on a new device)
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (localStorage.getItem('mytko-tasks:lang') === null) localStorage.setItem('mytko-tasks:lang', 'pl'); } catch {}" });
   await send("Page.navigate", { url: BASE + "/" }); await sleep(3500);
   await click('[data-view="goals"]'); await sleep(800);
   check("the tab opens the current month's list", await ev(`document.querySelector('.goals__head h2')?.textContent.trim()`) === `${["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"][month - 1]} ${year}`,
