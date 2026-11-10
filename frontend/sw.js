@@ -8,7 +8,7 @@
  *   its own "no connection" message.
  * - VERSION changes only when this file's logic changes; old caches with the PREFIX are dropped on activation.
  */
-const VERSION = "1";
+const VERSION = "2";
 const PREFIX = "mytko-tasks-";
 const CACHE = `${PREFIX}shell-v${VERSION}`;
 
@@ -29,7 +29,9 @@ function cacheable(response) {
 
 async function networkFirst(event) {
   const { request } = event;
-  const key = request.mode === "navigate" ? "/" : request;
+  // the app is one page: its navigations share the "/" entry; another page (privacy.html) keeps its own
+  const path = new URL(request.url).pathname;
+  const key = request.mode === "navigate" && (path === "/" || path === "/index.html") ? "/" : request;
   try {
     const response = await fetch(request, { cache: "no-cache" });
     if (response.status >= 500) throw new Error("server unavailable");

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Polityka prywatności – Mytko</title>
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+<link rel="stylesheet" href="./dist/style.css">
+</head>
+<body class="legal-page">
+<main class="legal">
+  <p class="legal__brand"><img src="./icons/icon-192.png" alt="" width="40" height="40"> Mytko</p>
+  <h1>Polityka prywatności</h1>
+  <p class="legal__meta">Obowiązuje od 10 listopada 2026. Dotyczy aplikacji Mytko: Mytko Tasks (tasks.mytko.dev), Mytko Finance i Mytko Workflow.</p>
+
+  <h2>Kto przetwarza dane</h2>
+  <p>Administratorem jest Mytko (Dmytro Rohov). Kontakt: <a href="mailto:hello@mytko.dev">hello@mytko.dev</a>.
+    Aplikacje Mytko są narzędziami do pracy własnej studia i osób, którym właściciel założył konto; nie są publiczną usługą.</p>
+
+  <h2>Dane z konta Google</h2>
+  <p>Tylko wtedy, gdy sam podłączysz Kalendarz Google do przestrzeni w Mytko Tasks („Podłącz Kalendarz Google”), aplikacja za Twoją zgodą:</p>
+  <ul>
+    <li>odczytuje wydarzenia z podłączonych kalendarzy (tytuł, termin, miejsce, opis, goście, link Google Meet), aby pokazać spotkania obok zadań;</li>
+    <li>tworzy, zmienia i usuwa wydarzenia, które dodajesz lub edytujesz w Mytko Tasks (np. spotkanie z linkiem Meet i zaproszeniami dla gości);</li>
+    <li>odczytuje adres e-mail konta Google, aby pokazać, które konto jest podłączone.</li>
+  </ul>
+  <p>Zakresy dostępu: <code>calendar.events</code>, <code>calendar.readonly</code>, <code>openid</code>, <code>email</code>.</p>
+
+  <h2>Jak dane są używane</h2>
+  <ul>
+    <li>Wyłącznie do funkcji, które widzisz w aplikacji: kalendarz, spotkania przy zadaniach i klientach, rezerwacje spotkań.</li>
+    <li>Nie sprzedajemy danych, nie używamy ich do reklam i nie przekazujemy ich innym firmom.</li>
+    <li>Jeśli w ustawieniach aplikacji włączysz AI, tytuł i termin spotkania mogą zostać przekazane wybranemu dostawcy AI tylko po to,
+      aby przygotować brief tego spotkania na Twoją prośbę. AI można w każdej chwili wyłączyć (Porządek → AI i Workflow).</li>
+    <li>Wykorzystanie danych otrzymanych z interfejsów API Google jest zgodne z
+      <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API Services User Data Policy</a>,
+      w tym z wymaganiami „Limited Use”.</li>
+  </ul>
+
+  <h2>Przechowywanie i usuwanie</h2>
+  <ul>
+    <li>Tokeny dostępu Google są przechowywane w bazie aplikacji w postaci zaszyfrowanej (AES-256-GCM) na serwerze w OVHcloud.</li>
+    <li>Kopia wydarzeń z podłączonych kalendarzy jest przechowywana tylko na czas podłączenia, aby kalendarz działał szybko.</li>
+    <li>„Odłącz kalendarz” w aplikacji usuwa tokeny i kopie wydarzeń z Mytko (w Google wydarzenia zostają).
+      Dostęp możesz też w każdej chwili cofnąć na stronie <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">myaccount.google.com/permissions</a>.</li>
+    <li>Na prośbę wysłaną na <a href="mailto:hello@mytko.dev">hello@mytko.dev</a> usuniemy wszystkie Twoje dane z aplikacji Mytko.</li>
+  </ul>
+
+  <h2>Pozostałe dane</h2>
+  <p>Zadania, notatki, cele i inne treści, które wpisujesz, są przechowywane w bazie danych aplikacji i widoczne tylko dla Twojego konta
+    (oraz dla kont, z którymi dzielisz wspólną przestrzeń). Logowanie używa wyłącznie niezbędnego pliku cookie sesji.</p>
+
+  <h2 lang="en">Summary in English</h2>
+  <p lang="en">Mytko apps access Google Calendar only after you connect a calendar. They read and write calendar events and read your account's
+    e-mail address, solely to show and manage your meetings inside the app. Google user data is not sold, not used for advertising and not
+    shared with third parties; its use complies with the Google API Services User Data Policy, including the Limited Use requirements. Tokens are
+    stored encrypted; disconnecting the calendar deletes them and the cached events. Contact: hello@mytko.dev.</p>
+</main>
+</body>
+</html>
