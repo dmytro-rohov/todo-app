@@ -47,3 +47,5 @@ usual. The release then contains exactly that `main` plus the Session's own smal
 **Release 5** (sort columns by priority, privacy policy page; no migration): see [RELEASE-5.md](RELEASE-5.md).
 
 **Release 6** (finished cards look inactive; no migration): see [RELEASE-6.md](RELEASE-6.md).
+
+**Release 7** (Ukrainian by default; no migration): see [RELEASE-7.md](RELEASE-7.md).
