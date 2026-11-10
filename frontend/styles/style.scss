@@ -222,7 +222,8 @@
         &__foot { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border); }
     }
     .nav-item {
-        display: flex; align-items: center; gap: 0.625rem; width: 100%; min-height: 2.625rem; padding: 0 0.625rem; border: 1px solid transparent;
+        // Same row as Mytko Finance and Mytko Workflow: one sidebar rhythm across the Mytko apps.
+        display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 2.75rem; padding: 0 0.75rem; border: 1px solid transparent;
         border-radius: 0.625rem; color: #dbe4dc; font-size: 0.9375rem; font-weight: 550; text-align: left;
         span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         em { color: var(--faint); font-size: 0.8125rem; font-style: normal; }
@@ -230,7 +231,7 @@
         &:hover { background: #ffffff0a; }
         &.is-active { border-color: #b7e34d40; background: var(--accent-soft); color: var(--accent); font-weight: 700; .i { color: var(--accent); } em { color: var(--accent); } }
         &--space .dot { width: 0.625rem; height: 0.625rem; margin: 0 0.25rem; }
-        &--sub { min-height: 2.375rem; font-size: 0.9062rem; }
+        &--sub { min-height: 2.5rem; font-size: 0.9062rem; }
         .folder { flex: 0 0 auto; color: var(--c, var(--muted)); }
     }
     .nav-heading {
