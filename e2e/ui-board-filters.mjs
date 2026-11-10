@@ -87,6 +87,13 @@ try {
   await api(`/api/tasks/${low.id}`, "DELETE"); await api(`/api/tasks/${top.id}`, "DELETE");
   await send("Page.reload"); await sleep(3000);
 
+  // a finished task looks inactive: crossed out, paler, greyer
+  const done = await ev(`(() => { const c = document.querySelector('.column--done .card'); if (!c) return null; const s = getComputedStyle(c), t = getComputedStyle(c.querySelector('.card__title'));
+    const open = getComputedStyle(document.querySelector('.column--todo .card'));
+    return { line: t.textDecorationLine, opacity: Number(s.opacity), filter: s.filter, openOpacity: Number(open.opacity), openLine: getComputedStyle(document.querySelector('.column--todo .card .card__title')).textDecorationLine }; })()`);
+  check("a finished card is crossed out, paler and greyer; open cards are not", done && done.line === "line-through" && done.opacity < 0.7 && /grayscale/.test(done.filter)
+    && done.openOpacity === 1 && done.openLine === "none", JSON.stringify(done));
+
   const look = id => ev(`(() => { const c = document.querySelector('.card[data-id="${id}"]'); const s = getComputedStyle(c);
     return { bg: s.backgroundColor, pc: s.getPropertyValue("--pc").trim(), left: s.borderLeftColor, project: c.classList.contains("card--project") }; })()`);
   const tinted = await look(inProject.id), plain = await look(loose.id);
