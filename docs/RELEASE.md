@@ -45,3 +45,5 @@ usual. The release then contains exactly that `main` plus the Session's own smal
 **Release 4** (tasks to Workflow by hand or by AI, AI and Workflow switches; migration 0011): see [RELEASE-4.md](RELEASE-4.md).
 
 **Release 5** (sort columns by priority, privacy policy page; no migration): see [RELEASE-5.md](RELEASE-5.md).
+
+**Release 6** (finished cards look inactive; no migration): see [RELEASE-6.md](RELEASE-6.md).
