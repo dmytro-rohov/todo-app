@@ -11,6 +11,14 @@ export function isOpen(task) {
   return task.status !== "done" && task.status !== "planned";
 }
 export const PRIORITY_LABELS = { P0: "Krytyczny", P1: "Wysoki", P2: "Normalny", P3: "Niski" };
+
+// A column by priority: P0 first, then P1, P2, P3; within a priority the manual order stays.
+const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
+export function byPriority(list) {
+  return list.map((task, index) => ({ task, index }))
+    .sort((a, b) => (PRIORITY_RANK[a.task.priority] ?? 2) - (PRIORITY_RANK[b.task.priority] ?? 2) || a.index - b.index)
+    .map(({ task }) => task);
+}
 const UK = LANG === "uk";
 export const MONTHS_SHORT = UK ? ["січ", "лют", "бер", "квіт", "трав", "черв", "лип", "серп", "вер", "жовт", "лист", "груд"]
   : ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];

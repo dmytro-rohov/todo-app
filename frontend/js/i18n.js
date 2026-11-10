@@ -218,6 +218,8 @@ const UK = {
   "AI nie odpowiada.": "AI не відповідає.", "Dostawca:": "Постачальник:", ", model": ", модель", "AI (API zgodne z OpenAI)": "AI (API, сумісне з OpenAI)",
   "Wyłącz, gdy skończą się środki na API: nic nie trafi wtedy do AI (propozycje z maili, briefy, analiza zadań), a wszystko robisz ręcznie.":
     "Вимкніть, коли закінчаться кошти на API: тоді нічого не потрапить до AI (пропозиції з листів, брифи, аналіз завдань), а все робите вручну.",
+  "Sortuj według priorytetu (najwyższy na górze)": "Сортувати за пріоритетом (найвищий угорі)",
+  "Kolejność według priorytetu (kliknij: kolejność ręczna)": "Порядок за пріоритетом (клік: ручний порядок)",
   // Cele / Marzenia
   "Cele / Marzenia": "Цілі / Мрії", "Cele": "Цілі", "/ Marzenia": "/ Мрії", "Marzenie": "Мрія", "Rok": "Рік", "Okres": "Період", "Rodzaj": "Тип", "Nagłówek": "Заголовок",
   "Na miesiąc albo na cały rok: co chcesz osiągnąć i o czym marzysz": "На місяць або на цілий рік: чого хочете досягти й про що мрієте",

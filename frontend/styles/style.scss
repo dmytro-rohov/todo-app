@@ -345,6 +345,10 @@
         }
         &__icon { flex: 0 0 auto; color: #e3ebe4; }
         &__tools { display: flex; margin-left: auto; .icon-btn { color: #dbe4dc; } }
+        // sort by priority, next to the count: dim until hovered or on
+        &__sort { flex: 0 0 auto; color: var(--faint); border: 1px solid transparent;
+            &:hover { color: var(--text); border-color: var(--border-strong); }
+            &.is-on { color: var(--accent); border-color: #b7e34d66; background: var(--accent-soft); } }
         // About four cards; longer columns scroll inside, so the board never becomes a page-long stack.
         &__cards {
             display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; min-height: 5.625rem; max-height: 45rem; align-content: start; overflow-y: auto;

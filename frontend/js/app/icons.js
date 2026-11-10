@@ -28,6 +28,7 @@ const PATHS = {
   chevronDown: '<path d="m7 10 5 5 5-5"/>',
   chevronLeft: '<path d="m14.5 6-6 6 6 6"/>',
   chevronRight: '<path d="m9.5 6 6 6-6 6"/>',
+  sortPriority: '<path d="M4 6.5h9M4 12h6.5M4 17.5h4"/><path d="M17.5 5v13.5M14.5 15.5l3 3 3-3"/>',
   sparkles: '<path d="M12 4.5 13.6 9l4.4 1.6-4.4 1.6L12 16.7l-1.6-4.5L6 10.6 10.4 9z"/><path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
   star: '<path d="m12 4 2.4 5 5.4.7-4 3.7 1 5.4L12 16.2l-4.8 2.6 1-5.4-4-3.7 5.4-.7z"/>',
   chevronUp: '<path d="m6.5 14.5 5.5-5.5 5.5 5.5"/>',
