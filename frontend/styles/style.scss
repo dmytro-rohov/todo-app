@@ -376,7 +376,12 @@
         &__action { display: inline-flex; align-items: center; gap: 0.375rem; margin-left: auto; }
         &--in_progress { border-left: 0.1875rem solid var(--accent); }
         &--needs_review { border-left: 0.1875rem solid var(--warning); }
-        &--done { border-left: 0.1875rem solid var(--success); .card__title { color: #dfe8e0; } }
+        // finished: crossed out, paler and greyer (inactive); clearer again under the pointer or keyboard focus
+        &--done {
+            border-left: 0.1875rem solid var(--success); opacity: .6; filter: grayscale(.6);
+            .card__title { color: var(--muted); text-decoration: line-through; text-decoration-color: #ffffff59; text-decoration-thickness: 0.09375rem; }
+            &:hover, &:focus-visible { opacity: .85; }
+        }
         // pale tint of the project's colour: the folder chip keeps the strong colour
         // (top, right and bottom only: the left edge keeps the status colour)
         &--project { --pc-line: color-mix(in srgb, var(--pc) 24%, var(--border));
