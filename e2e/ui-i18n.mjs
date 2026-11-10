@@ -59,8 +59,11 @@ try {
   ws.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
     if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); });
   await send("Runtime.enable");
+  await send("Page.enable");
+  // e2e checks the Polish texts: a fresh test profile starts in Polish (Ukrainian is the default on a new device)
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (localStorage.getItem('mytko-tasks:lang') === null) localStorage.setItem('mytko-tasks:lang', 'pl'); } catch {}" });
   await send("Page.navigate", { url: BASE + "/" }); await sleep(3500);
-  check("Polish by default", await ev(`document.documentElement.lang`) === "pl" && await text('[data-action="new-task"]') === "Nowe zadanie", await text('[data-action="new-task"]'));
+  check("Polish when chosen (the test profile starts in Polish)", await ev(`document.documentElement.lang`) === "pl" && await text('[data-action="new-task"]') === "Nowe zadanie", await text('[data-action="new-task"]'));
 
   await click('[data-action="language"]');
   check("the language dialog lists Polski and Українська", await ev(`[...document.querySelectorAll('dialog[open] [name="lang"]')].map(i => i.parentElement.textContent.trim()).join("|")`) === "PolskiPL|УкраїнськаУКР");
@@ -114,6 +117,11 @@ try {
   await click('[data-action="language"]'); await click('dialog[open] [name="lang"][value="pl"]'); await sleep(3500);
   check("back to Polish", await ev(`document.documentElement.lang`) === "pl" && await text('[data-action="new-task"]') === "Nowe zadanie",
     `${await ev("document.documentElement.lang")} ${await text('[data-action="new-task"]')} ${await ev("localStorage.getItem('mytko-tasks:lang')")}`);
+  // a device that never chose a language (nothing stored) gets Ukrainian
+  await ev(`localStorage.setItem("mytko-tasks:lang", "")`);
+  await send("Page.reload"); await sleep(3500);
+  check("a new device starts in Ukrainian", await ev(`document.documentElement.lang`) === "uk" && await text('[data-action="new-task"]') === "Нове завдання",
+    `${await ev("document.documentElement.lang")} ${await text('[data-action="new-task"]')}`);
   check("no script errors", errors.length === 0, errors.join(" | "));
   if (process.env.LEFTOVERS) for (const [s, where] of leftovers) console.log(`LEFT [${where}] ${s}`);
   else check("no interface text left in Polish", leftovers.size === 0, [...leftovers.keys()].slice(0, 12).join(" | "));

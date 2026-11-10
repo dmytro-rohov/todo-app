@@ -31,6 +31,9 @@ try {
   ws.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
     if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); });
   await send("Runtime.enable");
+  await send("Page.enable");
+  // e2e checks the Polish texts: a fresh test profile starts in Polish (Ukrainian is the default on a new device)
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (localStorage.getItem('mytko-tasks:lang') === null) localStorage.setItem('mytko-tasks:lang', 'pl'); } catch {}" });
   await send("Page.navigate", { url: BASE + "/#mail" }); await sleep(3500);
   check("the Poczta tab is shown to the owner", await ev("!document.querySelector('[data-view=\"mail\"]').hidden"));
   await click('[data-mail="sync"]'); await sleep(3000);

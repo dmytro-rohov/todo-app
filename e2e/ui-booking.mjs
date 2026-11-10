@@ -40,6 +40,9 @@ try {
     if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
     if (m.method === "Log.entryAdded" && m.params.entry.level === "error") errors.push(m.params.entry.text); });
   await send("Runtime.enable"); await send("Log.enable");
+  await send("Page.enable");
+  // e2e checks the Polish texts: a fresh test profile starts in Polish (Ukrainian is the default on a new device)
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (localStorage.getItem('mytko-tasks:lang') === null) localStorage.setItem('mytko-tasks:lang', 'pl'); } catch {}" });
   await send("Page.navigate", { url: "http://127.0.0.1:3198/" }); await sleep(2500);
   const days = await ev("document.querySelectorAll('.mb-day').length");
   check("the form on another origin loads free days across CORS", days > 0, `${days} days`);

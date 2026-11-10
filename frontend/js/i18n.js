@@ -1,4 +1,4 @@
-// Interface language: Polish (the source language of the app) or Ukrainian. Kept on this device; switching reloads.
+// Interface language: Ukrainian (default) or Polish (the source language of the app). Kept on this device; switching reloads.
 // The interface is written in Polish; in Ukrainian a translator replaces the interface's texts (text, title,
 // aria-label, placeholder) as they appear. Content people write (tasks, notes, mail, names) is marked translate="no"
 // where it is rendered and never touched.
@@ -8,7 +8,8 @@ export const LANGUAGES = { pl: "Polski", uk: "Українська" };
 function stored() {
   try { return typeof localStorage === "undefined" ? null : localStorage.getItem(KEY); } catch { return null; }
 }
-export const LANG = stored() === "uk" ? "uk" : "pl";
+// Ukrainian is the default; Polish (the language the interface is written in) when chosen on this device.
+export const LANG = stored() === "pl" ? "pl" : "uk";
 export const LOCALE = LANG === "uk" ? "uk-UA" : "pl-PL";
 
 export function setLang(lang) {

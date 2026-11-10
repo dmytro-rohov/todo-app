@@ -31,6 +31,8 @@ try {
     if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") errors.push(m.params.args.map(a => a.value ?? a.description).join(" "));
     if (m.method === "Log.entryAdded" && m.params.entry.level === "error") errors.push(m.params.entry.text); });
   await send("Runtime.enable"); await send("Log.enable"); await send("Page.enable");
+  // e2e checks the Polish texts: a fresh test profile starts in Polish (Ukrainian is the default on a new device)
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (localStorage.getItem('mytko-tasks:lang') === null) localStorage.setItem('mytko-tasks:lang', 'pl'); } catch {}" });
   await send("Page.navigate", { url: BASE + "/#board" }); await sleep(2500);
   const pwa = await evaluate("(async () => { const reg = await navigator.serviceWorker.ready; const m = await fetch('/manifest.webmanifest'); return { active: Boolean(reg.active), scope: reg.scope, type: m.headers.get('content-type'), name: (await m.json()).name }; })()");
   check("installable app: manifest served and the service worker active", pwa?.active && pwa.scope === BASE + "/" && /manifest\+json/.test(pwa.type) && pwa.name === "Mytko Tasks", JSON.stringify(pwa));
