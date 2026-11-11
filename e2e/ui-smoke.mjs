@@ -140,6 +140,11 @@ try {
   await click('dialog [data-add] input[name="name"]'); await type("Pilne");
   await click('dialog [data-add] button[type="submit"]'); await sleep(900);
   check("labels can be added from Porządek", (await api("/api/categories")).some(l => l.name === "Pilne"));
+  await click('dialog [data-kind="projects"]'); await sleep(300);
+  check("a project row shows the space it is in", await evaluate(`(() => { const row = [...document.querySelectorAll("dialog .mrow--project")].find(r => r.querySelector('[name="name"]').value === "Dom"); return row?.querySelector(".space-chip")?.textContent.trim(); })()`) === "Prywatne");
+  check("project details start closed", await evaluate("document.querySelector('dialog .mrow--project .mrow__more').hidden") === true);
+  await click("dialog .mrow--project [data-expand]"); await sleep(200);
+  check("the arrow opens space, client and archive", await evaluate("(() => { const m = document.querySelector('dialog .mrow--project .mrow__more'); return !m.hidden && !!m.querySelector('select[name=spaceId]') && !!m.querySelector('input[name=archived]'); })()"));
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }); await sleep(300);
 
   // 7. long columns scroll inside; a card can be dropped at the bottom of a long column

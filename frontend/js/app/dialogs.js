@@ -184,7 +184,16 @@ function sharedItemHtml(kind, item) {
 
 const peopleButton = item => `<button type="button" class="btn btn--ghost btn--sm people-btn" data-people="${item.id}" title="Kto jest w tej przestrzeni">${icon("users", 16)}<span>Osoby</span><em>${item.people}</em></button>`;
 
-function itemHtml(kind, item) {
+// A project shows the space it is in; built-in space names are translated, the user's own are not.
+function spaceChip(spaceId) {
+  const space = store.spaces.find(item => item.id === spaceId);
+  if (!space) return "";
+  const builtIn = space.key === "work" || String(space.key).startsWith("private");
+  return `<span class="space-chip" data-c="${escapeHtml(space.color)}" title="Przestrzeń"><i class="dot"></i><span${builtIn ? "" : ' translate="no"'}>${escapeHtml(space.name)}</span></span>`;
+}
+
+// expanded: ids of the projects whose details (space, client, archive) are open.
+function itemHtml(kind, item, expanded = new Set()) {
   if (item.mine === false) return sharedItemHtml(kind, item);
   const builtIn = kind === "spaces" && item.key;
   const extra = kind === "clients"
@@ -209,9 +218,20 @@ function itemHtml(kind, item) {
           <button type="button" class="btn btn--ghost btn--sm" data-cal-action="connect" data-space="${item.id}">Zmień konto</button>
           <button type="button" class="icon-btn" data-cal-action="disconnect" data-account="${account.id}" aria-label="Odłącz kalendarz" title="Odłącz kalendarz">${icon("x", 18)}</button></div>`
       : `<div class="cal-link"><button type="button" class="btn btn--ghost btn--sm" data-cal-action="connect" data-space="${item.id}">${icon("calendar", 16)}Podłącz Kalendarz Google</button></div>`;
-  return `<li data-item="${item.id}">
-    <input type="color" name="color" value="${escapeHtml(item.color)}" aria-label="Kolor">
-    <input name="name" value="${escapeHtml(item.name)}" maxlength="${kind === "spaces" || kind === "categories" ? 50 : 80}" aria-label="Nazwa">
+  const name = `<input type="color" name="color" value="${escapeHtml(item.color)}" aria-label="Kolor">
+    <input name="name" value="${escapeHtml(item.name)}" maxlength="${kind === "spaces" || kind === "categories" ? 50 : 80}" aria-label="Nazwa">`;
+  if (kind === "projects") {
+    const open = expanded.has(item.id);
+    return `<li data-item="${item.id}" class="mrow mrow--project${open ? " is-open" : ""}${item.archivedAt ? " is-archived" : ""}">
+    ${name}
+    ${spaceChip(item.spaceId)}${item.archivedAt ? '<span class="mrow__flag">Archiwum</span>' : ""}
+    <button type="button" class="icon-btn mrow__toggle" data-expand aria-expanded="${open}" aria-label="Szczegóły projektu" title="Przestrzeń, klient, archiwum">${icon("chevronDown", 18)}</button>
+    <button type="button" class="icon-btn" data-remove aria-label="Usuń ${escapeHtml(item.name)}">${icon("trash", 18)}</button>
+    <div class="mrow__more"${open ? "" : " hidden"}>${extra}</div>
+  </li>`;
+  }
+  return `<li data-item="${item.id}" class="mrow">
+    ${name}
     ${extra}
     ${builtIn ? `<span class="badge" title="Wbudowana">${icon("layers", 16)}</span>` : `<button type="button" class="icon-btn" data-remove aria-label="Usuń ${escapeHtml(item.name)}">${icon("trash", 18)}</button>`}
     ${calendarRow}
@@ -225,6 +245,7 @@ export function openManage(kind = "projects") {
     <div class="manage" aria-live="polite"></div>
   </div>`);
   let active = kind;
+  const expanded = new Set();
 
   function draw() {
     const k = KINDS[active];
@@ -237,7 +258,7 @@ export function openManage(kind = "projects") {
     element.querySelector(".manage").innerHTML = `
       <p class="manage__hint">${active === "spaces" && isMember() ? "Prywatne są wbudowane. Własną przestrzeń możesz oznaczyć jako wspólną i zaprosić do niej kogoś kodem lub linkiem. Przestrzenie oznaczone ikoną osób udostępnił Ci ktoś inny." : k.hint}</p>
       ${active === "spaces" ? `<p class="manage__hint">${isMember() ? "Masz kod od kogoś? Dołącz nim do jego przestrzeni." : "Wspólną przestrzeń widzą i edytują tylko osoby, które do niej dodasz z listy kont albo zaprosisz kodem lub linkiem."}</p>` : ""}
-      <ul class="manage__list">${k.list().map(item => itemHtml(active, item)).join("") || `<li class="muted">Jeszcze nic tu nie ma.</li>`}</ul>
+      <ul class="manage__list">${k.list().map(item => itemHtml(active, item, expanded)).join("") || `<li class="muted">Jeszcze nic tu nie ma.</li>`}</ul>
       <form class="manage__add" data-add>
         <input type="color" name="color" value="${color}" aria-label="Kolor">
         <input name="name" maxlength="${active === "spaces" || active === "categories" ? 50 : 80}" placeholder="${k.placeholder}" aria-label="Nazwa" required>
@@ -247,6 +268,7 @@ export function openManage(kind = "projects") {
       </form>
       ${active === "spaces" ? `<button type="button" class="btn btn--ghost btn--sm manage__join" data-join>${icon("users", 16)}Mam kod zaproszenia</button>` : ""}
       <p class="field-error" data-error hidden></p>`;
+    paint(element.querySelector(".manage"));
   }
 
   function fail(error) {
@@ -288,6 +310,17 @@ export function openManage(kind = "projects") {
     }
     const tab = event.target.closest("[data-kind]");
     if (tab) { active = tab.dataset.kind; return draw(); }
+    const toggle = event.target.closest("[data-expand]");
+    if (toggle) {
+      const row = toggle.closest("[data-item]");
+      const id = Number(row.dataset.item);
+      const open = !expanded.has(id);
+      if (open) expanded.add(id); else expanded.delete(id);
+      row.classList.toggle("is-open", open);
+      row.querySelector(".mrow__more").hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      return;
+    }
     const people = event.target.closest("[data-people]");
     if (people) {
       const space = store.spaces.find(item => item.id === Number(people.dataset.people));

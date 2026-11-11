@@ -259,7 +259,7 @@ const UK = {
   "Masz kod od kogoś? Dołącz nim do jego przestrzeni.": "Маєте код від когось? Приєднайтеся ним до його простору.",
   "Wspólną przestrzeń widzą i edytują tylko osoby, które do niej dodasz z listy kont albo zaprosisz kodem lub linkiem.":
     "Спільний простір бачать і редагують лише люди, яких ви додасте зі списку облікових записів або запросите кодом чи посиланням.",
-  "Usuń z przestrzeni": "Видалити з простору", "zarządza przestrzenią": "керує простором", "w przestrzeni": "у просторі",
+  "Usuń z przestrzeni": "Видалити з простору", "Szczegóły projektu": "Деталі проєкту", "Przestrzeń, klient, archiwum": "Простір, клієнт, архів", "zarządza przestrzenią": "керує простором", "w przestrzeni": "у просторі",
   "zarządza przestrzenią · to Ty": "керує простором · це ви", "w przestrzeni · to Ty": "у просторі · це ви",
   "Wspólną przestrzeń widzą i edytują tylko osoby z tej listy. Gdy ktoś odchodzi, jego zadania wracają do jego Prywatnych.":
     "Спільний простір бачать і редагують лише люди з цього списку. Коли хтось іде, його завдання повертаються до його «Приватне».",
