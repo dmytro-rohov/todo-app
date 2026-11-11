@@ -216,7 +216,7 @@ function createCalendarRouter(pool, { google, key, cookie }) {
 // cookie set by /api/calendar/connect; stores the encrypted refresh token for the space and syncs once.
 function createGoogleCallback(pool, { google, key, cookie, pendingCookie, isOwner }) {
   const router = express.Router();
-  const { readCookie } = require("../sessions");
+  const { readCookie } = require("../kit");
   const done = (res, outcome) => res.redirect(303, `/?calendar=${outcome}#manage-spaces`);
   router.get("/callback", async (req, res) => {
     const pending = readCookie(req, pendingCookie) || "";

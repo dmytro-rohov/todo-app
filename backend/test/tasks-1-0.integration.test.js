@@ -4,8 +4,8 @@ const { test, describe, before, after, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-const { createPool } = require("../db");
-const { runMigrations, listMigrations } = require("../migrations");
+const { createPool } = require("../kit");
+const { runMigrations, listMigrations } = require("../kit");
 const { startApp, SAME_ORIGIN_JSON, USERNAME, PASSWORD } = require("./support");
 const { runRetention } = require("../retention");
 

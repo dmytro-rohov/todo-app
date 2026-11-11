@@ -1,7 +1,7 @@
 // Per-task collections: notes (dated log), subtasks (checklist) and the read-only change history.
 const express = require("express");
 const { parseId, validateText } = require("../validation");
-const { withTransaction } = require("../db");
+const { withTransaction } = require("../kit");
 const { taskChanges, recordTaskChanges } = require("../task-history");
 const { statusAssignmentsSql } = require("../task-status");
 const { loadTask } = require("./tasks");

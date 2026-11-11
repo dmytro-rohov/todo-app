@@ -4,7 +4,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { listMigrations } = require("../migrations");
+const { listMigrations } = require("../kit");
 
 const ALLOWED = [
   /^CREATE TABLE "[a-z_]+" \(/,

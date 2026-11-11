@@ -1,7 +1,6 @@
+const kit = require("./kit");
 const { loadConfig } = require("./config");
-const { createPool } = require("./db");
 const { createApp } = require("./app");
-const { listMigrations } = require("./migrations");
 const { scheduleRetention } = require("./retention");
 const { scheduleCalendarSync } = require("./calendar-sync");
 const { adoptSharedSpaces } = require("./routes/spaces");
@@ -14,26 +13,28 @@ try {
   process.exit(1);
 }
 
-const pool = createPool(config.database);
+const pool = kit.createPool(config.database);
 
-const migrationVersions = listMigrations(config.migrationsDir).map(m => m.hash);
-const { app, markShuttingDown, stop, calendar } = createApp({ config, pool, migrationVersions });
+const migrationVersions = kit.listMigrations(config.migrationsDir).map(m => m.hash);
+const instance = createApp({ config, pool, migrationVersions });
 
-const server = app.listen(config.port, config.host, () => {
-  console.log(`Server listening on ${config.host}:${config.port}`);
-});
+let retention = null;
+let calendarSync = null;
+let adoptTimer = null;
 
-const retention = scheduleRetention(pool, config.retention);
-const calendarSync = scheduleCalendarSync(pool, calendar);
+// Listens, probes the database once (informational; /readyz reports actual readiness) and shuts down cleanly on
+// SIGTERM/SIGINT (the kit's server.js); the archive, calendar and shared-space jobs below stop with the app.
+kit.runServer({ config, pool, instance: { ...instance, stop() {
+  instance.stop();
+  retention?.stop();
+  calendarSync?.stop();
+  clearTimeout(adoptTimer);
+} } });
 
-// Startup DB probe is informational only; /readyz reports actual readiness.
-pool.query("SELECT 1").then(
-  () => console.log("Database reachable"),
-  (error) => console.error("Database not reachable yet:", "database operation failed")
-);
+retention = scheduleRetention(pool, config.retention);
+calendarSync = scheduleCalendarSync(pool, instance.calendar);
 
 // Spaces shared before space members existed keep everybody in them (once; retried until the database answers).
-let adoptTimer = null;
 function adopt() {
   adoptSharedSpaces(pool).then(
     added => { if (added) console.log(`Shared spaces: ${added} memberships kept from before`); },
@@ -41,38 +42,3 @@ function adopt() {
   );
 }
 adopt();
-
-let shuttingDown = false;
-
-function shutdown(signal) {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`${signal} received, shutting down`);
-
-  markShuttingDown();
-
-  const forceExit = setTimeout(() => {
-    console.error("Shutdown timed out, forcing exit");
-    process.exit(1);
-  }, config.shutdownTimeoutMs);
-  forceExit.unref();
-
-  // Stops accepting connections and waits for in-flight requests.
-  server.close(async (error) => {
-    if (error) console.error("HTTP server close error:", "operation failed");
-    stop();
-    retention.stop();
-    calendarSync.stop();
-    clearTimeout(adoptTimer);
-    try {
-      await pool.end();
-    } catch (poolError) {
-      console.error("Pool close error:", "operation failed");
-    }
-    process.exit(error ? 1 : 0);
-  });
-  server.closeIdleConnections();
-}
-
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));

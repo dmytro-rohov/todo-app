@@ -5,8 +5,8 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const path = require("node:path");
 
-const { createPool } = require("../db");
-const { runMigrations, listMigrations } = require("../migrations");
+const { createPool } = require("../kit");
+const { runMigrations, listMigrations } = require("../kit");
 const { startApp, SAME_ORIGIN_JSON } = require("./support");
 
 const OWNER_URL = process.env.TEST_MIGRATION_DATABASE_URL;

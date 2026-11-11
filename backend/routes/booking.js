@@ -3,7 +3,7 @@
 //   POST /api/public/booking                         books a slot: a Google event with Meet and the guest (Google sends
 //                                                    the invitation), a lead in Klienci and a preparation task in ToDo.
 const express = require("express");
-const { withTransaction } = require("../db");
+const { withTransaction } = require("../kit");
 const { decrypt } = require("../secrets");
 const { toRow, upsertEvent } = require("../calendar-sync");
 const { validateClient } = require("../clients");

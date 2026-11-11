@@ -6,7 +6,7 @@
 // Workflow (sent by a click or by AI, then withdrawn) is not looked at again. A few tasks per run; after an API error (no credit, bad key) it waits before trying again.
 const { structured, AiError } = require("./ai");
 const { setWorkflow } = require("./routes/tasks");
-const { withTransaction } = require("./db");
+const { withTransaction } = require("./kit");
 
 const EVERY_MS = 60000;
 const PER_RUN = 5;
