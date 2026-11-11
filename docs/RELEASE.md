@@ -51,3 +51,5 @@ usual. The release then contains exactly that `main` plus the Session's own smal
 **Release 7** (Ukrainian by default; no migration): see [RELEASE-7.md](RELEASE-7.md).
 
 **Release 8** (people in shared spaces, invitation codes, profile pictures, sidebar like Finance; migration 0012): see [RELEASE-8.md](RELEASE-8.md).
+
+**Release 9** (Porządek in the new style, a project shows its space; no migration): see [RELEASE-9.md](RELEASE-9.md).
