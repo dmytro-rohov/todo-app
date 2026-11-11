@@ -8,6 +8,7 @@ import { isMember, lookup, paint, reload, render, store, upsertTask } from "./ap
 import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.js";
 import { openClient } from "./clients.js";
 import { openDrawer } from "./drawer.js";
+import { avatarHtml as personAvatar } from "./avatar.js";
 import { LANG, LANGUAGES, LOCALE, setLang } from "../i18n.js";
 import { openJoin, openSpacePeople } from "./sharing.js";
 
@@ -55,6 +56,12 @@ function choices(list, selected, empty) {
 }
 
 // mailId / meetingId link the task to an e-mail / a meeting; onCreated(task) runs after it is saved.
+// A new task goes to the one chosen in the filter, else to the account itself; "Bez wykonawcy" can still be picked.
+function defaultAssignee() {
+  if (typeof store.filters.assigneeId === "number") return store.filters.assigneeId;
+  return store.assignees.find(person => person.self && person.mine)?.id ?? null;
+}
+
 export function openNewTask({ status = "todo", priority = "P2", dueDate = null, clientId = null, meetingId = null, mailId = null, spaceId = null, title = "", description = "",
   onCreated = null } = {}) {
   const privateSpace = lookup.privateSpace();
@@ -82,7 +89,7 @@ export function openNewTask({ status = "todo", priority = "P2", dueDate = null, 
       </div>
       <div class="field-row">
         ${isMember() ? "" : `<label class="field"><span>Klient</span><span class="select"><select name="clientId">${choices(store.clients.filter(c => c.status !== "archived"), clientId, "Bez klienta")}</select>${icon("chevronDown", 16)}</span></label>`}
-        <label class="field"><span>Wykonawca</span><span class="select"><select name="assigneeId">${choices(store.assignees, null, "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</span></label>
+        <label class="field"><span>Wykonawca</span><span class="select"><select name="assigneeId">${choices(store.assignees, defaultAssignee(), "Bez wykonawcy")}</select>${icon("chevronDown", 16)}</span></label>
       </div>
       ${store.labels.length ? `<fieldset class="label-picker"><legend>Etykiety</legend>${store.labels.map(label => `<label class="chip chip--label chip--toggle" data-c="${escapeHtml(label.color)}"><input type="checkbox" name="labelIds" value="${label.id}"${store.filters.labelId === label.id ? " checked" : ""}><i class="dot"></i>${escapeHtml(label.name)}</label>`).join("")}</fieldset>` : ""}
       <label class="field"><span>Opis</span><textarea class="textarea" name="description" rows="3" maxlength="5000" placeholder="Szczegóły, linki, kontekst…">${escapeHtml(description)}</textarea></label>
@@ -153,7 +160,7 @@ const KINDS = {
   projects: { title: "Projekty", placeholder: "Nowy projekt…", list: () => store.projects, hint: "Projekt to folder klienta w jednej przestrzeni. Jego zadania dostają jego etykietę. Usunięcie projektu zostawia zadania bez projektu." },
   categories: { title: "Etykiety", placeholder: "Nowa etykieta…", list: () => store.labels, hint: "Etykiety można łączyć: zadanie może mieć kilka. Usunięcie etykiety zdejmuje ją ze wszystkich zadań." },
   clients: { title: "Klienci", placeholder: "Nowy klient lub lead…", list: () => store.clients, hint: "Lead to ktoś przed współpracą (np. po rezerwacji spotkania), klient to stała współpraca. Spotkania z gośćmi z jego adresu lub domeny same się do niego przypinają. Usunięcie zostawia zadania i projekty bez klienta." },
-  assignees: { title: "Wykonawcy", placeholder: "Nowy wykonawca…", list: () => store.assignees, hint: "Osoby, którym przypisujesz zadania (to nie są konta logowania). Usunięcie zostawia zadania bez wykonawcy." }
+  assignees: { title: "Wykonawcy", placeholder: "Nowy wykonawca…", list: () => store.assignees, hint: "Ty jesteś tu zawsze (ze swoim zdjęciem) i nowe zadania trafiają domyślnie do Ciebie; można też wybrać „Bez wykonawcy”. Pozostali to osoby, którym przypisujesz zadania (to nie są konta logowania). Usunięcie zostawia zadania bez wykonawcy." }
 };
 
 // Spaces, labels, assignees and projects of another account (seen through a shared space): shown, not editable; a
@@ -177,8 +184,12 @@ function spaceChip(spaceId) {
 // expanded: ids of the projects whose details (space, client, archive) are open.
 function itemHtml(kind, item, expanded = new Set()) {
   if (item.mine === false) return sharedItemHtml(kind, item);
-  const builtIn = kind === "spaces" && item.key;
-  const extra = kind === "clients"
+  const builtIn = (kind === "spaces" && item.key) || (kind === "assignees" && item.self);
+  const extra = kind === "assignees"
+    ? item.self
+      ? `<span class="me-badge" title="To Ty: to konto, zawsze na liście">Ty</span>`
+      : `<button type="button" class="btn btn--ghost btn--sm mrow__hover" data-into-self title="Przenieś zadania tego wykonawcy na siebie i usuń ten wpis">${icon("user", 16)}To ja</button>`
+    : kind === "clients"
     ? `<span class="select select--sm"><select name="status" aria-label="Status">${[["lead", "Lead"], ["client", "Klient"], ["archived", "Archiwum"]].map(([v, l]) => `<option value="${v}"${item.status === v ? " selected" : ""}>${l}</option>`).join("")}</select>${icon("chevronDown", 16)}</span>
        <button type="button" class="btn btn--ghost btn--sm" data-client-card="${item.id}">Karta</button>`
     : kind === "projects"
@@ -200,7 +211,11 @@ function itemHtml(kind, item, expanded = new Set()) {
           <button type="button" class="btn btn--ghost btn--sm" data-cal-action="connect" data-space="${item.id}">Zmień konto</button>
           <button type="button" class="icon-btn" data-cal-action="disconnect" data-account="${account.id}" aria-label="Odłącz kalendarz" title="Odłącz kalendarz">${icon("x", 18)}</button></div>`
       : `<div class="cal-link"><button type="button" class="btn btn--ghost btn--sm" data-cal-action="connect" data-space="${item.id}">${icon("calendar", 16)}Podłącz Kalendarz Google</button></div>`;
-  const name = `<input type="color" name="color" value="${escapeHtml(item.color)}" aria-label="Kolor">
+  // one's own entry shows one's picture (or initials) instead of the colour
+  const swatch = kind === "assignees" && item.self
+    ? `${personAvatar({ id: item.accountId, name: item.name, avatarAt: item.avatarAt }, "avatar--lime mrow__me")}<input type="hidden" name="color" value="${escapeHtml(item.color)}">`
+    : `<input type="color" name="color" value="${escapeHtml(item.color)}" aria-label="Kolor">`;
+  const name = `${swatch}
     <input name="name" value="${escapeHtml(item.name)}" maxlength="${kind === "spaces" || kind === "categories" ? 50 : 80}" aria-label="Nazwa">`;
   if (kind === "projects") {
     const open = expanded.has(item.id);
@@ -215,7 +230,7 @@ function itemHtml(kind, item, expanded = new Set()) {
   return `<li data-item="${item.id}" class="mrow">
     ${name}
     ${extra}
-    ${builtIn ? `<span class="badge" title="Wbudowana">${icon("layers", 16)}</span>` : `<button type="button" class="icon-btn" data-remove aria-label="Usuń ${escapeHtml(item.name)}">${icon("trash", 18)}</button>`}
+    ${builtIn ? (kind === "assignees" ? "" : `<span class="badge" title="Wbudowana">${icon("layers", 16)}</span>`) : `<button type="button" class="icon-btn" data-remove aria-label="Usuń ${escapeHtml(item.name)}">${icon("trash", 18)}</button>`}
     ${calendarRow}
   </li>`;
 }
@@ -311,6 +326,18 @@ export function openManage(kind = "projects") {
     if (event.target.closest("[data-join]")) return openJoin("", () => draw());
     const card = event.target.closest("[data-client-card]");
     if (card) { element.close(); return openClient(Number(card.dataset.clientCard)); }
+    const intoSelf = event.target.closest("[data-into-self]");
+    if (intoSelf) {
+      const row = intoSelf.closest("[data-item]");
+      const name = row.querySelector('[name="name"]').value;
+      if (!(await confirmDialog(`„${name}” to Ty? Jego zadania zostaną przypisane do Ciebie, a ten wpis zniknie.`, "To ja"))) return;
+      try {
+        const { moved } = await api.assigneeIntoSelf(row.dataset.item);
+        toast(`Przypisano do Ciebie zadań: ${moved}.`);
+        await afterChange();
+      } catch (error) { fail(error); }
+      return;
+    }
     const remove = event.target.closest("[data-remove]");
     if (!remove) return;
     const row = remove.closest("[data-item]");

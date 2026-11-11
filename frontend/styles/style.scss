@@ -518,6 +518,10 @@
         > span { overflow: hidden; text-overflow: ellipsis; }
         .dot { flex: none; }
     }
+    .mrow__me { width: 1.75rem; height: 1.75rem; margin: 0 -0.125rem; font-size: 0.6875rem; }
+    // shown when the row is pointed at or focused (always on touch screens)
+    @media (hover: hover) { .mrow:not(:hover, :focus-within) .mrow__hover { opacity: 0; } }
+    .me-badge { padding: 0.1875rem 0.625rem; border-radius: 0.4375rem; background: var(--accent-soft); color: var(--accent); font-size: 0.8125rem; font-weight: 700; }
     .mrow__flag { padding: 0.125rem 0.5rem; border-radius: 0.4375rem; background: #ffffff0d; color: var(--muted); font-size: 0.75rem; font-weight: 650; }
     .mrow__toggle .i { transition: transform .15s; }
     .mrow.is-open .mrow__toggle .i { transform: rotate(180deg); }

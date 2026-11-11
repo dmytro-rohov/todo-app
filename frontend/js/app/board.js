@@ -68,6 +68,10 @@ export function chipsHtml(task) {
 
 export function avatarHtml(task) {
   const person = lookup.assignee(task.assigneeId);
+  // an account itself (its own entry): its picture when it has one, else the initials as for anyone
+  if (person?.self && person.avatarAt) {
+    return `<span class="avatar avatar--photo" data-c="${escapeHtml(person.color)}" data-initials="${escapeHtml(initials(person.name))}" title="${escapeHtml(person.name)}"><img src="${escapeHtml(api.avatarUrl(person.accountId, person.avatarAt))}" alt="" loading="lazy" decoding="async"></span>`;
+  }
   return person
     ? `<span class="avatar" data-c="${escapeHtml(person.color)}" title="${escapeHtml(person.name)}">${escapeHtml(initials(person.name))}</span>`
     : `<span class="avatar avatar--empty" title="Bez wykonawcy">${icon("user", 16)}</span><span class="muted">–</span>`;

@@ -427,6 +427,53 @@ describe("member accounts", { skip, concurrency: false }, () => {
     assert.equal((await owner.query("SELECT count(*)::int AS n FROM avatars WHERE account = $1", [`user:${filipId}`])).rows[0].n, 0);
   });
 
+  test("every account is its own assignee: first on the list, with its picture, never deleted; \"To ja\" moves tasks", async () => {
+    await call("/api/users", "POST", { login: "gosia", name: "Gosia", password: "gosia-test-password-1" });
+    await call("/api/users", "POST", { login: "henryk", name: "Henryk", password: "henryk-test-password-1" });
+    const gosia = as((await login("gosia", "gosia-test-password-1")).cookie);
+    const henryk = as((await login("henryk", "henryk-test-password-1")).cookie);
+    const gosiaId = (await call("/api/users")).body.find(u => u.login === "gosia").id;
+
+    // made on the first read, once, named after the account; the owner's is "Administrator"
+    const first = (await gosia("/api/assignees")).body;
+    assert.equal(first[0].self, true);
+    assert.deepEqual([first[0].name, first[0].mine, first[0].accountId, first[0].avatarAt], ["Gosia", true, gosiaId, null]);
+    assert.equal((await gosia("/api/assignees")).body.filter(a => a.self && a.mine).length, 1);
+    const ownerSelf = (await call("/api/assignees")).body.find(a => a.self && a.mine);
+    assert.deepEqual([ownerSelf.name, ownerSelf.accountId], ["Administrator", null]);
+    const me = first[0];
+
+    // its picture's version comes along; it can be renamed but not deleted
+    const webp = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 "), Buffer.alloc(20, 1)]).toString("base64");
+    const pic = (await gosia("/api/avatars/me", "PUT", { image: webp })).body.avatarAt;
+    assert.equal((await gosia("/api/assignees")).body[0].avatarAt, pic);
+    assert.equal((await gosia(`/api/assignees/${me.id}`, "PATCH", { name: "Małgosia" })).body.name, "Małgosia");
+    assert.equal((await gosia(`/api/assignees/${me.id}`, "DELETE")).status, 409);
+    assert.equal((await gosia(`/api/assignees/${me.id}/into-self`, "POST", {})).status, 409);
+
+    // "To ja": the tasks of an entry made by hand go to the account itself, the entry goes away
+    const byHand = (await gosia("/api/assignees", "POST", { name: "ja", color: "#38bdf8" })).body;
+    const task = (await gosia("/api/tasks", "POST", { title: "Zrobić zakupy", date: "2026-11-11", assigneeId: byHand.id })).body;
+    const unassigned = (await gosia("/api/tasks", "POST", { title: "Bez nikogo", date: "2026-11-11" })).body;
+    assert.equal(unassigned.assigneeId, null);
+    assert.equal((await henryk(`/api/assignees/${byHand.id}/into-self`, "POST", {})).status, 404);
+    assert.deepEqual((await gosia(`/api/assignees/${byHand.id}/into-self`, "POST", {})).body, { self: me.id, moved: 1 });
+    assert.equal((await gosia("/api/tasks")).body.find(t => t.id === task.id).assigneeId, me.id);
+    assert.ok(!(await gosia("/api/assignees")).body.some(a => a.id === byHand.id));
+
+    // people sharing a space see each other's own entries and may give each other tasks there; strangers do not
+    assert.ok(!(await henryk("/api/assignees")).body.some(a => a.id === me.id));
+    assert.equal((await henryk("/api/tasks", "POST", { title: "Dla Gosi", date: "2026-11-11", assigneeId: me.id })).status, 400);
+    const flat = (await gosia("/api/spaces", "POST", { name: "Mieszkanie", color: "#22c55e", shared: true })).body;
+    const code = (await gosia(`/api/spaces/${flat.id}/invites`, "POST", {})).body.code;
+    assert.equal((await henryk("/api/spaces/join", "POST", { code })).status, 200);
+    const seen = (await henryk("/api/assignees")).body.find(a => a.id === me.id);
+    assert.deepEqual([seen.self, seen.mine, seen.accountId, seen.avatarAt], [true, false, gosiaId, pic]);
+    const forGosia = await henryk("/api/tasks", "POST", { title: "Dla Gosi", date: "2026-11-11", spaceId: flat.id, assigneeId: me.id });
+    assert.equal(forGosia.status, 201);
+    assert.equal((await henryk(`/api/assignees/${me.id}`, "PATCH", { name: "Gosia2" })).status, 404);
+  });
+
   test("spaces shared before members existed keep everybody in them, once", async () => {
     const { adoptSharedSpaces } = require("../routes/spaces");
     await owner.query("DELETE FROM app_settings WHERE key = 'spaces.members'");

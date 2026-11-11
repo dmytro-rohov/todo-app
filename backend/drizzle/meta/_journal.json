@@ -92,6 +92,13 @@
       "when": 1794345076611,
       "tag": "0012_space_members_avatars",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794412431984,
+      "tag": "0013_self_assignee",
+      "breakpoints": true
     }
   ]
 }
