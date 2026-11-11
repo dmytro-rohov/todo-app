@@ -5,8 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { checkVendored } from "../vendor/mytko-kit/kit-check.mjs";
-import uk from "../js/locales/uk.js";
-import pl from "../js/locales/pl.js";
+import { KIT_TEXTS } from "../js/i18n.js";
 
 test("the vendored Mytko Kit is exactly what the kit's sync wrote", () => {
   const { problems, manifest } = checkVendored(fileURLToPath(new URL("../vendor/mytko-kit", import.meta.url)));
@@ -16,5 +15,5 @@ test("the vendored Mytko Kit is exactly what the kit's sync wrote", () => {
 });
 
 test("Tasks' texts of the kit's components: the same keys in Ukrainian and Polish", () => {
-  assert.deepEqual(Object.keys(pl).sort(), Object.keys(uk).sort());
+  assert.deepEqual(Object.keys(KIT_TEXTS.pl).sort(), Object.keys(KIT_TEXTS.uk).sort());
 });

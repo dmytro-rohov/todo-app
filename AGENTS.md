@@ -21,8 +21,10 @@ w ramach Mytko Workflow.
   zabezpieczeń zestawu (`backend/kit.js`). Zmienne: `ADMIN_LOGIN` / `ADMIN_PASSWORD_HASH`, a gdy ich nie ma —
   dotychczasowe `AUTH_USERNAME` / `AUTH_PASSWORD_HASH`.
 - Frontend: z zestawu pochodzą pomocniki, rozmiar interfejsu, ekran startowy, toasty, ikony, rdzeń service workera,
-  tokeny, reset, podstawa strony i style ekranu logowania. Teksty komponentów zestawu: `frontend/js/locales/`
-  (słowa Tasks nad tekstami zestawu); reszta interfejsu jest pisana po polsku i tłumaczona przez `js/i18n.js`.
+  tokeny, reset, podstawa strony i style ekranu logowania. Teksty komponentów zestawu: `KIT_TEXTS` w
+  `frontend/js/i18n.js` (słowa Tasks nad tekstami zestawu); reszta interfejsu jest pisana po polsku i tłumaczona przez
+  `js/i18n.js`. Każdy moduł to jedno żądanie więcej w limicie na adres (`RATE_LIMIT_MAX` na minutę): nie ładuj modułów
+  zestawu, których Tasks nie używa (np. `kit.js`, `http.js` zestawu).
 
 ## Izolacja i Git
 
