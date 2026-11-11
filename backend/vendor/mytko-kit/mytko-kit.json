@@ -1,7 +1,7 @@
 {
   "kit": "mytko-kit",
-  "version": "0.3.0",
-  "commit": "ef9dfe050c0edb1a554a14c7ad1d5cb7959c8828",
+  "version": "0.4.0",
+  "commit": "5d8098e72b0dfeb6a29cddd04b2247a594e8bfa9",
   "dirty": false,
   "part": "backend",
   "synced": "tools/sync.mjs",
@@ -21,9 +21,10 @@
     "routes/sso.js": "sha256:88e5d636f8e384c929ced929d199759877e0c8df19b58c5906ee6e00dd5213ac",
     "routes/users.js": "sha256:f4ac59d1b2476a9d7ede509252f3376fb423612961d64090062126e3adbafb90",
     "scripts.js": "sha256:a72cc4dca53903b515a84e96bced846a94e7f0760def9219d326cef130838fb8",
-    "security.js": "sha256:88b0a8711f75fb6d92c0681a251285de10dd8fc976291799790d1470e9e38601",
+    "security.js": "sha256:2a8b84848a508e81519d33343fd79fd10f6cf37470904a17ef41690efbbb7d8f",
     "server.js": "sha256:924df025b0b9ae48425eda082d3b6e97f6168323fdf04ad23b378dac599fcd22",
     "sessions.js": "sha256:81a82d6f06fd10e8c7095c737f5c275cbbcaf9b84b127217005cbedc37ee0124",
+    "testing.js": "sha256:8f370d03d40ff832dd463ae4f684b2d8bbbdd871627129d110c6160050254f21",
     "users.js": "sha256:dabdd858840c6cd597a9b400ea0db85cdfb33d6d124716b8706ed4fef31b76ee"
   }
 }

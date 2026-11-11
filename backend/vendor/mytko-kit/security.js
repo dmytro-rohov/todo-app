@@ -154,6 +154,21 @@ function rateLimit({ windowMs, max }) {
   return middleware;
 }
 
+// The paths the per-address request limit counts: the app's API (/api — also /api/auth, the Workflow agent, public
+// booking) and its sign-in round trips (/auth — "Zaloguj kontem Mytko", Google). A page load is dozens of static files
+// (the shell, its modules, styles, icons): they hold no data and are not counted, so reloading the app never runs into
+// the limit. Health checks are mounted before it (the proxy's and the container's probes never compete with visitors).
+const LIMITED_PATHS = Object.freeze(["/api", "/auth"]);
+
+// Mounts a rateLimit() middleware on those paths only. Express matches them the way it matches the routers mounted
+// there (case-insensitive, whole path segments: /API/x and /api/ count, /apix does not), so no route under them escapes
+// the limit. Call it where a global app.use(limiter) would go: before the routes.
+function limitDynamicRoutes(app, limiter, paths = LIMITED_PATHS) {
+  if (typeof limiter !== "function") throw new Error("limitDynamicRoutes needs the rateLimit() middleware");
+  app.use([...paths], limiter);
+  return limiter;
+}
+
 // Failed sign-ins, counted per client address and per login. After `max` failures within the window an address waits,
 // whatever login it tries; after `max * PER_LOGIN` failures from anywhere a login waits, so addresses spread over many
 // networks cannot keep guessing one password. A valid session keeps working; "Zaloguj kontem Mytko" counts per address
@@ -300,6 +315,8 @@ function securityHeaders({ isProduction, imgBlob = true }) {
 }
 
 module.exports = {
+  LIMITED_PATHS,
+  limitDynamicRoutes,
   SCRYPT_DEFAULTS,
   hashPassword,
   parsePasswordHash,

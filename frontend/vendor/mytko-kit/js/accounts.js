@@ -12,12 +12,10 @@
 //   read(form, user | null) those fields' values, merged into the request body
 //   bind(form, user | null) wires those fields once the form is open (Finance: the "Praca" switch follows the currency)
 import { authApi as api } from "./http.js";
-import { escapeHtml, initials } from "./helpers.js";
-import { LANG, LOCALE, t } from "./i18n.js";
+import { LANG, LOCALE, escapeHtml, initials, t } from "./core.js";
 import { icon } from "./icons.js";
-import { busy, confirmDialog, dialog, dialogHead as head, formError } from "./dialogs.js";
-import { toast } from "./toast.js";
-import { languageOptions as languageCards } from "./settings.js";
+import { busy, confirmDialog, dialog, dialogHead as head, formError, toast } from "./ui.js";
+import { languageOptions as languageCards } from "./shell.js";
 
 export const PASSWORD_MIN = 12;
 

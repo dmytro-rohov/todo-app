@@ -1,10 +1,10 @@
 // Every HTTP call of a Mytko app goes through request(): JSON in and out, a deadline, the server's English messages
 // shown in the interface language, and "not signed in" anywhere returning to the login screen.
-import { t } from "./i18n.js";
+import { appMessages, t } from "./core.js";
 
 export const API_BASE = globalThis.MYTKO_API_BASE ?? "";
 // Server messages (English, stable) shown in the interface language: the kit's (sign-in, accounts, the shared server
-// errors) and the app's own (addMessages, called once by the app's setup).
+// errors) and the app's own (addMessages in core.js, called once by the app's setup; an app entry wins over the kit's).
 const MESSAGES = {
   "Authentication required": "error.session",
   "Not available for this account": "error.forbidden",
@@ -27,18 +27,18 @@ const MESSAGES = {
   "Invalid request": "error.refresh"
 };
 
-// The app's server messages: { "Plan not found": "error.refresh", … } (an app entry wins over the kit's).
-export function addMessages(messages = {}) {
-  Object.assign(MESSAGES, messages);
-}
+// The app's server messages: { "Plan not found": "error.refresh", … } — kept in core.js (setupKit does not load this
+// module); this name still works.
+export { addMessages } from "./core.js";
 
 // The translation key of a server message, or null (tests: every mapped key exists).
 export function messageKey(message) {
-  return Object.hasOwn(MESSAGES, message) ? MESSAGES[message] : null;
+  const app = appMessages();
+  return Object.hasOwn(app, message) ? app[message] : Object.hasOwn(MESSAGES, message) ? MESSAGES[message] : null;
 }
 
 export function messageKeys() {
-  return [...new Set(Object.values(MESSAGES))];
+  return [...new Set(Object.values({ ...MESSAGES, ...appMessages() }))];
 }
 
 // Headers every change carries (any request with a method other than GET/HEAD), e.g. Finance's X-Mytko-Currency: the
