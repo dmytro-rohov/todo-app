@@ -1,7 +1,7 @@
 {
   "kit": "mytko-kit",
-  "version": "0.4.0",
-  "commit": "5d8098e72b0dfeb6a29cddd04b2247a594e8bfa9",
+  "version": "0.5.0",
+  "commit": "3a9994b08772dc0965460ed3d129dd4d05818b88",
   "dirty": false,
   "part": "frontend",
   "synced": "tools/sync.mjs",
@@ -10,7 +10,7 @@
     "js/accounts.js": "sha256:0de877c236b66d8f2bbda8c89a992a3a74a45116066cbf8b95550e2fded956a9",
     "js/boot.js": "sha256:33451e44498191b0ea6ddb97a6d2119e3f9fd6c747405bb234589bd7529a7ec5",
     "js/config.js": "sha256:69489094b982e592e3b5f749a6df5b24ed54cc1a97e2957615157b48577337cd",
-    "js/core.js": "sha256:9021f22ae518a3c2a3fac01d2c6e819729f7816df4d970d2125709c85f07dc47",
+    "js/core.js": "sha256:9077848b2ccfb6d7169484eb113041f68fc7aead10e97046a5f7577145fba3d6",
     "js/dialogs.js": "sha256:13f777233ec16c70b4e96e60bb2872f41ca2d8f763ed67ea5ab600a5e8866d07",
     "js/helpers.js": "sha256:69489094b982e592e3b5f749a6df5b24ed54cc1a97e2957615157b48577337cd",
     "js/http.js": "sha256:9406571460efdfd21b702e059a52d4b6e8d3283b035b49addcc806a2d0949ca3",
@@ -35,9 +35,9 @@
     "styles/_base.scss": "sha256:e9b54c5494a0bd21b2aa8a5e9ca18ba69de552632ef27244327545488cbcaf30",
     "styles/_components.scss": "sha256:cea57c6141a28ccf92514c95009a7b0c2435f5a1586d9b1f1595a1ad0bf2a2b1",
     "styles/_device.scss": "sha256:98e5084a47e07c182c202c9a97fc73859cd76964a094258bd20485ecd85341ec",
-    "styles/_index.scss": "sha256:964729ff51102e04eabeff4d9b4624157b453e3298806960fdc895f8918d9084",
+    "styles/_index.scss": "sha256:f587e4fad6d91d104da0e6706dd2be71ba92b3dfe136900afb7e890ca011b1ca",
     "styles/_reset.scss": "sha256:707cb8467d77a392982731e1082adc1ba8a8120c0d0326b2c788ae0ba1f250b5",
-    "styles/_shell.scss": "sha256:b0daded1ce5bd3361dea93e5bd454d7a4ebe94c7acc4d95785a17eb2b0a555da",
+    "styles/_shell.scss": "sha256:c1890d35c90486a9139a18dc171727a019bf3965553861ee3c0e1f234579266c",
     "styles/mytko-kit.scss": "sha256:f94508c91744b1d2d5845ef474f5bb4e601ee38b44de96a3b5b0f310398856c0",
     "styles/tokens.css": "sha256:cb31e6a9783048e619d8fa465da942c627200fcc4554cf80066527172b1cb792"
   }

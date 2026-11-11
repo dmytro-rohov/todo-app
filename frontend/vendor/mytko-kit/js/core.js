@@ -162,7 +162,7 @@ export function appMessages() {
 
 // ---- kit.js -----------------------------------------------------------------------------------------------------------
 
-export const KIT_VERSION = "0.4.0";
+export const KIT_VERSION = "0.5.0";
 
 // id, name, short, features, contact: configureApp. locales: { uk, pl } (the app's texts). messages: the app's server
 // messages -> text keys (addMessages; http.js shows them).

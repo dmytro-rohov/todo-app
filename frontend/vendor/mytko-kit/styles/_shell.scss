@@ -101,11 +101,7 @@
         &__text { flex: 1; min-width: 10rem; display: grid; gap: 0.125rem; strong { font-size: 1.0625rem; } span { color: var(--muted); font-size: 0.875rem; } b { color: var(--text); font-weight: 650; } }
     }
 
-    // the phone's "more" sheet (shell.js openMore)
-    .sheet-nav { display: grid; gap: 0.25rem; .nav-item { min-height: 3.25rem; font-size: 1rem; } }
-
-    // ---- phone tab bar (hidden on computers) -------------------------------------------------------------------
-    .tabbar { display: none; }
+    @include shell-nav;
 
     // ---- collapsible sidebar (computers): a rail of icons, the names as tooltips -------------------------------
     @media (min-width: 901px) {
@@ -118,6 +114,16 @@
             .profile { flex-direction: column; gap: 0.5rem; &__text { display: none; } }
         }
     }
+}
+
+// The phone navigation alone (part of shell-pages): the "more" sheet and the tab bar, hidden on computers. For an app
+// with its own Settings and accounts pages (Tasks) that takes the tab bar and the sheet only.
+@mixin shell-nav {
+    // the phone's "more" sheet (shell.js openMore)
+    .sheet-nav { display: grid; gap: 0.25rem; .nav-item { min-height: 3.25rem; font-size: 1rem; } }
+
+    // ---- phone tab bar (hidden on computers) -------------------------------------------------------------------
+    .tabbar { display: none; }
 }
 
 // Phones and small tablets (inside the app's @media (max-width: 900px)): no sidebar, the tab bar, dialogs as bottom

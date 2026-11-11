@@ -7,6 +7,7 @@
 //   kit.components    buttons, fields, chips, avatars, toasts, dialogs, … ($select-arrow) @layer components
 //   kit.shell-frame   sidebar, nav, main column, page heads, spinner                         @layer views (first)
 //   kit.shell-pages   "soon" cards, Settings, accounts; tab bar off and collapsed rail        @layer views (after the app's views)
+//   kit.shell-nav     the "more" sheet and the tab bar alone (part of shell-pages; Tasks)    @layer views
 //   kit.shell-phone   the same on phones                     inside the app's @media (max-width: 900px) in @layer views
 //   kit.shell-motion  reduced motion                                                         @layer views (last)
 //   kit.auth          the login and start-up screens                                         @layer auth
