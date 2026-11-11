@@ -86,6 +86,24 @@ test("failed sign-ins lock a login out from anywhere (5 x AUTH_FAIL_MAX), not on
   }
 });
 
+test("a login locked out on the login screen is locked for HTTP Basic too, from fresh addresses", async () => {
+  const ctx = await startApp({ pool: fakePool(), env: { AUTH_FAIL_MAX: "1", TRUST_PROXY: "loopback" } });
+  try {
+    const login = (password, ip) => ctx.request("/api/auth/login", { method: "POST", auth: null,
+      headers: { ...SAME_ORIGIN_JSON, "x-forwarded-for": ip }, body: JSON.stringify({ login: USERNAME, password }) });
+    const basic = (password, ip) => ctx.request("/api/tasks", { auth: null,
+      headers: { authorization: `Basic ${Buffer.from(`${USERNAME}:${password}`).toString("base64")}`, "x-forwarded-for": ip } });
+    for (let n = 1; n <= 5; n += 1) assert.equal((await login(`guess-${n}`, `198.51.100.${n}`)).status, 401);
+    for (const [password, ip] of [["guess-basic", "203.0.113.8"], [PASSWORD, "203.0.113.9"]]) {
+      const answer = await basic(password, ip); // a new address each time: still the locked login
+      assert.equal(answer.status, 429);
+      assert.ok(Number(answer.headers.get("retry-after")) > 0);
+    }
+  } finally {
+    await ctx.close();
+  }
+});
+
 test("Zaloguj kontem Mytko: failed code exchanges are limited (5 per 15 minutes), so Workflow's shared limit is never hit", async () => {
   const secret = "synthetic-client-secret-" + "s".repeat(24);
   const workflow = http.createServer((req, res) => {

@@ -116,9 +116,18 @@ function ownerAuth({ credentials, sessions, cookieName, ssoLogin = "", users = n
     const decoded = Buffer.from(match[1], "base64").toString("utf8");
     const separator = decoded.indexOf(":");
     if (separator === -1) return deny(res);
+    const login = decoded.slice(0, separator);
+
+    // A login locked out after too many failures (from any address) is not checked here either, as on the login screen;
+    // lockedFor() and check()'s reservation run in the same synchronous step.
+    const loginWait = credentials.lockedFor(req, login);
+    if (loginWait) {
+      res.set("Retry-After", String(loginWait));
+      return res.status(429).json({ message: "Too many failed login attempts" });
+    }
 
     try {
-      if (await credentials.check(req, decoded.slice(0, separator), decoded.slice(separator + 1))) {
+      if (await credentials.check(req, login, decoded.slice(separator + 1))) {
         if (verified.size > 1000) verified.clear();
         verified.set(digest, Date.now() + VERIFIED_TTL_MS);
         req.auth = { login: credentials.username, method: "basic" };
