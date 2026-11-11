@@ -49,3 +49,5 @@ usual. The release then contains exactly that `main` plus the Session's own smal
 **Release 6** (finished cards look inactive; no migration): see [RELEASE-6.md](RELEASE-6.md).
 
 **Release 7** (Ukrainian by default; no migration): see [RELEASE-7.md](RELEASE-7.md).
+
+**Release 8** (people in shared spaces, invitation codes, profile pictures, sidebar like Finance; migration 0012): see [RELEASE-8.md](RELEASE-8.md).
