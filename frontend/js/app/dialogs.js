@@ -10,6 +10,7 @@ import { openClient } from "./clients.js";
 import { openDrawer } from "./drawer.js";
 import { toast } from "./toast.js";
 import { LANG, LANGUAGES, LOCALE, setLang } from "../i18n.js";
+import { openJoin, openSpacePeople } from "./sharing.js";
 
 const PALETTE = ["#b7e34d", "#84cc16", "#22c55e", "#14b8a6", "#38bdf8", "#818cf8", "#f2c463", "#fb923c", "#f87171", "#e879f9"];
 
@@ -173,14 +174,18 @@ const KINDS = {
   assignees: { title: "Wykonawcy", placeholder: "Nowy wykonawca…", list: () => store.assignees, hint: "Osoby, którym przypisujesz zadania (to nie są konta logowania). Usunięcie zostawia zadania bez wykonawcy." }
 };
 
-// Spaces, labels, assignees and projects of another account (seen through a shared space): shown, not editable.
-function sharedItemHtml(item) {
+// Spaces, labels, assignees and projects of another account (seen through a shared space): shown, not editable; a
+// shared space shows its people (and can be left there).
+function sharedItemHtml(kind, item) {
   return `<li data-item="${item.id}" class="is-shared"><i class="dot" data-c="${escapeHtml(item.color)}"></i>
-    <span>${escapeHtml(item.name)}</span><span class="badge" title="Należy do innego konta, widoczna przez wspólną przestrzeń">${icon("users", 16)}wspólne</span></li>`;
+    <span>${escapeHtml(item.name)}</span>${kind === "spaces" ? peopleButton(item)
+      : `<span class="badge" title="Należy do innego konta, widoczna przez wspólną przestrzeń">${icon("users", 16)}wspólne</span>`}</li>`;
 }
 
+const peopleButton = item => `<button type="button" class="btn btn--ghost btn--sm people-btn" data-people="${item.id}" title="Kto jest w tej przestrzeni">${icon("users", 16)}<span>Osoby</span><em>${item.people}</em></button>`;
+
 function itemHtml(kind, item) {
-  if (item.mine === false) return sharedItemHtml(item);
+  if (item.mine === false) return sharedItemHtml(kind, item);
   const builtIn = kind === "spaces" && item.key;
   const extra = kind === "clients"
     ? `<span class="select select--sm"><select name="status" aria-label="Status">${[["lead", "Lead"], ["client", "Klient"], ["archived", "Archiwum"]].map(([v, l]) => `<option value="${v}"${item.status === v ? " selected" : ""}>${l}</option>`).join("")}</select>${icon("chevronDown", 16)}</span>
@@ -190,7 +195,8 @@ function itemHtml(kind, item) {
        ${isMember() ? "" : `<span class="select select--sm"><select name="clientId" aria-label="Klient">${choices(store.clients.filter(c => c.status !== "archived" || c.id === item.clientId), item.clientId, "Bez klienta")}</select>${icon("chevronDown", 16)}</span>`}
        <label class="check" title="Zarchiwizowany projekt znika z list, jego zadania zostają"><input type="checkbox" name="archived"${item.archivedAt ? " checked" : ""}>Archiwum</label>`
     : kind === "spaces"
-      ? `<label class="check" title="Wspólną przestrzeń widzą i edytują wszystkie konta (np. Dom, zakupy)"><input type="checkbox" name="shared"${item.shared ? " checked" : ""}${builtIn ? " disabled" : ""}>Wspólna</label>
+      ? `<label class="check" title="Wspólną przestrzeń widzą i edytują osoby, które do niej dodasz lub zaprosisz"><input type="checkbox" name="shared"${item.shared ? " checked" : ""}${builtIn ? " disabled" : ""}>Wspólna</label>
+        ${item.shared ? peopleButton(item) : ""}
         ${isMember() ? "" : `<label class="check" title="Tylko takie przestrzenie mogą kiedyś zobaczyć integracje i agenci AI"><input type="checkbox" name="agentVisible"${item.agentVisible ? " checked" : ""}${item.key === "private" ? " disabled" : ""}>Dla agentów</label>`}`
       : "";
   const account = kind === "spaces" ? calendarState.accounts.find(a => a.spaceId === item.id) : null;
@@ -229,14 +235,17 @@ export function openManage(kind = "projects") {
     const color = PALETTE[k.list().length % PALETTE.length];
     const defaultSpace = store.filters.spaceId || lookup.privateSpace()?.id;
     element.querySelector(".manage").innerHTML = `
-      <p class="manage__hint">${active === "spaces" && isMember() ? "Prywatne są wbudowane. Własne przestrzenie możesz oznaczyć jako wspólne: wtedy widzą je i edytują wszystkie konta. Przestrzenie oznaczone ikoną osób udostępnił ktoś inny." : k.hint}</p>
+      <p class="manage__hint">${active === "spaces" && isMember() ? "Prywatne są wbudowane. Własną przestrzeń możesz oznaczyć jako wspólną i zaprosić do niej kogoś kodem lub linkiem. Przestrzenie oznaczone ikoną osób udostępnił Ci ktoś inny." : k.hint}</p>
+      ${active === "spaces" ? `<p class="manage__hint">${isMember() ? "Masz kod od kogoś? Dołącz nim do jego przestrzeni." : "Wspólną przestrzeń widzą i edytują tylko osoby, które do niej dodasz z listy kont albo zaprosisz kodem lub linkiem."}</p>` : ""}
       <ul class="manage__list">${k.list().map(item => itemHtml(active, item)).join("") || `<li class="muted">Jeszcze nic tu nie ma.</li>`}</ul>
       <form class="manage__add" data-add>
         <input type="color" name="color" value="${color}" aria-label="Kolor">
         <input name="name" maxlength="${active === "spaces" || active === "categories" ? 50 : 80}" placeholder="${k.placeholder}" aria-label="Nazwa" required>
         ${active === "projects" ? `<span class="select select--sm"><select name="spaceId" aria-label="Przestrzeń">${choices(store.spaces, defaultSpace)}</select>${icon("chevronDown", 16)}</span>` : ""}
+        ${active === "spaces" ? '<label class="check" title="Wspólną przestrzeń widzą i edytują osoby, które do niej dodasz lub zaprosisz"><input type="checkbox" name="shared">Wspólna</label>' : ""}
         <button type="submit" class="btn btn--primary btn--sm">${icon("plus", 18)}Dodaj</button>
       </form>
+      ${active === "spaces" ? `<button type="button" class="btn btn--ghost btn--sm manage__join" data-join>${icon("users", 16)}Mam kod zaproszenia</button>` : ""}
       <p class="field-error" data-error hidden></p>`;
   }
 
@@ -279,6 +288,12 @@ export function openManage(kind = "projects") {
     }
     const tab = event.target.closest("[data-kind]");
     if (tab) { active = tab.dataset.kind; return draw(); }
+    const people = event.target.closest("[data-people]");
+    if (people) {
+      const space = store.spaces.find(item => item.id === Number(people.dataset.people));
+      return space && openSpacePeople(space, () => { if (element.open) draw(); });
+    }
+    if (event.target.closest("[data-join]")) return openJoin("", () => draw());
     const card = event.target.closest("[data-client-card]");
     if (card) { element.close(); return openClient(Number(card.dataset.clientCard)); }
     const remove = event.target.closest("[data-remove]");
@@ -311,7 +326,12 @@ export function openManage(kind = "projects") {
       Object.keys(body).forEach(key => delete body[key]);
       body[field] = event.target.checked;
     }
-    try { await api.update(active, row.dataset.item, body); await afterChange(); } catch (error) { fail(error); await afterChange(); }
+    try {
+      const saved = await api.update(active, row.dataset.item, body);
+      await afterChange();
+      // shared now: straight on to who is in it
+      if (active === "spaces" && field === "shared" && saved.shared) openSpacePeople(saved, () => { if (element.open) draw(); });
+    } catch (error) { fail(error); await afterChange(); }
   });
 
   element.addEventListener("submit", async event => {
@@ -319,10 +339,12 @@ export function openManage(kind = "projects") {
     const form = event.target;
     const body = { name: form.name.value.trim(), color: form.color.value };
     if (active === "projects") body.spaceId = Number(form.spaceId.value);
+    if (active === "spaces" && form.shared.checked) body.shared = true;
     try {
-      await api.create(active, body);
+      const saved = await api.create(active, body);
       await afterChange();
       element.querySelector("[data-add] [name=name]").focus();
+      if (active === "spaces" && saved.shared) openSpacePeople(saved, () => { if (element.open) draw(); });
     } catch (error) { fail(error); }
   });
 

@@ -17,7 +17,7 @@ SIZES=${*:-1672x941}
 HERE=$(cd "$(dirname "$0")" && pwd)
 : "${TEST_MIGRATION_DATABASE_URL:?}" "${TEST_DATABASE_URL:?}"
 case "$TEST_MIGRATION_DATABASE_URL$TEST_DATABASE_URL" in *test*) ;; *) echo "refusing: not a test database" >&2; exit 2;; esac
-psql "$TEST_MIGRATION_DATABASE_URL" -qc "DROP TABLE IF EXISTS app_settings, goals, meeting_briefs, mail_messages, users, clients, calendar_events, calendar_accounts, auth_sessions, task_history, task_time_entries, task_subtasks, task_notes, task_labels, tasks, projects, spaces, assignees, categories CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;" 2>&1 | grep -v NOTICE || true
+psql "$TEST_MIGRATION_DATABASE_URL" -qc "DROP TABLE IF EXISTS avatars, space_invites, space_members, app_settings, goals, meeting_briefs, mail_messages, users, clients, calendar_events, calendar_accounts, auth_sessions, task_history, task_time_entries, task_subtasks, task_notes, task_labels, tasks, projects, spaces, assignees, categories CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE;" 2>&1 | grep -v NOTICE || true
 docker run --rm --network host --read-only -e MIGRATION_DATABASE_URL="$TEST_MIGRATION_DATABASE_URL" -e APP_DB_ROLE=tasks_app "$IMG" node backend/migrate.js >/dev/null
 AUTH=(-e AUTH_DISABLED=true)
 CAL=()

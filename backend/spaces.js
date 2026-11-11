@@ -43,7 +43,35 @@ async function defaultSpaces(db, user = null) {
   return readDefaults(db);
 }
 
+// Tasks back in their creator's private space keep only what the creator can see there: their own labels and assignee
+// (another account's, seen through a shared space, would be dangling ids). Each change is the task's history.
+async function keepOwnReferences(db, taskIds, actor, record) {
+  if (!taskIds.length) return;
+  const labelLists = async () => new Map((await db.query(
+    "SELECT task_id, string_agg(category_id::text, ',' ORDER BY category_id) AS ids FROM task_labels WHERE task_id = ANY($1::int[]) GROUP BY task_id",
+    [taskIds])).rows.map(row => [row.task_id, row.ids]));
+  const labelsBefore = await labelLists();
+  const dropped = await db.query(
+    `DELETE FROM task_labels l USING tasks t, categories c
+     WHERE l.task_id = ANY($1::int[]) AND t.id = l.task_id AND c.id = l.category_id AND c.user_id IS DISTINCT FROM t.user_id
+     RETURNING l.task_id`, [taskIds]);
+  const labelsAfter = dropped.rowCount ? await labelLists() : labelsBefore;
+  const main = await db.query(
+    `UPDATE tasks t SET category_id = NULL FROM categories c, tasks old
+     WHERE t.id = ANY($1::int[]) AND old.id = t.id AND c.id = old.category_id AND c.user_id IS DISTINCT FROM t.user_id
+     RETURNING t.id, old.category_id AS was`, [taskIds]);
+  const assignee = await db.query(
+    `UPDATE tasks t SET assignee_id = NULL FROM assignees a, tasks old
+     WHERE t.id = ANY($1::int[]) AND old.id = t.id AND a.id = old.assignee_id AND a.user_id IS DISTINCT FROM t.user_id
+     RETURNING t.id, old.assignee_id AS was`, [taskIds]);
+  for (const id of new Set(dropped.rows.map(row => row.task_id))) {
+    await record(db, id, [{ field: "labels", oldValue: labelsBefore.get(id) ?? null, newValue: labelsAfter.get(id) ?? null }], actor);
+  }
+  for (const row of main.rows) await record(db, row.id, [{ field: "category_id", oldValue: String(row.was), newValue: null }], actor);
+  for (const row of assignee.rows) await record(db, row.id, [{ field: "assignee_id", oldValue: String(row.was), newValue: null }], actor);
+}
+
 // The key as the app shows it: a member's private space is "private" to them.
 const publicKey = key => (key && key.startsWith("private:") ? "private" : key);
 
-module.exports = { DEFAULT_SPACES, defaultSpaces, publicKey, memberKey, PRIVATE_SPACES };
+module.exports = { DEFAULT_SPACES, defaultSpaces, publicKey, memberKey, PRIVATE_SPACES, keepOwnReferences };

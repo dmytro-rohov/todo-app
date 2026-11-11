@@ -1,11 +1,12 @@
 // Accounts. The owner (the only administrator) creates accounts for others, e.g. a partner: they get the task app
-// only, with their own data plus the spaces marked shared. A member changes their own password here too.
+// only, with their own data plus the shared spaces they are put in or join with a code. A member changes their own password here too.
 import { api } from "../api/client.js";
 import { escapeHtml } from "../utils/helpers.js";
 import { icon } from "./icons.js";
 import { confirmDialog, dialog } from "./dialogs.js";
 import { toast } from "./toast.js";
 import { LOCALE } from "../i18n.js";
+import { avatarHtml } from "./avatar.js";
 
 const PASSWORD_MIN = 12;
 
@@ -32,8 +33,7 @@ export async function openAccounts() {
   let users = [];
   const element = dialog("dialog--manage dialog--accounts", `<div class="dialog__body">
     <header class="dialog__head"><h2>Konta</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
-    <p class="manage__hint">Tylko Ty zarządzasz kontami. Osoba z kontem widzi wyłącznie swoje zadania oraz przestrzenie oznaczone jako
-      <strong>wspólne</strong> (np. Dom). Nie widzi klientów, spotkań ani Twoich przestrzeni.</p>
+    <p class="manage__hint">Tylko Ty zarządzasz kontami. Osoba z kontem widzi wyłącznie swoje zadania oraz wspólne przestrzenie, do których ją dodasz albo zaprosisz (np. Dom). Nie widzi klientów, spotkań ani innych kont.</p>
     <ul class="manage__list accounts" data-list><li class="muted">Wczytuję…</li></ul>
     <form class="accounts__add" data-add novalidate>
       <h3>Nowe konto</h3>
@@ -56,7 +56,7 @@ export async function openAccounts() {
   function draw() {
     list.innerHTML = users.map(user => `
       <li data-user="${user.id}" class="account${user.disabledAt ? " is-disabled" : ""}">
-        <span class="avatar">${escapeHtml(user.name.slice(0, 2).toUpperCase())}</span>
+        ${avatarHtml(user)}
         <span class="account__text"><strong>${escapeHtml(user.name)}</strong>
           <small class="muted">login: ${escapeHtml(user.login)} · ostatnie logowanie: ${escapeHtml(when(user.lastLoginAt))} · otwarte zadania: ${user.openTasks}${user.disabledAt ? " · <b>zablokowane</b>" : ""}</small></span>
         <span class="account__actions">

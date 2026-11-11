@@ -72,7 +72,7 @@ describe("Poczta", { skip, concurrency: false }, () => {
   before(async () => {
     owner = createPool({ connectionString: OWNER_URL, max: 2, statementTimeoutMs: 0 });
     appPool = createPool({ connectionString: APP_URL, max: 5 });
-    await owner.query(`DROP TABLE IF EXISTS public.app_settings, public.goals, public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions,
+    await owner.query(`DROP TABLE IF EXISTS public.avatars, public.space_invites, public.space_members, public.app_settings, public.goals, public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions,
       public.task_history, public.task_time_entries, public.task_subtasks, public.task_notes, public.task_labels, public.tasks, public.projects, public.spaces,
       public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");

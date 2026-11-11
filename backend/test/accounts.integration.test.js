@@ -24,7 +24,7 @@ describe("member accounts", { skip, concurrency: false }, () => {
   before(async () => {
     owner = createPool({ connectionString: OWNER_URL, max: 2, statementTimeoutMs: 0 });
     appPool = createPool({ connectionString: APP_URL, max: 5 });
-    await owner.query(`DROP TABLE IF EXISTS public.app_settings, public.goals, public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history,
+    await owner.query(`DROP TABLE IF EXISTS public.avatars, public.space_invites, public.space_members, public.app_settings, public.goals, public.meeting_briefs, public.mail_messages, public.users, public.clients, public.calendar_events, public.calendar_accounts, public.auth_sessions, public.task_history,
       public.task_time_entries, public.task_subtasks, public.task_notes, public.task_labels, public.tasks, public.projects, public.spaces,
       public.assignees, public.categories CASCADE`);
     await owner.query("DROP SCHEMA IF EXISTS drizzle CASCADE");
@@ -170,8 +170,19 @@ describe("member accounts", { skip, concurrency: false }, () => {
 
   test("a shared space is seen and edited by both; unsharing sends the member's tasks home", async () => {
     const member = as(anna);
-    const dom = (await call("/api/spaces", "POST", { name: "Dom", color: "#38bdf8", shared: true })).body;
-    assert.equal(dom.shared, true);
+    const annaId = (await call("/api/users")).body.find(u => u.login === "anna").id;
+    // only the owner puts accounts in, only into a shared space
+    assert.equal((await call("/api/spaces", "POST", { name: "Dom", color: "#38bdf8", memberIds: [annaId] })).status, 400);
+    assert.equal((await member("/api/spaces", "POST", { name: "Jej", color: "#38bdf8", shared: true, memberIds: [annaId] })).status, 400);
+    assert.equal((await call("/api/spaces", "POST", { name: "Dom", color: "#38bdf8", shared: true, memberIds: [999999] })).status, 400);
+    const dom = (await call("/api/spaces", "POST", { name: "Dom", color: "#38bdf8", shared: true, memberIds: [annaId] })).body;
+    assert.deepEqual([dom.shared, dom.people], [true, 2]);
+    // a shared space with nobody else in it stays the owner's alone
+    const alone = (await call("/api/spaces", "POST", { name: "Tylko moja wspólna", color: "#38bdf8", shared: true })).body;
+    assert.ok(!(await member("/api/spaces")).body.some(s => s.id === alone.id));
+    assert.equal((await member(`/api/spaces/${alone.id}/members`)).status, 404);
+    const members = (await member(`/api/spaces/${dom.id}/members`)).body;
+    assert.deepEqual(members.map(m => [m.id, m.name, m.creator, m.me]), [[null, null, true, false], [annaId, "Anna", false, true]]);
     const ownerTask = (await call("/api/tasks", "POST", { title: "Zapłacić czynsz", date: "2026-11-07", spaceId: dom.id })).body;
     const memberSpaces = (await member("/api/spaces")).body;
     assert.deepEqual(memberSpaces.find(s => s.id === dom.id) && [memberSpaces.find(s => s.id === dom.id).mine], [false]);
@@ -243,9 +254,14 @@ describe("member accounts", { skip, concurrency: false }, () => {
     // deleting: the member's data goes; the owner's and another member's tasks in the member's shared space go back
     // to their own creators' private spaces
     const theirs = (await as(latest.cookie)("/api/spaces", "POST", { name: "Wspólne Anny", color: "#e879f9", shared: true })).body;
+    // the owner and Ola come in with Anna's codes
+    const ownerCode = (await as(latest.cookie)(`/api/spaces/${theirs.id}/invites`, "POST", {})).body.code;
+    assert.equal((await call("/api/spaces/join", "POST", { code: ownerCode })).status, 200);
     const ownerThere = (await call("/api/tasks", "POST", { title: "W jej przestrzeni", date: "2026-11-07", spaceId: theirs.id })).body;
     assert.equal((await call("/api/users", "POST", { login: "ola", name: "Ola", password: "ola-test-password-1" })).status, 201);
     const ola = await login("ola", "ola-test-password-1");
+    const olaCode = (await as(latest.cookie)(`/api/spaces/${theirs.id}/invites`, "POST", {})).body.code;
+    assert.equal((await as(ola.cookie)("/api/spaces/join", "POST", { code: olaCode })).status, 200);
     const olaThere = (await as(ola.cookie)("/api/tasks", "POST", { title: "Zadanie Oli u Anny", date: "2026-11-07", spaceId: theirs.id })).body;
     assert.equal((await call(`/api/users/${id}`, "DELETE")).status, 200);
     assert.equal((await as(again.cookie)("/api/tasks")).status, 401);
@@ -257,5 +273,171 @@ describe("member accounts", { skip, concurrency: false }, () => {
     assert.equal((await as(ola.cookie)("/api/tasks")).body.find(t => t.id === olaThere.id).spaceId, olaPrivate);
     const history = (await as(ola.cookie)(`/api/tasks/${olaThere.id}/history`)).body.find(h => h.field === "space_id");
     assert.deepEqual([history.oldValue, history.newValue], [String(theirs.id), String(olaPrivate)]);
+  });
+  test("invitation codes: one use, 7 days, withdrawable; joining, leaving and being taken out send one's tasks home", async () => {
+    await call("/api/users", "POST", { login: "bartek", name: "Bartek", password: "bartek-test-password-1" });
+    await call("/api/users", "POST", { login: "celina", name: "Celina", password: "celina-test-password-1" });
+    const bartek = as((await login("bartek", "bartek-test-password-1")).cookie);
+    const celina = as((await login("celina", "celina-test-password-1")).cookie);
+    const garden = (await bartek("/api/spaces", "POST", { name: "Ogród", color: "#22c55e", shared: true })).body;
+    // only the creator makes codes, only for a shared space; a code is shown once and kept only as a hash
+    assert.equal((await celina(`/api/spaces/${garden.id}/invites`, "POST", {})).status, 404);
+    const privateOne = (await bartek("/api/spaces", "POST", { name: "Moja", color: "#22c55e" })).body;
+    assert.equal((await bartek(`/api/spaces/${privateOne.id}/invites`, "POST", {})).status, 404);
+    const made = await bartek(`/api/spaces/${garden.id}/invites`, "POST", {});
+    assert.equal(made.status, 201);
+    assert.match(made.body.code, /^[A-HJKMNP-Z2-9]{12}$/);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM space_invites WHERE code_hash = $1", [made.body.code])).rows[0].n, 0);
+    assert.deepEqual((await bartek(`/api/spaces/${garden.id}/invites`)).body.map(i => i.id), [made.body.id]);
+
+    // a preview tells where the code leads; typed with dashes and lower case it still works
+    const typed = made.body.code.toLowerCase().replace(/(.{4})(?!$)/g, "$1-");
+    const preview = await celina("/api/spaces/join/preview", "POST", { code: typed });
+    assert.deepEqual(preview.body, { name: "Ogród", color: "#22c55e", people: 1, alreadyMember: false });
+    assert.equal((await bartek("/api/spaces/join", "POST", { code: typed })).status, 409); // the creator is in already
+    const joined = await celina("/api/spaces/join", "POST", { code: typed });
+    assert.deepEqual([joined.status, joined.body.id, joined.body.mine, joined.body.people], [200, garden.id, false, 2]);
+    assert.equal((await call("/api/spaces/join", "POST", { code: typed })).status, 404); // used up
+    assert.deepEqual((await bartek(`/api/spaces/${garden.id}/invites`)).body, []);
+
+    // withdrawn, expired: they let nobody in
+    const second = (await bartek(`/api/spaces/${garden.id}/invites`, "POST", {})).body;
+    assert.equal((await bartek(`/api/spaces/${garden.id}/invites/${second.id}`, "DELETE")).status, 200);
+    assert.equal((await call("/api/spaces/join/preview", "POST", { code: second.code })).status, 404);
+    const third = (await bartek(`/api/spaces/${garden.id}/invites`, "POST", {})).body;
+    await owner.query("UPDATE space_invites SET expires_at = now() - interval '1 minute' WHERE id = $1", [third.id]);
+    assert.equal((await call("/api/spaces/join", "POST", { code: third.code })).status, 404);
+
+    // the owner joins a member's space with a code like anybody else
+    const forOwner = (await bartek(`/api/spaces/${garden.id}/invites`, "POST", {})).body;
+    assert.equal((await call("/api/spaces/join", "POST", { code: forOwner.code })).status, 200);
+    assert.deepEqual((await celina(`/api/spaces/${garden.id}/members`)).body.map(m => [m.name, m.creator, m.me]),
+      [["Bartek", true, false], ["Celina", false, true], [null, false, false]]);
+
+    // leaving: Celina's tasks there go home, the others' stay; the creator cannot "leave" their own space
+    const celinaTask = (await celina("/api/tasks", "POST", { title: "Podlać", date: "2026-11-10", spaceId: garden.id })).body;
+    const bartekTask = (await bartek("/api/tasks", "POST", { title: "Skosić", date: "2026-11-10", spaceId: garden.id })).body;
+    assert.equal((await bartek(`/api/spaces/${garden.id}/members/me`, "DELETE")).status, 403);
+    assert.equal((await celina(`/api/spaces/${garden.id}/members/owner`, "DELETE")).status, 403); // only the creator takes others out
+    // Celina's project goes with her; Bartek's task in it stays in the space without it; Bartek's label leaves her task
+    const celinaProject = (await celina("/api/projects", "POST", { name: "Rabaty", color: "#22c55e", spaceId: garden.id })).body;
+    const inHerProject = (await celina("/api/tasks", "POST", { title: "Posadzić róże", date: "2026-11-10", projectId: celinaProject.id })).body;
+    const bartekInHers = (await bartek("/api/tasks", "POST", { title: "Kupić ziemię", date: "2026-11-10", projectId: celinaProject.id })).body;
+    const bartekLabel = (await bartek("/api/categories", "POST", { name: "Pilne", color: "#f87171" })).body;
+    assert.equal((await bartek(`/api/tasks/${celinaTask.id}`, "PATCH", { labelIds: [bartekLabel.id] })).status, 200);
+    assert.equal((await celina(`/api/spaces/${garden.id}/members/me`, "DELETE")).status, 200);
+    assert.ok(!(await celina("/api/spaces")).body.some(s => s.id === garden.id));
+    const herPrivate = (await celina("/api/spaces")).body.find(s => s.key === "private").id;
+    assert.equal((await celina("/api/projects")).body.find(p => p.id === celinaProject.id).spaceId, herPrivate);
+    const roses = (await celina("/api/tasks")).body.find(t => t.id === inHerProject.id);
+    assert.deepEqual([roses.spaceId, roses.projectId], [herPrivate, celinaProject.id]);
+    const soil = (await bartek("/api/tasks")).body.find(t => t.id === bartekInHers.id);
+    assert.deepEqual([soil.spaceId, soil.projectId], [garden.id, null]);
+    assert.deepEqual((await celina("/api/tasks")).body.find(t => t.id === celinaTask.id).labelIds, []);
+    assert.equal((await celina(`/api/tasks/${celinaTask.id}`, "PATCH", { title: "Podlać kwiaty" })).status, 200);
+    const celinaPrivate = (await celina("/api/spaces")).body.find(s => s.key === "private").id;
+    assert.equal((await celina("/api/tasks")).body.find(t => t.id === celinaTask.id).spaceId, celinaPrivate);
+    assert.ok(!(await celina("/api/tasks")).body.some(t => t.id === bartekTask.id));
+
+    // taken out by the creator: the owner's task goes to the owner's Prywatne
+    const ownerTask = (await call("/api/tasks", "POST", { title: "Nasiona", date: "2026-11-10", spaceId: garden.id })).body;
+    assert.equal((await bartek(`/api/spaces/${garden.id}/members/owner`, "DELETE")).status, 200);
+    const ownerPrivate = (await call("/api/spaces")).body.find(s => s.key === "private").id;
+    assert.equal((await call("/api/tasks")).body.find(t => t.id === ownerTask.id).spaceId, ownerPrivate);
+    assert.equal((await call(`/api/spaces/${garden.id}/members`)).status, 404);
+
+    // the owner adds an account straight from the list (to their own shared spaces only)
+    const celinaId = (await call("/api/users")).body.find(u => u.login === "celina").id;
+    const ownerSpace = (await call("/api/spaces", "POST", { name: "Wakacje", color: "#f59e0b", shared: true })).body;
+    assert.equal((await call(`/api/spaces/${garden.id}/members`, "POST", { userId: celinaId })).status, 404);
+    assert.equal((await bartek(`/api/spaces/${ownerSpace.id}/members`, "POST", { userId: celinaId })).status, 403);
+    assert.equal((await call(`/api/spaces/${ownerSpace.id}/members`, "POST", { userId: celinaId })).status, 201);
+    assert.equal((await call(`/api/spaces/${ownerSpace.id}/members`, "POST", { userId: celinaId })).status, 409);
+    assert.ok((await celina("/api/spaces")).body.some(s => s.id === ownerSpace.id));
+    // unsharing: its people and waiting codes go
+    await call(`/api/spaces/${ownerSpace.id}/invites`, "POST", {});
+    assert.equal((await call(`/api/spaces/${ownerSpace.id}`, "PATCH", { shared: false })).status, 200);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM space_members WHERE space_id = $1", [ownerSpace.id])).rows[0].n, 0);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM space_invites WHERE space_id = $1", [ownerSpace.id])).rows[0].n, 0);
+    assert.ok(!(await celina("/api/spaces")).body.some(s => s.id === ownerSpace.id));
+
+    // a task never moves into a shared space its creator is not in
+    assert.equal((await bartek(`/api/tasks/${bartekTask.id}`, "PATCH", { spaceId: celinaPrivate })).status, 400);
+  });
+
+  test("wrong codes are limited per account", async () => {
+    await call("/api/users", "POST", { login: "darek", name: "Darek", password: "darek-test-password-1" });
+    const darek = as((await login("darek", "darek-test-password-1")).cookie);
+    for (let i = 0; i < 10; i++) assert.equal((await darek("/api/spaces/join/preview", "POST", { code: "AAAA-BBBB-CCCC" })).status, 404);
+    assert.equal((await darek("/api/spaces/join", "POST", { code: "AAAA-BBBB-CCCC" })).status, 429);
+    assert.equal((await darek("/api/spaces/join", "POST", { code: "x", extra: 1 })).status, 400);
+  });
+
+  test("account pictures: every account sets its own; seen by itself, the owner and its space partners", async () => {
+    const webp = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 "), Buffer.alloc(20, 1)]).toString("base64");
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(40, 2)]).toString("base64");
+    await call("/api/users", "POST", { login: "ewa", name: "Ewa", password: "ewa-test-password-1" });
+    await call("/api/users", "POST", { login: "filip", name: "Filip", password: "filip-test-password-1" });
+    const ewa = as((await login("ewa", "ewa-test-password-1")).cookie);
+    const filip = as((await login("filip", "filip-test-password-1")).cookie);
+    const ewaId = (await call("/api/users")).body.find(u => u.login === "ewa").id;
+
+    // only a real WebP / JPEG, small
+    for (const image of ["", "not base64!", Buffer.from("<svg/>").toString("base64"), Buffer.alloc(130 * 1024, 0xff).toString("base64")]) {
+      assert.equal((await ewa("/api/avatars/me", "PUT", { image })).status, image.length > 200000 ? 413 : 400);
+    }
+    const set = await ewa("/api/avatars/me", "PUT", { image: webp });
+    assert.equal(set.status, 200);
+    assert.equal(typeof set.body.avatarAt, "number");
+    assert.equal((await ewa("/api/auth/session")).body.user.avatarAt, set.body.avatarAt);
+    assert.equal((await call("/api/users")).body.find(u => u.id === ewaId).avatarAt, set.body.avatarAt);
+
+    // the picture: to Ewa and the owner; not to Filip until they share a space
+    const picture = async (cookie, who) => ctx.request(`/api/avatars/${who}`, { ...(cookie ? { auth: null, headers: { cookie } } : {}) });
+    const ewaCookie = (await login("ewa", "ewa-test-password-1")).cookie;
+    const filipCookie = (await login("filip", "filip-test-password-1")).cookie;
+    const own = await picture(ewaCookie, ewaId);
+    assert.deepEqual([own.status, own.headers.get("content-type")], [200, "image/webp"]);
+    assert.equal(Buffer.from(await own.arrayBuffer()).toString("base64"), webp);
+    assert.equal((await picture(null, ewaId)).status, 200);
+    assert.equal((await picture(filipCookie, ewaId)).status, 404);
+    const etag = own.headers.get("etag");
+    assert.equal((await ctx.request(`/api/avatars/${ewaId}`, { auth: null, headers: { cookie: ewaCookie, "if-none-match": etag } })).status, 304);
+
+    const together = (await ewa("/api/spaces", "POST", { name: "Razem", color: "#22c55e", shared: true })).body;
+    const code = (await ewa(`/api/spaces/${together.id}/invites`, "POST", {})).body.code;
+    assert.equal((await filip("/api/spaces/join", "POST", { code })).status, 200);
+    assert.equal((await picture(filipCookie, ewaId)).status, 200);
+    assert.equal((await filip(`/api/spaces/${together.id}/members`)).body.find(m => m.id === ewaId).avatarAt, set.body.avatarAt);
+
+    // the owner has one too (not a users row); a member sees it only through a shared space
+    assert.equal((await call("/api/avatars/me", "PUT", { image: jpeg })).status, 200);
+    assert.equal((await picture(filipCookie, "owner")).status, 404);
+    const ownerCode = (await ewa(`/api/spaces/${together.id}/invites`, "POST", {})).body.code;
+    assert.equal((await call("/api/spaces/join", "POST", { code: ownerCode })).status, 200);
+    const ownerPicture = await picture(filipCookie, "owner");
+    assert.deepEqual([ownerPicture.status, ownerPicture.headers.get("content-type")], [200, "image/jpeg"]);
+
+    // removed: gone for everyone; the account's deletion takes it too
+    assert.deepEqual((await ewa("/api/avatars/me", "DELETE")).body, { avatarAt: null });
+    assert.equal((await picture(filipCookie, ewaId)).status, 404);
+    assert.equal((await filip("/api/avatars/me", "PUT", { image: webp })).status, 200);
+    const filipId = (await call("/api/users")).body.find(u => u.login === "filip").id;
+    assert.equal((await call(`/api/users/${filipId}`, "DELETE")).status, 200);
+    assert.equal((await owner.query("SELECT count(*)::int AS n FROM avatars WHERE account = $1", [`user:${filipId}`])).rows[0].n, 0);
+  });
+
+  test("spaces shared before members existed keep everybody in them, once", async () => {
+    const { adoptSharedSpaces } = require("../routes/spaces");
+    await owner.query("DELETE FROM app_settings WHERE key = 'spaces.members'");
+    const users = (await owner.query("SELECT id FROM users ORDER BY id")).rows.map(r => r.id);
+    const ownersOld = (await owner.query("INSERT INTO spaces (name, color, shared) VALUES ('Stara wspólna', '#38bdf8', true) RETURNING id")).rows[0].id;
+    const membersOld = (await owner.query("INSERT INTO spaces (name, color, shared, user_id) VALUES ('Jej stara', '#38bdf8', true, $1) RETURNING id", [users[0]])).rows[0].id;
+    assert.ok((await adoptSharedSpaces(appPool)) > 0);
+    const inOwners = (await owner.query("SELECT user_id FROM space_members WHERE space_id = $1 ORDER BY user_id", [ownersOld])).rows.map(r => r.user_id);
+    assert.deepEqual(inOwners, users);
+    const inMembers = (await owner.query("SELECT user_id FROM space_members WHERE space_id = $1 ORDER BY user_id NULLS FIRST", [membersOld])).rows.map(r => r.user_id);
+    assert.deepEqual(inMembers, [null, ...users.slice(1)]);
+    assert.equal(await adoptSharedSpaces(appPool), 0);
   });
 });

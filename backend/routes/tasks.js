@@ -53,14 +53,27 @@ async function loadTask(db, id, { lock = false } = {}) {
 // Decides space_id / project_id for a write. A project fixes the space; moving a task to another space
 // drops a project that does not belong there. `current` is the task before the change (null when creating).
 // Only projects and spaces the account can see are accepted; no space means the account's private space.
-// A task goes only to a shared space or to a space of its creator: nobody can move someone else's task out of sight
-// of the person who created it (e.g. a member moving the owner's task from "Dom" into their own Prywatne).
+// A task goes only to a space its creator sees (their own, or a shared space they are in): nobody can move someone
+// else's task out of sight of the person who created it (e.g. a member moving the owner's task from "Dom" into their own
+// Prywatne, or into a shared space the owner is not in).
 async function checkDestination(db, spaceId, creatorId) {
   if (spaceId === null) return;
-  const space = (await db.query("SELECT shared, user_id FROM spaces WHERE id = $1", [spaceId])).rows[0];
-  if (space && !space.shared && (space.user_id ?? null) !== (creatorId ?? null)) {
+  const space = await db.query(`SELECT ${visibleSpace("s", "$2::integer")} AS seen FROM spaces s WHERE s.id = $1`, [spaceId, creatorId ?? null]);
+  if (space.rowCount && !space.rows[0].seen) {
     throw new TaskInputError("A task can only move to a shared space or a space of its creator");
   }
+}
+
+// The spaces a write may put a task in, held (FOR SHARE) before the task itself, in the order taking someone out of a
+// shared space uses (the space, then its tasks): a task cannot slip into a space while its creator is being taken out.
+async function lockDestination(db, value) {
+  const ids = [];
+  if (value.spaceId != null) ids.push(value.spaceId);
+  if (value.projectId != null) {
+    const project = await db.query("SELECT space_id FROM projects WHERE id = $1", [value.projectId]);
+    if (project.rowCount) ids.push(project.rows[0].space_id);
+  }
+  if (ids.length) await db.query("SELECT 1 FROM spaces WHERE id = ANY($1::int[]) ORDER BY id FOR SHARE", [ids]);
 }
 
 async function resolvePlacement(db, current, value, spaces, user, creatorId = userId(user)) {
@@ -211,6 +224,7 @@ module.exports = function createTasksRouter(pool, { settings = null } = {}) {
     const workflowEnabled = domain.workflow === true ? await workflowOn() : true;
     try {
       const task = await withTransaction(pool, async client => {
+        await lockDestination(client, domain);
         const spaces = await defaultSpaces(client, req.user);
         await checkReferences(client, req.user, { ...domain, categoryId: value.categoryId });
         // Without a space or a project a new task is private.
@@ -284,6 +298,7 @@ module.exports = function createTasksRouter(pool, { settings = null } = {}) {
     const workflowEnabled = value.workflow === true ? await workflowOn() : true;
     try {
       const task = await withTransaction(pool, async client => {
+        await lockDestination(client, value);
         if (!(await canSeeTask(client, req.user, id))) return null;
         const before = await loadTask(client, id, { lock: true });
         if (!before) return null;
