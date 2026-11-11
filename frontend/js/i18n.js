@@ -85,8 +85,10 @@ const UK = {
     "Проєкт — це папка в одному просторі. Його завдання отримують його мітку. Видалення проєкту залишає завдання без проєкту.",
   "Etykiety można łączyć: zadanie może mieć kilka. Usunięcie etykiety zdejmuje ją ze wszystkich zadań.":
     "Мітки можна поєднувати: завдання може мати кілька. Видалення мітки знімає її з усіх завдань.",
-  "Osoby, którym przypisujesz zadania (to nie są konta logowania). Usunięcie zostawia zadania bez wykonawcy.":
-    "Люди, яким ви призначаєте завдання (це не облікові записи для входу). Видалення залишає завдання без виконавця.",
+  "Ty jesteś tu zawsze (ze swoim zdjęciem) i nowe zadania trafiają domyślnie do Ciebie; można też wybrać „Bez wykonawcy”. Pozostali to osoby, którym przypisujesz zadania (to nie są konta logowania). Usunięcie zostawia zadania bez wykonawcy.":
+    "Ви тут завжди (зі своїм фото), і нові завдання за замовчуванням призначаються вам; можна також вибрати «Без виконавця». Інші — люди, яким ви призначаєте завдання (це не облікові записи для входу). Видалення залишає завдання без виконавця.",
+  "Ty": "Ви", "To ja": "Це я", "To Ty: to konto, zawsze na liście": "Це ви: цей обліковий запис, завжди у списку",
+  "Przenieś zadania tego wykonawcy na siebie i usuń ten wpis": "Перенести завдання цього виконавця на себе і видалити цей запис",
   "Przestać udostępniać tę przestrzeń? Zadania innych kont z tej przestrzeni wrócą do ich Prywatnych.":
     "Припинити спільний доступ до цього простору? Завдання інших облікових записів повернуться до їхнього «Приватне».",
   "Przestań udostępniać": "Припинити спільний доступ", "Podłącz Kalendarz Google": "Під’єднати Google Календар", "Synchronizuj": "Синхронізувати",
@@ -351,6 +353,8 @@ const PATTERNS = [
   [/^Osoby w „(.+)”$/, "Люди в «$1»"], [/^Zaproszenie do „(.+)”$/, "Запрошення до «$1»"], [/^Usuń z przestrzeni: (.+)$/, "Видалити з простору: $1", "attr"],
   [/^Opuścić „(.+)”\? Przestrzeń zniknie z Twojej tablicy, a Twoje zadania z niej wrócą do Twoich Prywatnych\.$/,
     "Вийти з «$1»? Простір зникне з вашої дошки, а ваші завдання з нього повернуться до вашого «Приватне»."],
+  [/^„(.+)” to Ty\? Jego zadania zostaną przypisane do Ciebie, a ten wpis zniknie\.$/, "«$1» — це ви? Його завдання буде призначено вам, а цей запис зникне."],
+  [/^Przypisano do Ciebie zadań: (\d+)\.$/, "Призначено вам завдань: $1."],
   [/^Opuszczono „(.+)”\.$/, "Ви вийшли з «$1»."], [/^Dołączono do „(.+)”\.$/, "Ви приєдналися до «$1»."],
   [/^Usunąć (.+) z „(.+)”\? Zadania tej osoby z tej przestrzeni wrócą do jej Prywatnych\.$/, "Видалити $1 з «$2»? Завдання цієї людини з цього простору повернуться до її «Приватне»."],
   [/^Jednorazowy, ważny do (.+)\.$/, "Одноразовий, дійсний до $1."], [/^Ważny do (.+)$/, "Дійсний до $1"], [/^Osób w przestrzeni: (\d+)$/, "Людей у просторі: $1"],

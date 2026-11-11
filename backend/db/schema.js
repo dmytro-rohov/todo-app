@@ -98,13 +98,18 @@ const projects = pgTable("projects", {
 ]);
 
 // People a task can be assigned to (records, not login accounts; a future agent can be one too).
+// account: set on the one entry that is the account itself ("owner" or "user:<id>", as in avatars): every account has
+// it, made when its assignees are first read; it shows the account's picture and is never deleted.
 const assignees = pgTable("assignees", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 80 }).notNull(),
   color: varchar("color", { length: 7 }).notNull(),
   createdAt: timestamptz("created_at").defaultNow().notNull(),
   userId: ownerColumn(),
-});
+  account: varchar("account", { length: 24 }),
+}, (table) => [
+  uniqueIndex("assignees_account").on(table.account),
+]);
 
 const tasks = pgTable("tasks", {
   id: serial("id").primaryKey(),
