@@ -20,6 +20,8 @@
 @layer components {
     // The Mytko Kit's components (buttons, fields, switches, chips, avatars, toasts, dialogs, empty states), then
     // Tasks' own: the select, dates and colours, dots and counts, round buttons, deadlines, timers, view tabs.
+    // a plain checkbox's size first: the kit's switch and Tasks' toggle chips hide theirs (later rules)
+    input[type=checkbox] { accent-color: var(--accent); width: 1.125rem; height: 1.125rem; }
     @include kit.components;
     // Tasks' variants of the kit's components
     .icon-btn--sm { width: 1.625rem; height: 1.625rem; border-radius: 0.4375rem; }
@@ -52,7 +54,6 @@
     input[type=date] { color-scheme: dark; }
     .textarea { resize: vertical; line-height: 1.5; }
     input[type=color] { width: 2.25rem; height: 2.25rem; min-height: 0; padding: 2px; border: 1px solid var(--border-strong); border-radius: 0.5625rem; background: var(--surface-2); cursor: pointer; }
-    input[type=checkbox] { accent-color: var(--accent); width: 1.125rem; height: 1.125rem; }
 
     .dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--c, var(--accent)); }
     .count { display: inline-grid; place-items: center; min-width: 1.625rem; height: 1.5rem; padding: 0 0.4375rem; border-radius: 6.1875rem; background: #ffffff12; color: var(--muted); font-size: 0.8125rem; font-weight: 650; font-style: normal; }
