@@ -1,7 +1,7 @@
 // Login screen, the same as Mytko Workflow's: password login plus "Zaloguj kontem Mytko".
 import { request, ApiError } from "../api/http.js";
-import { markWelcome } from "../../vendor/mytko-kit/js/startup.js";
-import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { markWelcome } from "../../vendor/mytko-kit/js/ui.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { LANG, setLang } from "../i18n.js";
 
 const FEATURES = [

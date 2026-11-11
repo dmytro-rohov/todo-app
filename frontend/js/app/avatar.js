@@ -3,10 +3,10 @@
 // where the browser cannot write WebP, at most ~110 KB; the app makes it round). Only the account, the people it shares
 // a space with and the owner see it.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { initials } from "./logic.js";
 import { dialog } from "./dialogs.js";
-import { toast } from "../../vendor/mytko-kit/js/toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 
 const SIDE = 256; // the saved square
 const VIEW = 280; // the editor's circle, in CSS pixels

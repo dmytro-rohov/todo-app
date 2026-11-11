@@ -55,9 +55,12 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   // Liveness: the process is up. No dependencies, no details.
   app.get("/healthz", kit.liveness);
 
+  // The per-address limit counts the dynamic paths only (/api, /auth: the kit's limitDynamicRoutes) and, as before, the
+  // readiness check below (it asks the database); liveness above is exempt. The app shell, its modules and icons never
+  // use it up, so reloading the app never runs into it (test/limit.test.js).
   const limiter = rateLimit(config.rateLimit);
   stoppables.push(limiter);
-  app.use(limiter);
+  kit.limitDynamicRoutes(app, limiter, [...kit.LIMITED_PATHS, "/readyz"]);
 
   // Readiness: database reachable and schema migrated. Never returns error
   // details, connection info or versions.

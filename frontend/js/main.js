@@ -5,8 +5,7 @@ function shared() {
 }
 import { startApp } from "./app/app.js";
 import { rememberJoinLink } from "./app/sharing.js";
-import { finishStartup, markWelcome, startupStep } from "../vendor/mytko-kit/js/startup.js";
-import { applyScale } from "../vendor/mytko-kit/js/ui-scale.js";
+import { finishStartup, markWelcome, startupStep, applyScale } from "../vendor/mytko-kit/js/ui.js";
 import { startTranslation } from "./i18n.js";
 
 applyScale();

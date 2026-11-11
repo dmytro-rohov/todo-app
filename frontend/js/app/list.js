@@ -1,5 +1,5 @@
 // List view: rows grouped by status, sortable, with a quick status toggle.
-import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { formatDuration, SORTS, STATUSES, STATUS_LABELS, trackedNow } from "./logic.js";
 import { render, store, visibleTasks } from "./app.js";

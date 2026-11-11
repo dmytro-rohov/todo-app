@@ -23,8 +23,11 @@ w ramach Mytko Workflow.
 - Frontend: z zestawu pochodzą pomocniki, rozmiar interfejsu, ekran startowy, toasty, ikony, rdzeń service workera,
   tokeny, reset, podstawa strony i style ekranu logowania. Teksty komponentów zestawu: `KIT_TEXTS` w
   `frontend/js/i18n.js` (słowa Tasks nad tekstami zestawu); reszta interfejsu jest pisana po polsku i tłumaczona przez
-  `js/i18n.js`. Każdy moduł to jedno żądanie więcej w limicie na adres (`RATE_LIMIT_MAX` na minutę): nie ładuj modułów
-  zestawu, których Tasks nie używa (np. `kit.js`, `http.js` zestawu).
+  `js/i18n.js`. Moduły zestawu importuj z `core.js`, `ui.js`, `icons.js` (dawne ścieżki działają, ale każda to jeden
+  plik więcej przy wejściu na stronę).
+- Limit żądań na adres (`RATE_LIMIT_MAX` na minutę) liczy tylko `/api` i `/auth` (`kit.limitDynamicRoutes`); pliki
+  statyczne się nie liczą. Nowa trasa poza tymi ścieżkami (poza health checks) nie przejdzie
+  `backend/test/limit.test.js`.
 
 ## Izolacja i Git
 

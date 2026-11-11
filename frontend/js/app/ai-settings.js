@@ -1,11 +1,11 @@
 // Porządek → "AI i Workflow" (owner only): is Mytko Workflow connected right now, turn the connection on/off;
 // the AI on/off (any provider; off: nothing is sent to the AI, everything is done by hand) and how tasks reach the Workflow ToDo.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { reload, render, store } from "./app.js";
 import { dialog } from "./dialogs.js";
-import { toast } from "../../vendor/mytko-kit/js/toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 import { LOCALE } from "../i18n.js";
 
 const MODES = [

@@ -72,9 +72,12 @@ describe("app wiring", () => {
     assert.ok(auth > 0);
     assert.ok(app.indexOf('app.get("/healthz"') < auth);
     assert.ok(app.indexOf('app.get("/readyz"') < auth);
-    // liveness is exempt from the rate limiter, readiness is not
-    assert.ok(app.indexOf('app.get("/healthz"') < app.indexOf("app.use(limiter)"));
-    assert.ok(app.indexOf('app.get("/readyz"') > app.indexOf("app.use(limiter)"));
+    // liveness is exempt from the rate limiter, readiness is not (the limit is mounted on the dynamic paths and /readyz;
+    // test/limit.test.js shows it answering 429)
+    const limit = app.indexOf("kit.limitDynamicRoutes(app, limiter, [...kit.LIMITED_PATHS, \"/readyz\"])");
+    assert.ok(limit > 0);
+    assert.ok(app.indexOf('app.get("/healthz"') < limit);
+    assert.ok(app.indexOf('app.get("/readyz"') > limit);
   });
 });
 

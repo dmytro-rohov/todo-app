@@ -1,14 +1,14 @@
 // Meeting brief: what was said (Gemini's notes from Poczta, or pasted notes) and the AI's brief: summary, decisions,
 // open questions, the client's site brief (Website Factory's brief.json terms), proposed tasks and the next meeting.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { addDays, isoDay, STATUS_LABELS } from "./logic.js";
 import { lookup, reload, store, upsertTask, workflowReady } from "./app.js";
 import { dialog } from "./dialogs.js";
 import { openDrawer } from "./drawer.js";
 import { eventDay, eventTime, openMeeting } from "./meetings.js";
-import { toast } from "../../vendor/mytko-kit/js/toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 
 const items = list => (list?.length ? `<ul>${list.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<p class="muted">—</p>');
 

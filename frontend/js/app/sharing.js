@@ -1,12 +1,12 @@
 // Shared spaces: who is in one, adding the owner's accounts straight from the list (the owner alone sees it), inviting
 // anybody with a one-time code or its link, joining with a code, leaving. Nobody else is shown which accounts exist.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { confirmDialog, dialog } from "./dialogs.js";
 import { isMember, paint, reload } from "./app.js";
 import { avatarHtml } from "./avatar.js";
-import { toast } from "../../vendor/mytko-kit/js/toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 import { LANG, LOCALE } from "../i18n.js";
 
 // "XXXX-XXXX-XXXX": how a code is shown and read out.

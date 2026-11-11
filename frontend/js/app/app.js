@@ -1,7 +1,7 @@
 // Mytko Tasks app shell: state, sidebar, header with counters, view tabs, filters, and the active view.
 import { api } from "../api/client.js";
 import { logout, markLoggedOut } from "../auth/login.js";
-import { escapeHtml, safeColor } from "../../vendor/mytko-kit/js/helpers.js";
+import { escapeHtml, safeColor } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { counters, filterTasks, isOpen, isoDay, STATUS_LABELS, formatClock, trackedNow } from "./logic.js";
 import { renderBoard, bindBoard, tickTimers, timerData, updatePeek } from "./board.js";
@@ -18,7 +18,7 @@ import { afterGoalsRender, bindGoals, renderGoals } from "./goals.js";
 import { openAiSettings } from "./ai-settings.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog, openLanguageDialog, openScaleDialog } from "./dialogs.js";
-import { toast } from "../../vendor/mytko-kit/js/toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 import { LANG } from "../i18n.js";
 
 const PREFS = "mytko-tasks-prefs";

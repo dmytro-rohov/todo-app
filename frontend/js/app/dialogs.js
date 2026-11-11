@@ -1,14 +1,13 @@
 // Modal dialogs (native <dialog>): new task, managing spaces / projects / labels / people, confirmations.
 import { api } from "../api/client.js";
-import { SCALES, savedScale, saveScale } from "../../vendor/mytko-kit/js/ui-scale.js";
-import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { SCALES, savedScale, saveScale, toast } from "../../vendor/mytko-kit/js/ui.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { isoDay, PRIORITY_LABELS, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
 import { isMember, lookup, paint, reload, render, store, upsertTask } from "./app.js";
 import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.js";
 import { openClient } from "./clients.js";
 import { openDrawer } from "./drawer.js";
-import { toast } from "../../vendor/mytko-kit/js/toast.js";
 import { LANG, LANGUAGES, LOCALE, setLang } from "../i18n.js";
 import { openJoin, openSpacePeople } from "./sharing.js";
 

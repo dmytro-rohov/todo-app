@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeHtml, safeColor } from '../vendor/mytko-kit/js/helpers.js';
+import { escapeHtml, safeColor } from '../vendor/mytko-kit/js/core.js';
 for (const [input, expected] of [['<script>', '&lt;script&gt;'], ['"\'`&', '&quot;&#39;&#96;&amp;'], [null, ''], [undefined, ''], ['Żółć 🎉', 'Żółć 🎉'], [7, '7']]) {
   test(`escapeHtml safely renders ${String(input)}`, () => assert.equal(escapeHtml(input), expected));
 }

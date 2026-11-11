@@ -1,14 +1,14 @@
 // Calendar view: task deadlines and the meetings of the connected Google Calendars. Month (drag a task to another
 // day to move its deadline), week with hours (click a free slot for a meeting), and an agenda on phones.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { addDays, byPosition, isoDay, monthGrid, MONTHS, MONTHS_SHORT, shiftMonth, STATUS_LABELS, WEEKDAYS } from "./logic.js";
 import { lookup, render, runTask, store, visibleTasks } from "./app.js";
 import { calendarState, ensureEvents, eventsByDay, eventTime, hasCalendars, openMeeting, scopedEvents } from "./meetings.js";
 import { openDrawer } from "./drawer.js";
 import { openNewTask } from "./dialogs.js";
-import { uiScale } from "../../vendor/mytko-kit/js/ui-scale.js";
+import { uiScale } from "../../vendor/mytko-kit/js/ui.js";
 import { LOCALE } from "../i18n.js";
 
 const PER_DAY = 3;
