@@ -34,6 +34,41 @@ w ramach Mytko Workflow.
   statyczne się nie liczą. Nowa trasa poza tymi ścieżkami (poza health checks) nie przejdzie
   `backend/test/limit.test.js`.
 
+## Mytko Kit: zasada ekosystemu Mytko
+
+Wszystkie aplikacje Mytko (Workflow, Tasks, Finance, Fitness i każda następna) korzystają z jednego zestawu:
+**Mytko Kit** (`dmytro-rohov/mytko-kit`). Celem jest jeden wygląd, jeden sposób działania i jeden kod do utrzymania.
+
+1. **Najpierw zestaw.**
+   - Zanim napiszesz którąkolwiek z tych rzeczy, sprawdź, czy jest już w Mytko Kit:
+     - komponent, układ, styl, token koloru, ikonę albo tekst interfejsu;
+     - moduł serwera (logowanie, sesje, „Zaloguj kontem Mytko”, bezpieczeństwo, limity zapytań, migracje, health,
+       obsługa błędów).
+   - Gdzie szukać: kopia `vendor/mytko-kit` w aplikacji oraz `README.md` i `CHANGELOG.md` zestawu.
+   - Jeśli jest, użyj go. Nie kopiuj kodu z innej aplikacji Mytko i nie pisz własnej wersji.
+2. **Brakuje czegoś? Rozszerz zestaw.**
+   - Ogólne rzeczy dodaje się do Mytko Kit, nie do jednej aplikacji. Tak samo, gdy zestaw nie pasuje.
+   - Zmiana w zestawie musi być wstecznie zgodna. Wymaga nowej wersji, wpisu w `CHANGELOG.md` i testów.
+   - Potem kopię w aplikacji aktualizuje się poleceniem zestawu `node tools/sync.mjs <katalog aplikacji>`.
+   - To, co dotyczy tylko jednej aplikacji, zostaje w aplikacji i korzysta z opcji albo haków zestawu.
+   - Jeśli pracujesz w sesji aplikacji i nie możesz zmienić zestawu:
+     - zrób najmniejsze rozwiązanie w aplikacji i oznacz je komentarzem `TODO(mytko-kit): <co przenieść>`;
+     - w raporcie napisz, czego brakuje w zestawie.
+3. **Potem używaj ponownie.**
+   - Co trafiło do zestawu, inne aplikacje biorą z zestawu.
+   - Nową wersję synchronizują przy najbliższej zmianie, zamiast utrzymywać własne odpowiedniki.
+4. **Kopii nie zmieniaj ręcznie.**
+   - `vendor/mytko-kit` należy do zestawu, a test pilnuje, że jest identyczny z manifestem.
+   - Zmiany robi się w zestawie i synchronizuje.
+5. **Nowa aplikacja Mytko startuje od zestawu, nie od kopii innej aplikacji.** Zestaw daje:
+   - tokeny i style;
+   - ikony;
+   - pasek boczny na komputerze i dolny pasek kart na telefonie;
+   - logowanie, też „Zaloguj kontem Mytko”;
+   - okna dialogowe i powiadomienia;
+   - języki PL/UA;
+   - moduły serwera.
+
 ## Izolacja i Git
 
 - Każda sesja pracuje w **osobnym worktree** na **własnym branchu** utworzonym przez Mytko.
