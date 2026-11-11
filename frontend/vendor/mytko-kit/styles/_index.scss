@@ -1,0 +1,32 @@
+// Mytko Kit, styles: `@use "../vendor/mytko-kit/styles" as kit;` from the app's styles/style.scss gives these mixins,
+// each placed in the app's cascade layer of the same name (the whole default sheet, in order: mytko-kit.scss):
+//
+//   kit.tokens        tokens.css (colours dark + light, fonts, radii, sizes, shadows)      @layer base
+//   kit.base          the page itself (scale, html/body, focus, [hidden], …)                 @layer base
+//   kit.reset         the reset                                                              @layer reset
+//   kit.components    buttons, fields, chips, avatars, toasts, dialogs, … ($select-arrow) @layer components
+//   kit.shell-frame   sidebar, nav, main column, page heads, spinner                         @layer views (first)
+//   kit.shell-pages   "soon" cards, Settings, accounts; tab bar off and collapsed rail        @layer views (after the app's views)
+//   kit.shell-phone   the same on phones                     inside the app's @media (max-width: 900px) in @layer views
+//   kit.shell-motion  reduced motion                                                         @layer views (last)
+//   kit.auth          the login and start-up screens                                         @layer auth
+//   kit.device        iOS field zoom, finger-sized icon buttons                              @layer device
+//
+// Never edit these files in an app (vendor/mytko-kit is a copy): change the kit and run its sync.
+@use "sass:meta";
+@forward "base";
+@forward "components";
+@forward "shell";
+@forward "device";
+
+@mixin tokens {
+    @include meta.load-css("tokens");
+}
+
+@mixin reset {
+    @include meta.load-css("reset");
+}
+
+@mixin auth {
+    @include meta.load-css("auth");
+}
