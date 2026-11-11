@@ -9,6 +9,21 @@ w ramach Mytko Workflow.
 - Express 5 / Node.js 22+ (CommonJS w `backend/`)
 - PostgreSQL
 
+## Mytko Kit (wspólny kod aplikacji Mytko)
+
+- **Wspólny kod jest w `frontend/vendor/mytko-kit/` i `backend/vendor/mytko-kit/`: to kopia zestawu Mytko Kit
+  (osobne repozytorium `mytko-kit`). Nigdy jej tu nie edytuj** — zmień zestaw i uruchom w nim
+  `node tools/sync.mjs <ta aplikacja>`, a kopię zacommituj jako całość („chore: Mytko Kit <wersja> (<commit>)”).
+  Testy `backend/test/kit.test.js` i `frontend/test/kit.test.js` nie przechodzą, gdy kopia różni się od manifestu
+  (`mytko-kit.json`).
+- Tasks ma **własny model właściciela** (właściciel = sesja bez `user_id`, konta członków w `users`): własne
+  `config.js`, `users.js`, `access.js` i trasy logowania/kont zostają w aplikacji i korzystają z kryptografii, sesji i
+  zabezpieczeń zestawu (`backend/kit.js`). Zmienne: `ADMIN_LOGIN` / `ADMIN_PASSWORD_HASH`, a gdy ich nie ma —
+  dotychczasowe `AUTH_USERNAME` / `AUTH_PASSWORD_HASH`.
+- Frontend: z zestawu pochodzą pomocniki, rozmiar interfejsu, ekran startowy, toasty, ikony, rdzeń service workera,
+  tokeny, reset, podstawa strony i style ekranu logowania. Teksty komponentów zestawu: `frontend/js/locales/`
+  (słowa Tasks nad tekstami zestawu); reszta interfejsu jest pisana po polsku i tłumaczona przez `js/i18n.js`.
+
 ## Izolacja i Git
 
 - Każda sesja pracuje w **osobnym worktree** na **własnym branchu** utworzonym przez Mytko.

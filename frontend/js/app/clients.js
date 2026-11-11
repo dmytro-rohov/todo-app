@@ -1,13 +1,13 @@
 // Client card (CRM-lite): details, status (lead → client), projects, open tasks and meetings of one client.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { addDays, dueLabel, isoDay, isOpen, STATUS_LABELS } from "./logic.js";
 import { lookup, reload, setFilter, store } from "./app.js";
 import { confirmDialog, dialog, openNewTask } from "./dialogs.js";
 import { openDrawer } from "./drawer.js";
 import { calendarState, eventDay, eventTime, openMeeting } from "./meetings.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/toast.js";
 
 const STATUS = { lead: "Lead", client: "Klient", archived: "Archiwum" };
 

@@ -1,13 +1,13 @@
 // Meetings: events of the Google Calendars connected to spaces (read, created and edited through Tasks).
 import { api } from "../api/client.js";
-import { escapeHtml } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { addDays, isoDay, STATUS_LABELS } from "./logic.js";
 import { lookup, reload, render, store } from "./app.js";
 import { confirmDialog, dialog } from "./dialogs.js";
 import { openDrawer } from "./drawer.js";
 import { openBrief } from "./brief.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/toast.js";
 import { LOCALE } from "../i18n.js";
 
 export const calendarState = { configured: false, accounts: [], events: [], rangeKey: "", today: [] };

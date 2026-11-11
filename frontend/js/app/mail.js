@@ -2,8 +2,8 @@
 // lead from the sender, the AI's proposed tasks, an invitation into the Praca calendar, a reply in the mail program.
 // "Załatwione" hides a message here only; opening one marks it read on the server too.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/helpers.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { isoDay, STATUS_LABELS } from "./logic.js";
 import { isMember, lookup, reload, render, store, upsertTask, workflowReady } from "./app.js";
 import { openNewTask } from "./dialogs.js";
@@ -11,7 +11,7 @@ import { openDrawer } from "./drawer.js";
 import { openClient } from "./clients.js";
 import { calendarState } from "./meetings.js";
 import { openBrief } from "./brief.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/toast.js";
 import { LOCALE } from "../i18n.js";
 
 export const mailState = { data: null, view: "inbox", q: "", openId: null, message: null, busy: "" };

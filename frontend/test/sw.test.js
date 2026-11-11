@@ -23,11 +23,15 @@ function load(answer) {
     skipWaiting() {},
     clients: { claim: async () => undefined },
   };
-  vm.runInNewContext(source, {
+  // sw.js loads the Mytko Kit core the way the browser does (importScripts), into the same worker scope
+  const context = vm.createContext({
     self, URL, Response, console,
     caches: { open: async () => cache, keys: async () => [], delete: async () => true },
     fetch: async () => answer(),
   });
+  context.importScripts = (...paths) => paths.forEach(path =>
+    vm.runInContext(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", path.replace(/^\//, "")), "utf8"), context));
+  vm.runInContext(source, context);
   return async (path, mode) => {
     let reply;
     const waits = [];

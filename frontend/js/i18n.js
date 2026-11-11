@@ -2,6 +2,16 @@
 // The interface is written in Polish; in Ukrainian a translator replaces the interface's texts (text, title,
 // aria-label, placeholder) as they appear. Content people write (tasks, notes, mail, names) is marked translate="no"
 // where it is rendered and never touched.
+import { setupKit } from "../vendor/mytko-kit/js/kit.js";
+import kitUk from "./locales/uk.js";
+import kitPl from "./locales/pl.js";
+
+// Mytko Kit (vendor/mytko-kit: a copy of the shared kit, never edited here — change the kit and run its tools/sync.mjs)
+// set up for Mytko Tasks: its id (storage keys "mytko-tasks:…", the same language key as below) and name, and the
+// texts its components show in Tasks (locales/uk.js, pl.js). The kit's components translate their own texts; this
+// file's translator keeps translating Tasks' Polish interface.
+setupKit({ id: "tasks", name: "Mytko Tasks", short: "Tasks", locales: { uk: kitUk, pl: kitPl } });
+
 const KEY = "mytko-tasks:lang";
 export const LANGUAGES = { pl: "Polski", uk: "Українська" };
 
