@@ -1,10 +1,10 @@
 // Accounts. The owner (the only administrator) creates accounts for others, e.g. a partner: they get the task app
 // only, with their own data plus the shared spaces they are put in or join with a code. A member changes their own password here too.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { confirmDialog, dialog } from "./dialogs.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 import { LOCALE } from "../i18n.js";
 import { avatarHtml } from "./avatar.js";
 

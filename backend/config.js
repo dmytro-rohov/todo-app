@@ -1,7 +1,6 @@
 const path = require("node:path");
-const { isIP } = require("node:net");
 
-const { parsePasswordHash } = require("./security");
+const { parsePasswordHash, loadDatabaseConfig, loadSso: loadKitSso, toInt, parseTrustProxy } = require("./kit");
 const { loadAi } = require("./ai");
 
 // Reads configuration from the environment. Fails fast in production when
@@ -16,18 +15,20 @@ function loadConfig(env = process.env) {
     errors.push("DATABASE_URL is required");
   }
 
-  const authUsername = env.AUTH_USERNAME || "";
-  const authPasswordHash = env.AUTH_PASSWORD_HASH || "";
+  // The owner: ADMIN_LOGIN / ADMIN_PASSWORD_HASH, the names every Mytko app uses; AUTH_USERNAME / AUTH_PASSWORD_HASH
+  // (Tasks' earlier names) still work when the new ones are not set. The login is compared exactly as written.
+  const authUsername = env.ADMIN_LOGIN || env.AUTH_USERNAME || "";
+  const authPasswordHash = env.ADMIN_PASSWORD_HASH || env.AUTH_PASSWORD_HASH || "";
   const authDisabled = env.AUTH_DISABLED === "true";
 
   if (authDisabled && isProduction) {
     errors.push("AUTH_DISABLED=true is not allowed when NODE_ENV=production");
   }
   if (authUsername.length > 80) {
-    errors.push("AUTH_USERNAME must be at most 80 characters");
+    errors.push("ADMIN_LOGIN (AUTH_USERNAME) must be at most 80 characters");
   }
   if (!authDisabled && (!authUsername || !authPasswordHash)) {
-    errors.push("AUTH_USERNAME and AUTH_PASSWORD_HASH are required (or AUTH_DISABLED=true outside production)");
+    errors.push("ADMIN_LOGIN and ADMIN_PASSWORD_HASH (or AUTH_USERNAME and AUTH_PASSWORD_HASH) are required (or AUTH_DISABLED=true outside production)");
   } else if (!authDisabled) {
     try {
       parsePasswordHash(authPasswordHash);
@@ -58,7 +59,7 @@ function loadConfig(env = process.env) {
     throw error;
   }
 
-  const database = require("./database-config").loadDatabaseConfig(env);
+  const database = loadDatabaseConfig(env);
   return {
     database,
     nodeEnv,
@@ -100,26 +101,10 @@ function loadConfig(env = process.env) {
   };
 }
 
-// "Zaloguj kontem Mytko" (routes/sso.js): enabled when MYTKO_SSO_ORIGIN and MYTKO_SSO_CLIENT_SECRET are set.
-// MYTKO_SSO_LOGIN is the only Mytko Workflow login let in.
+// "Zaloguj kontem Mytko" (the kit's routes/sso.js): enabled when MYTKO_SSO_ORIGIN and MYTKO_SSO_CLIENT_SECRET are set.
+// MYTKO_SSO_LOGIN is the only Mytko Workflow login let in; it becomes the owner here. The client id defaults to "tasks".
 function loadSso(env, errors) {
-  const origin = env.MYTKO_SSO_ORIGIN || "";
-  const clientSecret = env.MYTKO_SSO_CLIENT_SECRET || "";
-  if (!origin && !clientSecret) return null;
-  if (!origin || !clientSecret) {
-    errors.push("MYTKO_SSO_ORIGIN and MYTKO_SSO_CLIENT_SECRET must be set together");
-    return null;
-  }
-  if (!/^https:\/\/[^/]+$/.test(origin) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-    errors.push("MYTKO_SSO_ORIGIN must be an https origin without path, e.g. https://workflow.mytko.dev");
-  }
-  if (clientSecret.length < 32) errors.push("MYTKO_SSO_CLIENT_SECRET must be at least 32 characters");
-  const clientId = env.MYTKO_SSO_CLIENT_ID || "tasks";
-  if (!/^[a-z][a-z0-9-]{1,31}$/.test(clientId)) errors.push("MYTKO_SSO_CLIENT_ID must be a short lowercase id");
-  // Workflow may have several operators; only this one becomes the owner here.
-  const login = env.MYTKO_SSO_LOGIN || "";
-  if (!login || login.length > 80) errors.push("MYTKO_SSO_LOGIN (the Mytko Workflow login let in, at most 80 characters) is required with MYTKO_SSO_ORIGIN");
-  return { origin, clientSecret, clientId, login };
+  return loadKitSso(env, errors, "tasks");
 }
 
 // Google Calendars per space (routes/calendar.js): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (an OAuth "Web application"
@@ -219,36 +204,6 @@ function parseDays(value) {
     for (let day = from; day <= to; day++) days.add(day);
   }
   return [...days];
-}
-
-function toInt(value, fallback) {
-  if (value === undefined || value === "") return fallback;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error(`Expected a non-negative integer, got "${value}"`);
-  }
-  return parsed;
-}
-
-function parseTrustProxy(value, isProduction) {
-  // Trust only actual proxy peers in production, never every private client
-  // or a hop count (which depends on every route having the same length).
-  if (isProduction && value && value !== "false") {
-    const peers = value.split(",").map(item => item.trim());
-    for (const peer of peers) {
-      const [address, prefix, extra] = peer.split("/");
-      const family = isIP(address);
-      const hostPrefix = family === 4 ? "32" : "128";
-      if (peer !== "loopback" && (!family || extra !== undefined ||
-          (prefix !== undefined && prefix !== hostPrefix))) {
-        throw new Error("Production TRUST_PROXY requires loopback or explicit proxy IPs (/32 or /128)");
-      }
-    }
-  }
-  if (value === undefined || value === "" || value === "false") return false;
-  if (value === "true") return true;
-  if (/^\d+$/.test(value)) return Number(value);
-  return value.split(",").map(item => item.trim()).filter(Boolean);
 }
 
 module.exports = { loadConfig };

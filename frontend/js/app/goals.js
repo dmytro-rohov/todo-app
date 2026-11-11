@@ -2,12 +2,12 @@
 // crossed out, so the month or the year can be looked back on), switched between goal and dream, edited and moved
 // up or down. Earlier lists sit on the side with how much of each was done.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { isoDay, MONTHS } from "./logic.js";
 import { render } from "./app.js";
 import { confirmDialog, dialog } from "./dialogs.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 import { LOCALE } from "../i18n.js";
 
 const now = new Date();

@@ -1,13 +1,13 @@
 // Task details: a side panel that edits the task in place (each field saves on change), with subtasks, notes,
 // the timer and the change history.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { formatClock, formatDuration, PRIORITY_LABELS, STATUS_LABELS, titleError, trackedNow, yearsAhead } from "./logic.js";
 import { isMember, lookup, paint, reload, runTask, store, workflowReady } from "./app.js";
 import { moveTask, timerData, workflowLabel } from "./board.js";
 import { confirmDialog } from "./dialogs.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 import { LOCALE } from "../i18n.js";
 
 const FIELD_NAMES = {

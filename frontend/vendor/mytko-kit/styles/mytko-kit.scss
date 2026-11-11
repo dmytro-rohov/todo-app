@@ -1,0 +1,39 @@
+// The kit's whole default stylesheet, in the cascade layers every Mytko app uses. A new app can start from it:
+//
+//   @use "../vendor/mytko-kit/styles/mytko-kit";      // the layers and the kit's rules
+//   @layer components { …the app's own… }              // later rules in a layer win over the kit's
+//   @layer views { …the app's views… }
+//
+// (An app whose rules must sit between the kit's — Fitness, Finance — includes the mixins itself; see _index.scss.)
+@use "index" as kit;
+@layer reset, base, components, views, auth, device;
+
+@layer reset {
+    @include kit.reset;
+}
+
+@layer base {
+    @include kit.tokens;
+    @include kit.base;
+}
+
+@layer components {
+    @include kit.components;
+}
+
+@layer views {
+    @include kit.shell-frame;
+    @include kit.shell-pages;
+    @media (max-width: 900px) {
+        @include kit.shell-phone;
+    }
+    @include kit.shell-motion;
+}
+
+@layer auth {
+    @include kit.auth;
+}
+
+@layer device {
+    @include kit.device;
+}

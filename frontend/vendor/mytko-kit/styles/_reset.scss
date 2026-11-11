@@ -1,4 +1,4 @@
-// Wrapped in the "reset" cascade layer by style.scss.
+// Mytko Kit: the reset, wrapped in the "reset" cascade layer by the app (@layer reset { @include kit.reset; }).
 /* 1. Use a more-intuitive box-sizing model */
 *, *::before, *::after {
   box-sizing: border-box;

@@ -3,6 +3,14 @@
 Prywatna lista zadań właściciela Mytko: praca i sprawy prywatne, projekty klientów, terminy i czas pracy.
 Działa na `tasks.mytko.dev`, wygląda i loguje się tak samo jak Mytko Workflow.
 
+## Mytko Kit
+
+Wspólny wygląd i kod aplikacji Mytko (kryptografia haseł, sesje, zabezpieczenia, ikony, tokeny i style, ekran startowy,
+service worker) pochodzi z zestawu **Mytko Kit**, skopiowanego do `frontend/vendor/mytko-kit/` i
+`backend/vendor/mytko-kit/`. Tej kopii nie edytuje się tutaj: zmiany robi się w repozytorium `mytko-kit`, potem
+`node tools/sync.mjs ../todo-app` (w zestawie) i commit kopii w Tasks. Testy `kit.test.js` pilnują, że kopia jest
+dokładnie taka, jak ją zapisał zestaw.
+
 ## Technologie
 
 - **Frontend:** Vanilla JS (natywne moduły ES, bez bundlera), SCSS, ikony SVG inline.

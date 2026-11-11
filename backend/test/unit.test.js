@@ -6,7 +6,7 @@ const { pathToFileURL } = require("node:url");
 const { loadConfig } = require("../config");
 const { hashPassword, parsePasswordHash, verifyPassword } = require("../security");
 const { parseId, isValidDate, validateTask, validateCategory } = require("../validation");
-const { listMigrations } = require("../migrations");
+const { listMigrations } = require("../kit");
 
 const PROD = {
   NODE_ENV: "production",
@@ -128,7 +128,8 @@ describe("migrations on disk", () => {
 });
 
 describe("frontend escaping helpers", () => {
-  const helpersUrl = pathToFileURL(path.join(__dirname, "..", "..", "frontend", "js", "utils", "helpers.js")).href;
+  // the frontend's helpers are the kit's now (frontend/vendor/mytko-kit/js/helpers.js)
+  const helpersUrl = pathToFileURL(path.join(__dirname, "..", "..", "frontend", "vendor", "mytko-kit", "js", "helpers.js")).href;
 
   test("escapeHtml neutralizes markup", async () => {
     const { escapeHtml } = await import(helpersUrl);

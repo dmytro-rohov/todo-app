@@ -1,13 +1,13 @@
 // Board view: four columns, cards, drag and drop (mouse, touch, keyboard) and the card actions.
 import { api, sha256Hex } from "../api/client.js";
-import { escapeHtml } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { applyMove, byPriority, boardCanonical, byPosition, columns, dueLabel, dueState, formatClock, formatDuration, goalLabel, initials, PRIORITY_LABELS, STATUSES,
   STATUS_LABELS, trackedNow } from "./logic.js";
 import { lookup, reload, render, runTask, savePrefs, store, visibleTasks, workflowReady } from "./app.js";
 import { openDrawer } from "./drawer.js";
 import { retentionNote } from "./archive.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 
 const COLUMN_ICONS = { todo: "circle", in_progress: "play", needs_review: "warning", done: "checkCircle", planned: "target" };
 const DRAG_THRESHOLD = 6;

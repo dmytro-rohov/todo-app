@@ -1,25 +1,4 @@
-// Applies pending schema migrations using the migration (schema owner)
-// credentials, then grants data-only privileges to the application role.
-// Safe to run concurrently and repeatedly.
-const path = require("node:path");
-
-const { createPool } = require("./db");
-const { runMigrations } = require("./migrations");
-
-async function main() {
-  const pool = createPool(require("./database-config").loadDatabaseConfig(process.env, { migration: true }));
-
-  try {
-    await runMigrations(pool, {
-      dir: path.join(__dirname, "drizzle"),
-      appRole: process.env.APP_DB_ROLE || ""
-    });
-  } finally {
-    await pool.end();
-  }
-}
-
-main().catch((error) => {
-  console.error(`migration failed: ${error.message}`);
-  process.exit(1);
-});
+// Applies pending schema migrations (./drizzle) using the migration (schema owner) credentials, then grants data-only
+// privileges to the application role (APP_DB_ROLE). Safe to run concurrently and repeatedly (Tasks' own migration lock,
+// kit.js). APP_DB_ROLE stays optional here, as it always was in Tasks.
+require("./kit").migrateCli({ requireAppRole: false });

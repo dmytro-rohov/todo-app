@@ -1,0 +1,12 @@
+// Mytko Kit: what the device needs wins over every view's own sizes (the login form included). The app's last layer:
+// @layer device { @include kit.device; …the app's own touch sizes… }
+@mixin device {
+    @media (max-width: 900px) {
+        // 16 px keeps iOS Safari from zooming into a field on focus, whatever the interface scale.
+        @supports (-webkit-touch-callout: none) { input, select, textarea { font-size: max(16px, 1rem); } }
+    }
+    // A finger needs a bigger target than the drawn button at the small phone scale: the hit area grows, the look not.
+    @media (pointer: coarse) {
+        .icon-btn { min-width: max(2.25rem, 40px); min-height: max(2.25rem, 40px); }
+    }
+}

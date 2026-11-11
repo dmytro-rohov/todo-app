@@ -21,10 +21,11 @@ test("the stylesheet source exists and builds into dist/ (ignored by Git)", () =
 
 test("SCSS declares the cascade layer order once and avoids deprecated @import", () => {
   const style = readFileSync(join(frontendDir, "styles", "style.scss"), "utf8");
-  const reset = readFileSync(join(frontendDir, "styles", "reset.scss"), "utf8");
+  // the reset is the Mytko Kit's (kit.reset), wrapped in the reset layer by style.scss
+  const reset = readFileSync(join(frontendDir, "vendor", "mytko-kit", "styles", "_reset.scss"), "utf8");
   assert.match(style, /^@layer reset, base, components, views, auth;$/m);
   assert.doesNotMatch(style, /@import/);
-  assert.doesNotMatch(reset, /@layer/, "reset.scss is wrapped by style.scss; nesting creates reset.reset");
+  assert.doesNotMatch(reset.replace(/^\/\/.*$/gm, ""), /@layer/, "the reset is wrapped by style.scss; nesting creates reset.reset");
 });
 
 test("compiled stylesheet exists (run `npm run build` in frontend/)", (t) => {
@@ -45,11 +46,17 @@ function collectExports(source) {
   for (const match of source.matchAll(/export\s+(?:async\s+)?(?:function|const|let|class)\s+([A-Za-z_$][\w$]*)/g)) {
     names.add(match[1]);
   }
+  // export { a, b as c } [from "…"]: the re-exports of the login and dialog modules (the kit's)
+  for (const match of source.matchAll(/export\s*\{([^}]*)\}/g)) {
+    for (const part of match[1].split(",").map(item => item.trim()).filter(Boolean)) names.add(part.split(/\s+as\s+/).pop());
+  }
   return names;
 }
 
 function collectImports(source) {
   const imports = [];
+  // comments may show usage examples (the Mytko Kit's do): only code counts
+  source = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   for (const match of source.matchAll(/import\s*(?:\{([^}]*)\}\s*from\s*)?["']([^"']+)["']/g)) {
     const names = (match[1] || "")
       .split(",")
@@ -105,7 +112,10 @@ test("the app is installable: manifest, icons and a service worker that never to
   assert.deepEqual([manifest.name, manifest.start_url, manifest.display], ["Mytko Tasks", "/", "standalone"]);
   for (const icon of manifest.icons) assert.ok(existsSync(join(frontendDir, icon.src)), icon.src);
   assert.ok(manifest.icons.some(icon => icon.purpose === "maskable" && icon.sizes === "512x512"));
-  const worker = readFileSync(join(frontendDir, "sw.js"), "utf8");
+  // sw.js runs the Mytko Kit's worker core (importScripts) with Tasks' options
+  const own = readFileSync(join(frontendDir, "sw.js"), "utf8");
+  assert.match(own, /importScripts\("\/vendor\/mytko-kit\/js\/sw-core\.js"\)/);
+  const worker = own + readFileSync(join(frontendDir, "vendor", "mytko-kit", "js", "sw-core.js"), "utf8");
   assert.match(worker, /startsWith\("\/api\/"\)/);
   assert.match(worker, /startsWith\("\/auth\/"\)/);
   assert.match(readFileSync(join(frontendDir, "js", "main.js"), "utf8"), /serviceWorker\.register\("\/sw\.js"\)/);
@@ -121,6 +131,7 @@ test("the privacy policy page (Google OAuth) is a static page in the image, outs
   const root = join(frontendDir, "..");
   assert.match(readFileSync(join(root, "Dockerfile"), "utf8"), /COPY frontend\/index\.html frontend\/privacy\.html frontend\//);
   assert.match(readFileSync(join(root, ".dockerignore"), "utf8"), /^!frontend\/privacy\.html$/m);
-  // only the app's own navigations share the "/" cache entry
-  assert.match(readFileSync(join(frontendDir, "sw.js"), "utf8"), /path === "\/" \|\| path === "\/index\.html"/);
+  // only the app's own navigations share the "/" cache entry (the kit core's `pages` option, on in Tasks' sw.js)
+  assert.match(readFileSync(join(frontendDir, "sw.js"), "utf8"), /pages: true/);
+  assert.match(readFileSync(join(frontendDir, "vendor", "mytko-kit", "js", "sw-core.js"), "utf8"), /path === "\/" \|\| path === "\/index\.html"/);
 });

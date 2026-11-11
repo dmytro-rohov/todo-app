@@ -1,8 +1,8 @@
 // Login screen API: session state, password login (the owner, then member accounts), logout and a member's own
-// password change ("Zaloguj kontem Mytko" is added by routes/sso.js). Mounted before the authentication middleware;
-// CSRF, JSON and rate limits apply as to the rest of /api.
+// password change ("Zaloguj kontem Mytko" is the kit's routes/sso.js, wired in app.js). Mounted before the
+// authentication middleware; CSRF, JSON and rate limits apply as to the rest of /api.
 const express = require("express");
-const { readCookie } = require("../sessions");
+const { readCookie } = require("../kit");
 const { ownerSession, hashPassword, parsePasswordHash, verifyPassword } = require("../security");
 const { passwordProblem } = require("../users");
 const { avatarVersion } = require("./avatars");
@@ -62,18 +62,27 @@ function createAuthRouter({ credentials, sessions, cookie, authDisabled = false,
         !body.login.trim() || !body.password || body.login.length > MAX_LOGIN || body.password.length > MAX_PASSWORD) {
       return res.status(400).json({ message: "Login and password are required" });
     }
-    const waitSeconds = credentials.lockedFor(req);
+    const waitSeconds = credentials.lockedFor(req, body.login);
     if (waitSeconds) {
       res.set("Retry-After", String(waitSeconds));
       return res.status(429).json({ message: "Too many failed login attempts" });
     }
-    if (await credentials.matches(body.login.trim(), body.password)) {
-      return res.json(await startSession(req, res, { login: credentials.username, method: "password" }));
+    // reserved in the same step as the check above (no await in between): parallel guesses cannot all pass it
+    const end = credentials.begin(req, body.login);
+    let signedIn = null;
+    try {
+      if (await credentials.matches(body.login.trim(), body.password)) {
+        signedIn = { login: credentials.username, method: "password" };
+      } else {
+        const member = users && await users.verify(body.login, body.password);
+        if (member) signedIn = { login: member.login, method: "password", user: member };
+        else credentials.fail(req, body.login);
+      }
+    } finally {
+      end();
     }
-    const member = users && await users.verify(body.login, body.password);
-    if (member) return res.json(await startSession(req, res, { login: member.login, method: "password", user: member }));
-    credentials.fail(req);
-    res.status(401).json({ message: "Invalid login or password" });
+    if (!signedIn) return res.status(401).json({ message: "Invalid login or password" });
+    res.json(await startSession(req, res, signedIn));
   });
 
   // A member changes their own password; the owner's is set on the server (AUTH_PASSWORD_HASH).
@@ -84,16 +93,21 @@ function createAuthRouter({ credentials, sessions, cookie, authDisabled = false,
     const body = req.body || {};
     const problem = passwordProblem(body.next);
     if (problem) return res.status(400).json({ message: problem });
-    const waitSeconds = credentials.lockedFor(req);
+    const waitSeconds = credentials.lockedFor(req, user.login);
     if (waitSeconds) {
       res.set("Retry-After", String(waitSeconds));
       return res.status(429).json({ message: "Too many failed login attempts" });
     }
-    const row = (await pool.query("SELECT password_hash FROM users WHERE id = $1", [user.id])).rows[0];
-    if (typeof body.current !== "string" || body.current.length > MAX_PASSWORD || !(await verifyPassword(body.current, parsePasswordHash(row.password_hash)))) {
-      credentials.fail(req);
-      return res.status(400).json({ message: "The current password is wrong" });
+    const end = credentials.begin(req, user.login);
+    let currentOk;
+    try {
+      const row = (await pool.query("SELECT password_hash FROM users WHERE id = $1", [user.id])).rows[0];
+      currentOk = typeof body.current === "string" && body.current.length <= MAX_PASSWORD && await verifyPassword(body.current, parsePasswordHash(row.password_hash));
+      if (!currentOk) credentials.fail(req, user.login);
+    } finally {
+      end();
     }
+    if (!currentOk) return res.status(400).json({ message: "The current password is wrong" });
     await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [await hashPassword(body.next), user.id]);
     await sessions.revokeUser(user.id);
     res.json(await startSession(req, res, { login: user.login, method: "password", user }));

@@ -1,84 +1,43 @@
-@use "sass:meta";
+// Mytko Tasks styles: the shared base comes from Mytko Kit (vendor/mytko-kit/styles: a copy of the shared kit, never
+// edited here — change the kit and run its tools/sync.mjs): the reset, the tokens (colours, radii, fonts, sizes:
+// vendor/mytko-kit/styles/tokens.css), the page itself and the login and start-up screens; this file adds Tasks'
+// own components and views.
+@use "../vendor/mytko-kit/styles" as kit;
 @layer reset, base, components, views, auth;
 
 @layer reset {
-    @include meta.load-css("reset");
+    @include kit.reset;
 }
 
-// Tokens: Mytko Workflow's dark theme (frontend/src/styles.css, [data-theme="dark"]) plus the board's states.
+// Tokens: the Mytko palette (Mytko Workflow's dark theme); the page itself (Tasks adds the dragging and drawer states).
 @layer base {
-    :root {
-        --bg: #0b110d;
-        --surface: #111813;
-        --surface-2: #151d17;
-        --surface-3: #1b251d;
-        --text: #edf4ee;
-        --muted: #98a49a;
-        --faint: #6f7c72;
-        --border: #233026;
-        --border-strong: #2f3e31;
-        --accent: #b7e34d;
-        --accent-strong: #c9f27a;
-        --accent-contrast: #142006;
-        --accent-soft: #b7e34d1f;
-        --warning: #f2c463;
-        --warning-soft: #f2c4631c;
-        --success: #8fd65a;
-        --danger: #ff9a89;
-        --danger-soft: #ff9a891a;
-        --radius: 0.75rem;
-        --radius-lg: 1rem;
-        --shadow: 0 1.125rem 3.125rem #00000073;
-        --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-        color-scheme: dark;
-    }
-
-    // Every size is in rem, so --ui-scale sizes the whole interface: 75% on computers, 70% on phones by default
-    // (as the browser's 70–80% zoom looked), or the viewer's own choice from "Rozmiar interfejsu" (js/ui-scale.js).
-    :root { --ui-scale: .75; }
-    @media (max-width: 600px) { :root { --ui-scale: .7; } }
-    html { background: var(--bg); font-size: calc(16px * var(--ui-scale)); }
-    body {
-        min-height: 100vh;
-        min-height: 100dvh;
-        background: var(--bg);
-        color: var(--text);
-        font: 400 0.9375rem/1.45 var(--font);
-        font-synthesis: none;
-    }
+    @include kit.tokens;
+    @include kit.base;
     body.is-dragging { cursor: grabbing; user-select: none; }
     body.drawer-open { overflow: hidden; }
-    button { color: inherit; background: none; border: 0; transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s; }
-    input, select, textarea { color: inherit; }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    ::selection { background: #b7e34d55; }
-    [hidden] { display: none !important; }
-    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-    .muted { color: var(--faint); }
-    .i { flex: 0 0 auto; display: block; }
 }
 
 @layer components {
-    .icon-btn {
-        display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; color: var(--muted);
-        &:hover { color: var(--text); background: var(--surface-3); }
-        &--sm { width: 1.625rem; height: 1.625rem; border-radius: 0.4375rem; }
-        &--box { width: 2.75rem; height: 2.75rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
-    }
-
-    .btn {
-        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.75rem; padding: 0 1.125rem;
-        border-radius: 0.6875rem; font-weight: 650; white-space: nowrap;
-        &--primary {
-            color: var(--accent-contrast); background: linear-gradient(90deg, #c3f27f, #b1ea65); box-shadow: 0 0.5rem 1.375rem #a6e45b2e;
-            &:hover { filter: brightness(1.05); }
-            &:disabled { opacity: .6; cursor: default; }
+    // The Mytko Kit's components (buttons, fields, switches, chips, avatars, toasts, dialogs, empty states), then
+    // Tasks' own: the select, dates and colours, dots and counts, round buttons, deadlines, timers, view tabs.
+    // a plain checkbox's size first: the kit's switch and Tasks' toggle chips hide theirs (later rules)
+    input[type=checkbox] { accent-color: var(--accent); width: 1.125rem; height: 1.125rem; }
+    @include kit.components;
+    // Tasks' variants of the kit's components
+    .icon-btn--sm { width: 1.625rem; height: 1.625rem; border-radius: 0.4375rem; }
+    .chip {
+        &--project .i { color: var(--c, var(--muted)); }
+        &--label { border-color: color-mix(in srgb, var(--c, var(--border-strong)) 35%, transparent); background: color-mix(in srgb, var(--c, #2a352c) 12%, var(--surface-2)); }
+        &--toggle {
+            cursor: pointer; opacity: .6;
+            input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+            &:has(input:checked) { opacity: 1; border-color: var(--c, var(--accent)); box-shadow: inset 0 0 0 1px var(--c, var(--accent)); }
+            &:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
         }
-        &--ghost { border: 1px solid var(--border-strong); background: var(--surface-2); &:hover { background: var(--surface-3); } }
-        &--danger { color: #2b0d08; background: var(--danger); }
-        &--sm { min-height: 2.25rem; padding: 0 0.75rem; font-size: 0.875rem; border-radius: 0.5625rem; }
     }
-
+    // every person keeps their colour (data-c)
+    .avatar { background: color-mix(in srgb, var(--c, #2c372e) 30%, #222c24); }
+    .avatar--empty { border: 1.5px solid var(--border-strong); background: transparent; color: var(--muted); }
     .select {
         position: relative; display: inline-flex; align-items: center;
         select {
@@ -92,54 +51,14 @@
         &--sm > span { margin-right: 0.5rem; color: var(--muted); font-size: 0.875rem; }
     }
 
-    input:not([type=checkbox], [type=color], [type=radio]), .textarea {
-        width: 100%; min-height: 2.75rem; padding: 0.625rem 0.875rem; border: 1px solid var(--border-strong); border-radius: 0.6875rem;
-        background: var(--surface-2); font-size: 0.9375rem;
-        &::placeholder { color: var(--faint); }
-        &:focus { border-color: #79bf55; outline: none; box-shadow: 0 0 0 0.1875rem #a6e45b26; }
-    }
     input[type=date] { color-scheme: dark; }
     .textarea { resize: vertical; line-height: 1.5; }
-    input[type=color] { width: 2.25rem; height: 2.25rem; padding: 2px; border: 1px solid var(--border-strong); border-radius: 0.5625rem; background: var(--surface-2); cursor: pointer; }
-    input[type=checkbox] { accent-color: var(--accent); width: 1.125rem; height: 1.125rem; }
-
-    .switch {
-        display: inline-flex; align-items: center; gap: 0.75rem; color: var(--text); cursor: pointer; white-space: nowrap;
-        input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-        &__track {
-            position: relative; width: 2.75rem; height: 1.625rem; border-radius: 6.1875rem; background: #2a352c; transition: background .15s;
-            &::after { content: ""; position: absolute; top: 0.1875rem; left: 0.1875rem; width: 1.25rem; height: 1.25rem; border-radius: 50%; background: #e7efe8; transition: transform .15s; }
-        }
-        input:checked + .switch__track { background: var(--accent); &::after { transform: translateX(1.125rem); background: var(--accent-contrast); } }
-        input:focus-visible + .switch__track { outline: 2px solid var(--accent); outline-offset: 2px; }
-    }
-
-    .check { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--muted); font-size: 0.875rem; cursor: pointer; white-space: nowrap; }
+    input[type=color] { width: 2.25rem; height: 2.25rem; min-height: 0; padding: 2px; border: 1px solid var(--border-strong); border-radius: 0.5625rem; background: var(--surface-2); cursor: pointer; }
 
     .dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--c, var(--accent)); }
     .count { display: inline-grid; place-items: center; min-width: 1.625rem; height: 1.5rem; padding: 0 0.4375rem; border-radius: 6.1875rem; background: #ffffff12; color: var(--muted); font-size: 0.8125rem; font-weight: 650; font-style: normal; }
 
-    .chip {
-        display: inline-flex; align-items: center; gap: 0.4375rem; max-width: 100%; min-height: 1.75rem; padding: 0 0.6875rem; border-radius: 6.1875rem;
-        border: 1px solid var(--border-strong); background: var(--surface-3); color: #dfe8e0; font-size: 0.8125rem; font-weight: 550;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        &--project .i { color: var(--c, var(--muted)); }
-        &--label { border-color: color-mix(in srgb, var(--c, var(--border-strong)) 35%, transparent); background: color-mix(in srgb, var(--c, #2a352c) 12%, var(--surface-2)); }
-        &--toggle {
-            cursor: pointer; opacity: .6;
-            input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-            &:has(input:checked) { opacity: 1; border-color: var(--c, var(--accent)); box-shadow: inset 0 0 0 1px var(--c, var(--accent)); }
-            &:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-        }
-    }
     .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; min-width: 0; }
-
-    .avatar {
-        display: inline-grid; place-items: center; flex: 0 0 auto; width: 2.125rem; height: 2.125rem; border-radius: 50%;
-        background: color-mix(in srgb, var(--c, #2c372e) 30%, #222c24); color: #f2f7f2; font-size: 0.8125rem; font-weight: 750; letter-spacing: .02em;
-        &--lime { background: var(--accent); color: var(--accent-contrast); }
-        &--empty { border: 1.5px solid var(--border-strong); background: transparent; color: var(--muted); }
-    }
 
     .round-btn {
         display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent);
@@ -187,21 +106,16 @@
     }
 
 
-    .toasts { position: fixed; z-index: 90; left: 50%; bottom: 1.5rem; display: grid; gap: 0.5rem; transform: translateX(-50%); width: min(32.5rem, calc(100vw - 2rem)); }
-    .toast {
-        display: flex; align-items: center; gap: 0.875rem; padding: 0.75rem 1rem; border: 1px solid var(--border-strong); border-radius: 0.75rem;
-        background: #18221a; box-shadow: var(--shadow); font-size: 0.875rem; animation: rise .2s ease;
-        span { flex: 1; }
-        button { color: var(--accent); font-weight: 700; padding: 0.25rem 0.5rem; border-radius: 0.4375rem; &:hover { background: var(--accent-soft); } }
-        &--error { border-color: #ff9a8966; background: #2a1916; }
-    }
-    @keyframes rise { from { transform: translateY(0.5rem); opacity: 0; } }
-
-    .field-error { margin-top: 0.5rem; color: var(--danger); font-size: 0.875rem; }
-    .empty { padding: 3rem 1rem; color: var(--faint); text-align: center; }
 }
 
 @layer views {
+    // The Mytko Kit's phone navigation, under Tasks' own layout below (which wins where it says otherwise): the tab bar
+    // (hidden on computers), the "more" sheet, and on phones the tab bar, room for it under the content and dialogs as
+    // bottom sheets.
+    @include kit.shell-nav;
+    @media (max-width: 900px) {
+        @include kit.shell-phone;
+    }
     // ---- shell ------------------------------------------------------------------------------------------------
     .app { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
 
@@ -625,12 +539,17 @@
 
     @media (max-width: 900px) {
         .app { grid-template-columns: minmax(0, 1fr); }
-        .sidebar { position: fixed; z-index: 70; inset: 0 auto 0 0; width: min(18.75rem, 86vw); transform: translateX(-102%); transition: transform .2s ease; }
+        // the sidebar is the drawer of spaces and projects here (the kit's phone frame hides it; the tab bar holds the views)
+        .sidebar { display: flex; position: fixed; z-index: 70; inset: 0 auto 0 0; width: min(18.75rem, 86vw); transform: translateX(-102%); transition: transform .2s ease; }
         .sidebar__close { display: inline-grid; }
         .sidebar-open .sidebar { transform: none; box-shadow: var(--shadow); }
         .sidebar-open .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 65; background: #00000080; }
-        .main { padding: 0.75rem 1rem 2rem; }
+        .main { padding: 0.75rem 1rem calc(var(--tabbar-h) + 2rem + env(safe-area-inset-bottom)); }
         .topbar { flex-wrap: wrap; gap: 0.625rem; &__menu { display: inline-grid; } }
+        // the views are in the tab bar (and its "more" sheet)
+        .toolbar .tabs { display: none; }
+        .tabbar__item { position: relative; .count { position: absolute; top: 0.5rem; left: calc(50% + 0.375rem); min-width: 1.25rem; height: 1.125rem; padding: 0 0.3125rem; font-size: 0.6875rem; } }
+        body.drawer-open .tabbar, .sidebar-open .tabbar { display: none; }
         .crumbs { order: 1; font-size: 0.9375rem; }
         .bell-wrap { order: 2; }
         .search { order: 3; width: 100%; }
@@ -657,7 +576,7 @@
         .calendar__weekday { padding: 0.375rem 0.25rem; font-size: 0.6875rem; text-align: center; }
     }
     // ---- collapsible sidebar (desktop): a rail of icons, the names as tooltips -----------------------------------
-    .fab, .topbar__search, .filters-toggle { display: none; }
+    .topbar__search, .filters-toggle { display: none; }
     @media (min-width: 901px) {
         .app.sidebar-collapsed {
             grid-template-columns: 4.75rem minmax(0, 1fr);
@@ -681,7 +600,7 @@
         }
         .sidebar__collapse { display: none; }
         .sidebar { padding-top: calc(1.375rem + env(safe-area-inset-top)); padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
-        .main { padding: 0 max(1rem, env(safe-area-inset-right)) calc(6.25rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
+        .main { padding: 0 max(1rem, env(safe-area-inset-right)) calc(var(--tabbar-h) + 2rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
         .topbar {
             position: sticky; top: 0; z-index: 30; margin: 0 -1rem; padding: calc(0.5rem + env(safe-area-inset-top)) 1rem 0.5rem;
             background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(0.625rem); flex-wrap: nowrap;
@@ -715,18 +634,8 @@
             strong { font-size: 1.1875rem; } small { font-size: 0.7188rem; line-height: 1.2; }
             &__icon { display: none; }
         }
-        .toolbar { gap: 0.625rem; .split-btn { display: none; } .tabs { flex: 1 1 100%; } }
-        .tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0.25rem; }
-        .tab { position: relative; .count { position: absolute; top: 0.25rem; right: 0.375rem; min-width: 1.25rem; height: 1.125rem; padding: 0 0.3125rem; font-size: 0.6875rem; } }
-        .tab { flex-direction: column; justify-content: center; gap: 0.1875rem; min-height: 3.375rem; padding: 0.25rem 2px; font-size: 0.7812rem; }
+        .toolbar { gap: 0.625rem; .split-btn { display: none; } }
         .toolbar .filters-toggle { width: 100%; justify-content: center; }
-        .fab {
-            position: fixed; z-index: 40; right: max(1rem, env(safe-area-inset-right)); bottom: calc(1.125rem + env(safe-area-inset-bottom));
-            display: grid; place-items: center; width: 3.625rem; height: 3.625rem; border-radius: 1.125rem; color: var(--accent-contrast);
-            background: linear-gradient(135deg, #c9f27a, #a9e25b); box-shadow: 0 0.75rem 1.875rem #0009, 0 0 0 1px #b7e34d66;
-        }
-        body.drawer-open .fab, body:has(dialog[open]) .fab, .sidebar-open .fab { display: none; }
-        .toasts { bottom: calc(5.75rem + env(safe-area-inset-bottom)); }
         .list__bar { flex-wrap: wrap; }
         .row { padding: 0.625rem 0.75rem; }
         .archive__rules p { font-size: 0.8438rem; }
@@ -819,8 +728,8 @@
     .app.has-timer-dock .main { padding-bottom: 6rem; }
     @media (prefers-reduced-motion: reduce) { .timer-dock__pulse { animation: none; } }
     @media (max-width: 900px) {
-        // above the "+" button on phones and tablets
-        .timer-dock { bottom: calc(5.75rem + env(safe-area-inset-bottom)); right: max(1rem, env(safe-area-inset-right)); }
+        // above the tab bar on phones and tablets
+        .timer-dock { bottom: calc(var(--tabbar-h) + 1rem + env(safe-area-inset-bottom)); right: max(1rem, env(safe-area-inset-right)); }
         body.drawer-open .timer-dock, body:has(dialog[open]) .timer-dock, .sidebar-open .timer-dock { display: none; }
     }
 
@@ -1166,5 +1075,5 @@
 }
 
 @layer auth {
-    @include meta.load-css("auth");
+    @include kit.auth;
 }

@@ -23,11 +23,9 @@ const { createUserStore } = require("./users");
 const { OWNER, ownerOnly } = require("./access");
 const createTaskDetailsRouter = require("./routes/task-details");
 const { createAuthRouter } = require("./routes/auth");
-const { createSsoRouter, createWorkflowHealth } = require("./routes/sso");
 const { createCalendarRouter, createGoogleCallback } = require("./routes/calendar");
 const { createGoogle } = require("./google");
-const { createSessionStore, cookieSettings } = require("./sessions");
-const { checkSchema } = require("./migrations");
+const kit = require("./kit");
 const {
   ownerAuth,
   ownerCredentials,
@@ -36,7 +34,9 @@ const {
   securityHeaders
 } = require("./security");
 
-const READINESS_TIMEOUT_MS = 2000;
+// The owner of this instance has no users row: "Zaloguj kontem Mytko" (the kit's routes/sso.js) signs in as the owner
+// (user id null) with the Workflow login, and records no last login.
+const SSO_OWNER = Object.freeze({ admin: async () => OWNER, recordLogin: async () => {} });
 
 // Builds the Express app. `migrationVersions` are the migrations shipped with
 // this release; readiness fails until the database has all of them.
@@ -49,35 +49,28 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   app.set("trust proxy", config.trustProxy);
 
   app.use(securityHeaders({ isProduction: config.isProduction }));
+  // a proxy TRUST_PROXY does not name makes every client one address: said once, in the log (the kit's http.js)
+  app.use(kit.proxyWarning(app, config));
 
   // Liveness: the process is up. No dependencies, no details.
-  app.get("/healthz", (req, res) => {
-    res.set("Cache-Control", "no-store").json({ status: "ok" });
-  });
+  app.get("/healthz", kit.liveness);
 
+  // The per-address limit counts the dynamic paths only (/api, /auth: the kit's limitDynamicRoutes) and, as before, the
+  // readiness check below (it asks the database); liveness above is exempt. The app shell, its modules and icons never
+  // use it up, so reloading the app never runs into it (test/limit.test.js).
   const limiter = rateLimit(config.rateLimit);
   stoppables.push(limiter);
-  app.use(limiter);
+  kit.limitDynamicRoutes(app, limiter, [...kit.LIMITED_PATHS, "/readyz"]);
 
   // Readiness: database reachable and schema migrated. Never returns error
   // details, connection info or versions.
-  app.get("/readyz", async (req, res) => {
-    res.set("Cache-Control", "no-store");
-    if (state.shuttingDown) {
-      return res.status(503).json({ status: "unavailable" });
-    }
-    try {
-      const ready = await withTimeout(checkSchema(pool, migrationVersions), READINESS_TIMEOUT_MS);
-      if (!ready) return res.status(503).json({ status: "unavailable" });
-      res.json({ status: "ok" });
-    } catch (error) {
-      console.error("readiness check failed");
-      res.status(503).json({ status: "unavailable" });
-    }
-  });
+  app.get("/readyz", kit.readiness({ pool, migrationVersions, isShuttingDown: () => state.shuttingDown }));
 
-  const sessions = createSessionStore(pool, { ttlMs: config.auth.sessionTtlMs });
-  const cookie = cookieSettings(config.publicOrigin);
+  // Sessions in the database (the kit's sessions.js): the owner's have user id null and are capped together at 32, a
+  // member's at 8; the table has no sso_login column (a "mytko" session is tied to its Workflow login).
+  const sessions = kit.createSessionStore(pool, { ttlMs: config.auth.sessionTtlMs, maxSessions: userId => (userId ? 8 : 32),
+    ownerWithoutRow: true, ssoLogin: false });
+  const cookie = kit.cookieSettings(config.publicOrigin);
   const credentials = config.auth.disabled ? null : ownerCredentials({
     username: config.auth.username,
     passwordHash: config.auth.passwordHash,
@@ -87,10 +80,7 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   if (credentials) stoppables.push(credentials);
 
   const api = express.Router();
-  api.use((req, res, next) => {
-    res.set("Cache-Control", "no-store");
-    next();
-  });
+  api.use(kit.noStore);
   const csrf = csrfProtection({ publicOrigin: config.publicOrigin });
   const json = express.json({ limit: "10kb", inflate: false });
   // The login screen's API is reachable without a session; everything after it is not, and anonymous requests are
@@ -100,8 +90,8 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   const calendarConfig = config.calendar && config.calendar.key ? config.calendar : null;
   const google = calendarConfig ? createGoogle({ ...calendarConfig, fetchImpl: options.fetchImpl, ...(options.googleUrls || {}) }) : null;
   const calendarRouter = createCalendarRouter(pool, { google, key: calendarConfig?.key, cookie });
-  const workflowUp = sso ? createWorkflowHealth(sso, options.fetchImpl) : null;
-  const users = createUserStore(pool);
+  const workflowUp = sso ? kit.createWorkflowHealth(sso, options.fetchImpl) : null;
+  const users = createUserStore(pool, { dummyLike: credentials ? credentials.passwordHash : null });
   const authRouter = createAuthRouter({ credentials, sessions, cookie, authDisabled: config.auth.disabled, mytkoLogin: Boolean(sso), ssoLogin, workflowUp,
     users, pool });
   api.use("/auth", csrf, json, authRouter);
@@ -138,9 +128,7 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use("/briefs", ownerOnly, createBriefsRouter(pool, { ai: () => settings.ai(), fetchImpl: options.fetchImpl }));
   api.use("/settings", ownerOnly, createSettingsRouter(pool, { settings, ai: config.ai, workflow: config.workflow, router: routing }));
   api.use("/users", ownerOnly, createUsersRouter(pool, { sessions, reserved: [config.auth.username, ssoLogin, "dev", "owner"].filter(Boolean) }));
-  api.use((req, res) => {
-    res.status(404).json({ message: "Not found" });
-  });
+  api.use(kit.notFound);
   // Mytko Workflow polls its ToDo with a Bearer token, never a session (routes/agent.js).
   if (config.workflow) {
     app.use("/api/agent", express.json({ limit: "20kb", inflate: false }), createAgentRouter(pool, { ...config.workflow, publicOrigin: config.publicOrigin, settings }));
@@ -155,38 +143,29 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
 
   if (google) {
     const { ownerSession } = require("./security");
-    const { readCookie } = require("./sessions");
+    const { readCookie } = kit;
     const isOwner = async req => config.auth.disabled ||
       ownerSession(await sessions.verify(readCookie(req, cookie.name)), { username: config.auth.username, ssoLogin });
     app.use("/auth/google", createGoogleCallback(pool, { google, key: calendarConfig.key, cookie, pendingCookie: calendarRouter.pendingCookie, isOwner }));
   }
 
   if (sso) {
-    app.use("/auth/mytko", createSsoRouter({ sso, publicOrigin: config.publicOrigin, cookie, startSession: authRouter.startSession, fetchImpl: options.fetchImpl, workflowUp }));
+    // failed code exchanges are limited per visitor (the owner's login guard) and in total, below Workflow's own limit
+    const ssoRouter = kit.createSsoRouter({ sso, publicOrigin: config.publicOrigin, cookie, users: SSO_OWNER, guard: credentials,
+      startSession: (req, res, account, method, ssoLogin) => authRouter.startSession(req, res, { login: ssoLogin, method }),
+      fetchImpl: options.fetchImpl, workflowUp });
+    stoppables.push(ssoRouter);
+    app.use("/auth/mytko", ssoRouter);
   }
 
-  // The app shell and assets hold no data and render the login screen, so they are public.
-  app.use(express.static(config.staticDir, { index: "index.html", dotfiles: "ignore" }));
+  // The app shell and assets hold no data and render the login screen, so they are public. They are revalidated on
+  // every load (ETag): unchanged files answer 304, and a release is picked up at once.
+  app.use(kit.staticFiles(config.staticDir));
 
-  app.use((req, res) => {
-    res.status(404).json({ message: "Not found" });
-  });
+  app.use(kit.notFound);
 
-  // Central error handler: never leaks stack traces or database messages.
-  app.use((error, req, res, next) => {
-    if (res.headersSent) return next(error);
-    if (error.type === "entity.parse.failed") {
-      return res.status(400).json({ message: "Invalid JSON" });
-    }
-    if (error.type === "encoding.unsupported") {
-      return res.status(415).json({ message: "Compressed request bodies are not supported" });
-    }
-    if (error.type === "entity.too.large") {
-      return res.status(413).json({ message: "Request body too large" });
-    }
-    console.error("Request failed", req.method);
-    res.status(500).json({ message: "Server error" });
-  });
+  // Central error handler: never leaks stack traces or database messages (the kit's http.js).
+  app.use(kit.errorHandler);
 
   return {
     app,
@@ -198,14 +177,6 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
       stoppables.forEach(item => item.stop());
     }
   };
-}
-
-function withTimeout(promise, ms) {
-  let timer;
-  const timeout = new Promise((resolve, reject) => {
-    timer = setTimeout(() => reject(new Error("timeout")), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 module.exports = { createApp };

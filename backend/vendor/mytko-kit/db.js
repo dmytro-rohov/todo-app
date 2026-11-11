@@ -1,6 +1,7 @@
-const { Pool } = require("pg");
+// PostgreSQL: the pool (pg, the app's own dependency, loaded when the pool is made) and transactions.
 
-function createPool({ connectionString, max = 10, statementTimeoutMs = 10000, applicationName = "mytko-tasks" }) {
+function createPool({ connectionString, max = 10, statementTimeoutMs = 10000, applicationName = "mytko" }) {
+  const { Pool } = require("pg");
   const pool = new Pool({
     connectionString,
     max,

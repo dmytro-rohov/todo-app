@@ -5,7 +5,7 @@
 //    private ones (the owner's or a member's private space, or no space) after RETENTION_DELETE_PRIVATE_DAYS in the archive,
 //    all others (Praca, clients' projects, own spaces) after RETENTION_DELETE_WORK_DAYS.
 // A value of 0 switches that step off.
-const { withTransaction } = require("./db");
+const { withTransaction } = require("./kit");
 const { PRIVATE_SPACES } = require("./spaces");
 const { recordTaskChanges } = require("./task-history");
 

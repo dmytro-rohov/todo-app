@@ -83,7 +83,8 @@ try {
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }); await sleep(1000);
   await ev(`document.querySelector('[data-mail="back"]')?.click()`); await sleep(400); // the phone shows the list or the reader
   await click('[data-mail-view="inbox"]'); await sleep(1200);
-  check("phone: the five view tabs fit one row", await ev("new Set([...document.querySelectorAll('.tabs .tab:not([hidden])')].map(t => Math.round(t.getBoundingClientRect().top))).size") === 1);
+  // the views are in the tab bar on phones (one row; Poczta is under "Więcej", which carries its unread count, if any)
+  check("phone: the tab bar fits one row, with Poczta's unread count on \"Więcej\"", await ev("new Set([...document.querySelectorAll('.tabbar .tabbar__item')].map(t => Math.round(t.getBoundingClientRect().top))).size === 1 && (() => { const tab = document.querySelector('.tabs [data-view=\"mail\"] .count'); const more = document.querySelector('.tabbar [data-more] .count'); return tab.hidden ? !more : more?.textContent === tab.textContent; })()"));
   check("Poczta has its own head, without task filters", await ev("document.querySelector('.page-head h1').textContent === 'Poczta' && getComputedStyle(document.querySelector('.filters-toggle')).display === 'none'"));
   check("phone: the list fills the screen", await ev("document.querySelector('.mail__list').getBoundingClientRect().width > 300 && document.documentElement.scrollWidth <= 391"));
   await shot("phone-list");

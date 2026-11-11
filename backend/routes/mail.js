@@ -2,7 +2,7 @@
 // "handled" hides it in Tasks only. From a message: a task (POST /api/tasks with mailId), a lead from the sender,
 // Claude's proposed tasks, and an invitation added to the Praca calendar.
 const express = require("express");
-const { withTransaction } = require("../db");
+const { withTransaction } = require("../kit");
 const { parseId } = require("../validation");
 const { validateClient, companyDomain } = require("../clients");
 const { parseInvite } = require("../ics");

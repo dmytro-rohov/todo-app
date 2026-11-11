@@ -1,0 +1,34 @@
+{
+  "kit": "mytko-kit",
+  "version": "0.6.1",
+  "commit": "d7ff48911028c2393a2dc1f315430e19b11501a5",
+  "dirty": false,
+  "part": "backend",
+  "vendors": [
+    "frontend",
+    "backend"
+  ],
+  "synced": "tools/sync.mjs",
+  "files": {
+    "config.js": "sha256:79f9ef158a9724c1398b96dfb3a75106d110e18f67e93d0b35de27021f9a3dc4",
+    "database-config.js": "sha256:e54d538ca17c5089ca53a48c4a7be2b3815e7f57cb8fb6584d8ee4b97efe7604",
+    "db.js": "sha256:8cc470d1dd520cc3cb4109ab256e7410726bb3ba36c2ea1ab2002848a1263c97",
+    "healthcheck.js": "sha256:e2f43f4c2a9d53e7726b14ce480bf3d38f75fab47cdca508801e53cefbf22da2",
+    "http.js": "sha256:0493e3142dba8c1e722fd6b18131092a456e09ff9c09d79caac9d7d5551ae7fa",
+    "index.js": "sha256:266cf6d24b87c3d7d1971fca752613044e3839d68e55529404ded234f5ffe2a9",
+    "kit-check.mjs": "sha256:8c29303251dae976ddc5d5ec7b06dd9e06b4d3427d2e0b3856223611e4a8a4f3",
+    "migration-grammar.js": "sha256:a2ea690854f5bcc50f3dc9f2f753950bf50624327988aeb138279845064dada7",
+    "migrations.js": "sha256:9301e5513bbcb967736d0e0fd983763a04b7a10d9970a2408df152d8a2dfc638",
+    "package.json": "sha256:8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a",
+    "routes/auth.js": "sha256:7cb372a8ff64f98de6b85c5e3e6bb6eb89ce883b6f5808460bf4e5f441dbf1a1",
+    "routes/me.js": "sha256:35821e8841a16c47a86d12db35a1bdbcb66a7acf2dbccd366091d2071d096982",
+    "routes/sso.js": "sha256:88e5d636f8e384c929ced929d199759877e0c8df19b58c5906ee6e00dd5213ac",
+    "routes/users.js": "sha256:f4ac59d1b2476a9d7ede509252f3376fb423612961d64090062126e3adbafb90",
+    "scripts.js": "sha256:a72cc4dca53903b515a84e96bced846a94e7f0760def9219d326cef130838fb8",
+    "security.js": "sha256:2a8b84848a508e81519d33343fd79fd10f6cf37470904a17ef41690efbbb7d8f",
+    "server.js": "sha256:924df025b0b9ae48425eda082d3b6e97f6168323fdf04ad23b378dac599fcd22",
+    "sessions.js": "sha256:81a82d6f06fd10e8c7095c737f5c275cbbcaf9b84b127217005cbedc37ee0124",
+    "testing.js": "sha256:8f370d03d40ff832dd463ae4f684b2d8bbbdd871627129d110c6160050254f21",
+    "users.js": "sha256:dabdd858840c6cd597a9b400ea0db85cdfb33d6d124716b8706ed4fef31b76ee"
+  }
+}

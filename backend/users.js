@@ -1,13 +1,12 @@
 // Member accounts (the owner is configured on the server and is not a row): validation, password checks and
 // sessions. Passwords are scrypt hashes like the owner's; a login is lowercase letters, digits, dot, dash, underscore.
-const { hashPassword, parsePasswordHash, verifyPassword } = require("./security");
+const { parsePasswordHash, verifyPassword } = require("./security");
+const { dummyPasswordCheck, SCRYPT } = require("./kit");
 const { memberUser } = require("./access");
 
 const LOGIN = /^[a-z0-9._-]{3,40}$/;
 const MAX_USERS = 20;
 const USER_COLUMNS = `id, login, name, disabled_at AS "disabledAt", last_login_at AS "lastLoginAt", created_at AS "createdAt"`;
-// Spent on unknown logins too, so the answer time does not reveal which logins exist.
-let dummyHash = null;
 
 function validateUser(body, { partial = false, reserved = [] } = {}) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { error: "Invalid request body" };
@@ -42,15 +41,16 @@ function passwordProblem(password) {
   return null;
 }
 
-function createUserStore(pool) {
+// dummyLike: the owner's parsed hash (security.js ownerCredentials). Unknown logins cost a check with the same scrypt
+// parameters, so the answer time tells neither the owner's login nor a member's apart from one that does not exist.
+function createUserStore(pool, { dummyLike = null } = {}) {
   return {
     // The member with this login and password, or null.
     async verify(login, password) {
       const row = (await pool.query("SELECT id, login, name, password_hash, disabled_at FROM users WHERE login = $1",
         [String(login).trim().toLowerCase()])).rows[0];
       if (!row) {
-        dummyHash ??= await hashPassword("not-a-real-password");
-        await verifyPassword(String(password), parsePasswordHash(dummyHash));
+        await dummyPasswordCheck(password, dummyLike || SCRYPT);
         return null;
       }
       const ok = await verifyPassword(String(password), parsePasswordHash(row.password_hash));

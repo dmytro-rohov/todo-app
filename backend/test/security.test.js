@@ -355,7 +355,7 @@ describe("input handling", () => {
   });
 
   test("static server does not expose files outside the frontend", async () => {
-    for (const path of ["/%2e%2e/backend/db.js", "/..%2fbackend%2fdb.js", "/backend/db.js", "/.env"]) {
+    for (const path of ["/%2e%2e/backend/kit.js", "/..%2fbackend%2fkit.js", "/backend/kit.js", "/.env"]) {
       const res = await ctx.request(path);
       assert.notEqual(res.status, 200, path);
     }
