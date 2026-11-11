@@ -1,6 +1,6 @@
 // Modal dialogs (native <dialog>): new task, managing spaces / projects / labels / people, confirmations.
 import { api } from "../api/client.js";
-import { SCALES, savedScale, saveScale, toast } from "../../vendor/mytko-kit/js/ui.js";
+import { SCALES, confirmDialog as kitConfirmDialog, dialog, savedScale, saveScale, toast } from "../../vendor/mytko-kit/js/ui.js";
 import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { isoDay, PRIORITY_LABELS, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
@@ -13,17 +13,10 @@ import { openJoin, openSpacePeople } from "./sharing.js";
 
 const PALETTE = ["#b7e34d", "#84cc16", "#22c55e", "#14b8a6", "#38bdf8", "#818cf8", "#f2c463", "#fb923c", "#f87171", "#e879f9"];
 
-export function dialog(className, html) {
-  const element = document.createElement("dialog");
-  element.className = `dialog ${className}`;
-  element.innerHTML = html;
-  document.body.append(element);
-  element.addEventListener("close", () => element.remove());
-  element.addEventListener("click", event => { if (event.target === element) element.close(); });
-  paint(element);
-  element.showModal();
-  return element;
-}
+// Dialogs are the Mytko Kit's (ui.js): the title (.dialog__head h2) names the dialog for screen readers, [data-close]
+// closes it, and the backdrop closes it only when the press started there too (selecting text in a field and letting
+// go outside never throws typed data away).
+export { dialog };
 
 // "Rozmiar interfejsu": the whole interface scales (every size is in rem); kept on this device only.
 export function openScaleDialog() {
@@ -51,19 +44,9 @@ export function openLanguageDialog() {
   element.addEventListener("change", event => { if (event.target.name === "lang" && event.target.value !== LANG) setLang(event.target.value); });
 }
 
+// The kit's confirmation (the question names the dialog; Cancel has the focus, so Enter never confirms by accident).
 export function confirmDialog(message, confirmLabel = "OK") {
-  return new Promise(resolve => {
-    const element = dialog("dialog--confirm", `
-      <form method="dialog" class="dialog__body">
-        <p>${escapeHtml(message)}</p>
-        <div class="dialog__actions">
-          <button type="submit" value="cancel" class="btn btn--ghost">Anuluj</button>
-          <button type="submit" value="ok" class="btn btn--danger">${escapeHtml(confirmLabel)}</button>
-        </div>
-      </form>`);
-    element.querySelector('[value="cancel"]').focus();
-    element.addEventListener("close", () => resolve(element.returnValue === "ok"));
-  });
+  return kitConfirmDialog(message, confirmLabel);
 }
 
 function choices(list, selected, empty) {
