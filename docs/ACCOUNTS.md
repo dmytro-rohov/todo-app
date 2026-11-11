@@ -40,3 +40,15 @@ Data model: `users` (migration `0006_accounts`) and `user_id` on spaces, project
 `0012_space_members_avatars`; an avatar's key is `owner` or `user:<id>`). Visibility rules: `backend/access.js`;
 spaces, people and codes: `backend/routes/spaces.js`; pictures: `backend/routes/avatars.js`.
 Tests: `backend/test/accounts.integration.test.js`, `e2e/ui-run.sh <image> accounts … TEST=e2e/ui-accounts.mjs`.
+
+## The account itself as an assignee
+
+Every account (the owner too) is on its own list of assignees from the start: the entry is made the first time its
+assignees are read (`assignees.account` = `owner` or `user:<id>`, migration `0013_self_assignee`), named after the account
+(the owner: "Administrator"; it can be renamed) and shown first, with the account's picture (or its initials). It cannot
+be deleted. The new-task dialog picks it by default; "Bez wykonawcy" can still be chosen, and tasks made elsewhere (AI
+proposals, meetings, mail, the agent API) stay unassigned unless they say otherwise.
+
+People who share a space see each other's own entries, so they can give each other tasks there. An entry someone made
+for themselves earlier ("ja") can be turned into the account itself with "To ja": its tasks move to the account's entry
+(each records it in its history) and it is deleted.

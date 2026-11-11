@@ -76,7 +76,9 @@ export const api = {
   list: kind => request(`/api/${kind}`),
   create: (kind, body) => request(`/api/${kind}`, json("POST", body)),
   update: (kind, id, body) => request(`/api/${kind}/${id}`, json(kind === "categories" ? "PUT" : "PATCH", body)),
-  remove: (kind, id) => request(`/api/${kind}/${id}`, { method: "DELETE" })
+  remove: (kind, id) => request(`/api/${kind}/${id}`, { method: "DELETE" }),
+  // "To ja": an assignee someone made for themselves; its tasks go to the account's own entry and it is deleted
+  assigneeIntoSelf: id => request(`/api/assignees/${Number(id)}/into-self`, json("POST", {}))
 };
 
 // sha256 hex of a string (the board's optimistic-concurrency token).

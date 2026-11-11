@@ -95,9 +95,13 @@ try {
   await click('[data-action="new-task"]');
   await click('dialog input[name="title"]'); await type("Zadanie z testu przeglądarki");
   await evaluate("document.querySelector('dialog select[name=status]').value='needs_review'");
+  const me = (await api("/api/assignees")).find(a => a.self && a.mine);
+  check("a new task goes to the account itself by default", await evaluate("document.querySelector('dialog select[name=assigneeId]').value") === String(me?.id));
+  check("\"Bez wykonawcy\" can still be chosen", await evaluate("[...document.querySelectorAll('dialog select[name=assigneeId] option')].some(o => o.value === '')"));
   await click('dialog button[type="submit"]'); await sleep(1000);
   const created = (await api("/api/tasks")).find(t => t.title === "Zadanie z testu przeglądarki");
   check("new task dialog creates the task in the chosen column", created?.status === "needs_review");
+  check("…assigned to the account itself", created?.assigneeId === me?.id);
   check("the new card is on the board", await evaluate(`Boolean(document.querySelector('.column--needs_review .card[data-id="${created?.id}"]'))`));
 
   // 4. drawer: rename and add a note
@@ -145,6 +149,8 @@ try {
   check("project details start closed", await evaluate("document.querySelector('dialog .mrow--project .mrow__more').hidden") === true);
   await click("dialog .mrow--project [data-expand]"); await sleep(200);
   check("the arrow opens space, client and archive", await evaluate("(() => { const m = document.querySelector('dialog .mrow--project .mrow__more'); return !m.hidden && !!m.querySelector('select[name=spaceId]') && !!m.querySelector('input[name=archived]'); })()"));
+  await click('dialog [data-kind="assignees"]'); await sleep(300);
+  check("Wykonawcy: the account itself first, with its picture, never deleted", await evaluate(`(() => { const row = document.querySelector("dialog .mrow"); return Boolean(row?.querySelector(".me-badge") && row.querySelector(".avatar") && !row.querySelector("[data-remove]")); })()`));
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }); await sleep(300);
 
   // 7. long columns scroll inside; a card can be dropped at the bottom of a long column

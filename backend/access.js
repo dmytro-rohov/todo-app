@@ -22,7 +22,9 @@ const visibleProject = visibleTask;
 // Labels and assignees: one's own, plus those on tasks in one's shared spaces (shown there, editable by their owner only).
 const visibleLabel = (alias, p) => `(${own(alias, p)} OR ${alias}.id IN (SELECT category_id FROM tasks WHERE space_id IN ${sharedSpaces(p)})
   OR ${alias}.id IN (SELECT l.category_id FROM task_labels l JOIN tasks t ON t.id = l.task_id WHERE t.space_id IN ${sharedSpaces(p)}))`;
-const visibleAssignee = (alias, p) => `(${own(alias, p)} OR ${alias}.id IN (SELECT assignee_id FROM tasks WHERE space_id IN ${sharedSpaces(p)}))`;
+// Assignees also: the accounts themselves (their own entries) of the people one shares a space with, to give them tasks.
+const visibleAssignee = (alias, p) => `(${own(alias, p)} OR ${alias}.id IN (SELECT assignee_id FROM tasks WHERE space_id IN ${sharedSpaces(p)})
+  OR (${alias}.account IS NOT NULL AND EXISTS (SELECT 1 FROM spaces ps WHERE ${inSpace("ps", p)} AND ${inSpace("ps", `${alias}.user_id`)})))`;
 
 // Express: refuses members (403) on owner-only APIs.
 function ownerOnly(req, res, next) {
