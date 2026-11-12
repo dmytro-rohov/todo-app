@@ -25,7 +25,7 @@ export const KIT_TEXTS = {
     // the phone's tab bar and its "more" sheet (the kit's shell)
     "nav.board": "Дошка", "nav.list": "Список", "nav.calendar": "Календар", "nav.goals": "Цілі / Мрії", "nav.archive": "Архів",
     "nav.mail": "Пошта", "nav.scope": "Простори й проєкти", "nav.accounts": "Облікові записи", "nav.ai": "AI і Workflow",
-    "nav.scale": "Розмір інтерфейсу", "nav.language": "Мова", "nav.add": "Нове завдання"
+    "nav.scale": "Розмір інтерфейсу", "nav.notifications": "Сповіщення", "nav.language": "Мова", "nav.add": "Нове завдання"
   },
   pl: {
     "startup.session": "Weryfikacja sesji…",
@@ -40,7 +40,7 @@ export const KIT_TEXTS = {
     "hero.f3.title": "Terminy i czas pracy", "hero.f3.text": "Dziś, po terminie, najbliższe 7 dni i licznik czasu.",
     "nav.board": "Tablica", "nav.list": "Lista", "nav.calendar": "Kalendarz", "nav.goals": "Cele / Marzenia", "nav.archive": "Archiwum",
     "nav.mail": "Poczta", "nav.scope": "Przestrzenie i projekty", "nav.accounts": "Konta", "nav.ai": "AI i Workflow",
-    "nav.scale": "Rozmiar interfejsu", "nav.language": "Język", "nav.add": "Nowe zadanie"
+    "nav.scale": "Rozmiar interfejsu", "nav.notifications": "Powiadomienia", "nav.language": "Język", "nav.add": "Nowe zadanie"
   }
 };
 // the login screen's three features (texts: hero.f1-3 above)

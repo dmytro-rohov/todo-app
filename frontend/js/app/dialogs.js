@@ -3,6 +3,7 @@ import { api } from "../api/client.js";
 import { SCALES, confirmDialog as kitConfirmDialog, dialog, savedScale, saveScale, toast } from "../../vendor/mytko-kit/js/ui.js";
 import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
 import { icon } from "../../vendor/mytko-kit/js/icons.js";
+import { mountPushBlock, pushBlock } from "../../vendor/mytko-kit/js/push.js";
 import { isoDay, PRIORITY_LABELS, STATUS_LABELS, titleError, yearsAhead } from "./logic.js";
 import { isMember, lookup, paint, reload, render, store, upsertTask } from "./app.js";
 import { calendarState, loadCalendarAccounts, refreshEvents } from "./meetings.js";
@@ -394,4 +395,14 @@ export function openManage(kind = "projects") {
   element.querySelector("[data-add] [name=name]").focus();
   // The calendar rows need the connected accounts; refresh them (also right after returning from Google).
   if (active === "spaces" && !isMember()) loadCalendarAccounts().then(() => { if (element.open) draw(); });
+}
+
+// Notifications on this device (Mytko Kit push.js: the block, the iPhone install hint, categories, a test).
+export function openNotificationsDialog() {
+  const element = dialog("dialog--confirm dialog--push", `<div class="dialog__body">
+    <header class="dialog__head"><h2>Powiadomienia</h2><button type="button" class="icon-btn" data-close aria-label="Zamknij">${icon("x")}</button></header>
+    ${pushBlock()}
+  </div>`);
+  element.addEventListener("click", event => { if (event.target.closest("[data-close]")) element.close(); });
+  mountPushBlock(element.querySelector("[data-push-block]"));
 }
