@@ -9,6 +9,7 @@
 import { LANG, LANGUAGES, appInfo, escapeHtml, initials, t } from "./core.js";
 import { icon } from "./icons.js";
 import { SCALES, dialog, dialogHead, savedScale } from "./ui.js";
+import { MYTKO_APPS, otherApps } from "./apps.js";
 
 const LOGO = "./icons/icon-192.png";
 
@@ -45,9 +46,21 @@ export function initialsAvatar(user, className = "avatar--lime") {
   return `<span class="avatar${className ? ` ${className}` : ""}">${escapeHtml(initials(user.name))}</span>`;
 }
 
+// The other Mytko apps (apps.js), as links under the views or in the phone's "more" sheet: a different address, so a
+// plain link (on an iPhone, an app from the Home Screen opens it in its own browser sheet). "" when there is none.
+export function appLinks({ current = appInfo().id, apps = MYTKO_APPS } = {}) {
+  const others = otherApps(current, apps);
+  if (!others.length) return "";
+  return `<nav class="mytko-apps" aria-label="${escapeHtml(t("apps.title"))}">
+      <p class="mytko-apps__title">${escapeHtml(t("apps.title"))}</p>
+      ${others.map(app => `<a class="nav-item mytko-apps__item" href="${escapeHtml(app.url)}" rel="noopener" title="${escapeHtml(app.name)}">${icon(app.icon)}<span>${escapeHtml(app.name)}</span></a>`).join("")}
+    </nav>`;
+}
+
 // views: [[name, view], …] in the main list; foot: [name, view] above the account (the settings / profile view).
-// avatar: HTML of the account's badge (default: initials on lime).
-export function sidebar({ views, foot, active, collapsed = false, user, avatar = null }) {
+// avatar: HTML of the account's badge (default: initials on lime). apps (0.9.0): true, or appLinks' options — the
+// other Mytko apps under the views (default: none, as before).
+export function sidebar({ views, foot, active, collapsed = false, user, avatar = null, apps = null }) {
   const app = appInfo();
   return `<aside class="sidebar" aria-label="${escapeHtml(t("nav.main"))}">
     <div class="sidebar__brand">
@@ -57,6 +70,7 @@ export function sidebar({ views, foot, active, collapsed = false, user, avatar =
         aria-pressed="${collapsed}">${icon("sidebar")}</button>
     </div>
     <nav class="sidebar__nav">${views.map(([name, view]) => navItem(name, view, active)).join("")}</nav>
+    ${apps ? appLinks(apps === true ? {} : apps) : ""}
     <div class="sidebar__foot">
       ${foot ? navItem(foot[0], foot[1], active) : ""}
       <div class="profile">
@@ -83,8 +97,8 @@ export function tabBar({ items, active, iconSize = 24, add = null, more = null }
   return `<nav class="tabbar" aria-label="${escapeHtml(t("nav.main"))}">${tabs.join("")}</nav>`;
 }
 
-// The phone's "more" sheet: the views that do not fit the tab bar, then signing out.
-export function openMore({ views, active, onPick, onLogout }) {
+// The phone's "more" sheet: the views that do not fit the tab bar, then signing out. apps (0.9.0): as in sidebar().
+export function openMore({ views, active, onPick, onLogout, apps = null }) {
   const element = dialog("dialog--sheet", `<div class="dialog__body">
     ${dialogHead(t("nav.more"))}
     <nav class="sheet-nav" aria-label="${escapeHtml(t("nav.more"))}">
@@ -92,6 +106,7 @@ export function openMore({ views, active, onPick, onLogout }) {
         ${icon(view.icon)}<span>${escapeHtml(t(view.label))}</span></button>`).join("")}
       <button type="button" class="nav-item nav-item--danger" data-logout>${icon("logout")}<span>${escapeHtml(t("nav.logout"))}</span></button>
     </nav>
+    ${apps ? appLinks(apps === true ? {} : apps) : ""}
   </div>`);
   element.addEventListener("click", event => {
     const view = event.target.closest("[data-view]")?.dataset.view;

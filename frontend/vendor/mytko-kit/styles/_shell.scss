@@ -44,6 +44,13 @@
             strong { font-size: 0.875rem; } small { color: var(--muted); font-size: 0.7812rem; } }
     }
 
+    // the other Mytko apps (shell.js appLinks), under the views and in the phone's "more" sheet
+    .mytko-apps {
+        display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border);
+        &__title { padding: 0 0.75rem 0.375rem; color: var(--faint); font-size: 0.75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+        .nav-item { text-decoration: none; }
+    }
+
     .main { min-width: 0; padding: 1.5rem 2rem 3rem; outline: none; > * { max-width: 78rem; } }
 
     .page-head {
@@ -83,6 +90,8 @@
         &__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
         &__buttons { display: flex; gap: 0.625rem; flex-wrap: wrap; }
     }
+    // Web Push (push.js): this device's categories, one switch per row
+    .push-block__list { display: grid; gap: 0.875rem; padding: 0.25rem 0; .switch { font-weight: 500; } }
 
     // ---- accounts (Settings, administrator) ---------------------------------------------------------------------
     .accounts { display: grid; gap: 0.5rem; }
@@ -111,6 +120,7 @@
             .sidebar__brand { flex-direction: column; gap: 0.625rem; padding: 0 0 1.125rem; > span { display: none; } }
             .sidebar__collapse { margin: 0; }
             .nav-item { justify-content: center; padding: 0; > span { display: none; } }
+            .mytko-apps__title { display: none; }
             .profile { flex-direction: column; gap: 0.5rem; &__text { display: none; } }
         }
     }

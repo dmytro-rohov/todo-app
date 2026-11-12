@@ -24,7 +24,11 @@ const MESSAGES = {
   "Account not found": "error.accountNotFound",
   "Request body too large": "error.tooLarge",
   "Busy, try again": "error.busy",
-  "Invalid request": "error.refresh"
+  "Invalid request": "error.refresh",
+  "Push notifications are not configured": "push.unavailable",
+  "This push service is not supported": "push.unsupported",
+  "This device is not subscribed": "push.gone",
+  "The notification could not be sent": "push.sendFailed"
 };
 
 // The app's server messages: { "Plan not found": "error.refresh", … } — kept in core.js (setupKit does not load this
