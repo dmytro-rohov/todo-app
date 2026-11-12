@@ -14,16 +14,38 @@ export const KIT_TEXTS = {
     "startup.session": "Перевірка сесії…",
     "startup.loading": "Завантаження завдань…",
     "startup.preparing": "Підготовка дошки…",
-    "startup.ready": "Готово — відкриваємо Tasks…"
+    "startup.ready": "Готово — відкриваємо Tasks…",
+    // the login screen (the kit's): Tasks' own lead and three features
+    "hero.title": "Від ідеї",
+    "hero.titleAccent": "до виконаного завдання",
+    "hero.lead": "Mytko Tasks — приватний список завдань: робота й особисті справи, проєкти клієнтів, терміни й час роботи — в одному місці, поруч із Mytko Workflow.",
+    "hero.f1.title": "Дошка, список і календар", "hero.f1.text": "Чотири робочі колонки, перетягування й порядок як пріоритет.",
+    "hero.f2.title": "Простори й проєкти", "hero.f2.text": "Робота, приватне й проєкти клієнтів в окремих папках.",
+    "hero.f3.title": "Терміни й час роботи", "hero.f3.text": "Сьогодні, прострочене, найближчі 7 днів і таймер.",
+    // the phone's tab bar and its "more" sheet (the kit's shell)
+    "nav.board": "Дошка", "nav.list": "Список", "nav.calendar": "Календар", "nav.goals": "Цілі / Мрії", "nav.archive": "Архів",
+    "nav.mail": "Пошта", "nav.scope": "Простори й проєкти", "nav.accounts": "Облікові записи", "nav.ai": "AI і Workflow",
+    "nav.scale": "Розмір інтерфейсу", "nav.language": "Мова", "nav.add": "Нове завдання"
   },
   pl: {
     "startup.session": "Weryfikacja sesji…",
     "startup.loading": "Wczytywanie zadań…",
     "startup.preparing": "Przygotowanie tablicy…",
-    "startup.ready": "Gotowe — otwieranie Tasks…"
+    "startup.ready": "Gotowe — otwieranie Tasks…",
+    "hero.title": "Od pomysłu",
+    "hero.titleAccent": "do zrobionego zadania",
+    "hero.lead": "Mytko Tasks to prywatna lista zadań: praca i sprawy prywatne, projekty klientów, terminy i czas pracy — w jednym miejscu, obok Mytko Workflow.",
+    "hero.f1.title": "Tablica, lista i kalendarz", "hero.f1.text": "Cztery kolumny pracy, przeciąganie i kolejność jako priorytet.",
+    "hero.f2.title": "Przestrzenie i projekty", "hero.f2.text": "Praca, prywatne i projekty klientów w osobnych folderach.",
+    "hero.f3.title": "Terminy i czas pracy", "hero.f3.text": "Dziś, po terminie, najbliższe 7 dni i licznik czasu.",
+    "nav.board": "Tablica", "nav.list": "Lista", "nav.calendar": "Kalendarz", "nav.goals": "Cele / Marzenia", "nav.archive": "Archiwum",
+    "nav.mail": "Poczta", "nav.scope": "Przestrzenie i projekty", "nav.accounts": "Konta", "nav.ai": "AI i Workflow",
+    "nav.scale": "Rozmiar interfejsu", "nav.language": "Język", "nav.add": "Nowe zadanie"
   }
 };
-setupKit({ id: "tasks", name: "Mytko Tasks", short: "Tasks", locales: KIT_TEXTS });
+// the login screen's three features (texts: hero.f1-3 above)
+setupKit({ id: "tasks", name: "Mytko Tasks", short: "Tasks", locales: KIT_TEXTS,
+  features: [{ icon: "board", key: "hero.f1" }, { icon: "folder", key: "hero.f2" }, { icon: "clock", key: "hero.f3" }] });
 
 const KEY = "mytko-tasks:lang";
 export const LANGUAGES = { pl: "Polski", uk: "Українська" };

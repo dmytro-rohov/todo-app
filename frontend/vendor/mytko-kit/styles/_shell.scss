@@ -101,11 +101,7 @@
         &__text { flex: 1; min-width: 10rem; display: grid; gap: 0.125rem; strong { font-size: 1.0625rem; } span { color: var(--muted); font-size: 0.875rem; } b { color: var(--text); font-weight: 650; } }
     }
 
-    // the phone's "more" sheet (shell.js openMore)
-    .sheet-nav { display: grid; gap: 0.25rem; .nav-item { min-height: 3.25rem; font-size: 1rem; } }
-
-    // ---- phone tab bar (hidden on computers) -------------------------------------------------------------------
-    .tabbar { display: none; }
+    @include shell-nav;
 
     // ---- collapsible sidebar (computers): a rail of icons, the names as tooltips -------------------------------
     @media (min-width: 901px) {
@@ -120,19 +116,19 @@
     }
 }
 
-// Phones and small tablets (inside the app's @media (max-width: 900px)): no sidebar, the tab bar, dialogs as bottom
-// sheets.
-@mixin shell-phone {
-    .app { grid-template-columns: minmax(0, 1fr); }
-    .sidebar { display: none; }
-    .main { padding: calc(1rem + env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) calc(var(--tabbar-h) + 2rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
-    .page-head { margin: 0.25rem 0 1rem; &__title h1 { font-size: 1.75rem; } &__title p { font-size: 0.9375rem; } &__icon { width: 3rem; height: 3rem; } }
-    .soon { padding: 1.125rem; gap: 1rem; }
-    .field-row { grid-template-columns: 1fr; }
-    .account-row__actions { grid-column: 1 / -1; }
-    .password-row { flex-wrap: wrap; .btn { flex: 1 1 100%; } }
-    .toasts { bottom: calc(var(--tabbar-h) + 1rem + env(safe-area-inset-bottom)); }
+// The phone navigation alone (part of shell-pages): the "more" sheet and the tab bar, hidden on computers. For an app
+// with its own Settings and accounts pages (Tasks) that takes the tab bar and the sheet only.
+@mixin shell-nav {
+    // the phone's "more" sheet (shell.js openMore)
+    .sheet-nav { display: grid; gap: 0.25rem; .nav-item { min-height: 3.25rem; font-size: 1rem; } }
 
+    // ---- phone tab bar (hidden on computers) -------------------------------------------------------------------
+    .tabbar { display: none; }
+}
+
+// The phone tab bar alone (part of shell-phone), inside the app's phone @media: for an app with its own phone layout
+// (Mytko Workflow's React shell).
+@mixin shell-tabbar {
     .tabbar {
         position: fixed; z-index: 50; inset: auto 0 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end;
         height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding: 0 max(0.5rem, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(0.5rem, env(safe-area-inset-left));
@@ -152,6 +148,22 @@
         }
     }
     body:has(dialog[open]) .tabbar { display: none; }
+}
+
+// Phones and small tablets (inside the app's @media (max-width: 900px)): no sidebar, the tab bar, dialogs as bottom
+// sheets.
+@mixin shell-phone {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .sidebar { display: none; }
+    .main { padding: calc(1rem + env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) calc(var(--tabbar-h) + 2rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
+    .page-head { margin: 0.25rem 0 1rem; &__title h1 { font-size: 1.75rem; } &__title p { font-size: 0.9375rem; } &__icon { width: 3rem; height: 3rem; } }
+    .soon { padding: 1.125rem; gap: 1rem; }
+    .field-row { grid-template-columns: 1fr; }
+    .account-row__actions { grid-column: 1 / -1; }
+    .password-row { flex-wrap: wrap; .btn { flex: 1 1 100%; } }
+    .toasts { bottom: calc(var(--tabbar-h) + 1rem + env(safe-area-inset-bottom)); }
+
+    @include shell-tabbar;
 
     .dialog {
         width: 100vw; max-width: 100vw; margin: auto 0 0; max-height: 92dvh; border-radius: 1.25rem 1.25rem 0 0; border-bottom: 0;

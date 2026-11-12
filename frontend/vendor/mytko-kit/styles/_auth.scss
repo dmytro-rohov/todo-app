@@ -119,6 +119,11 @@
 .startup__bar span{position:absolute;inset:0 auto 0 0;width:0;border-radius:inherit;background:linear-gradient(90deg,#8fdc5a,#c9f78f);box-shadow:0 0 0.875rem #a6e45b99;transition:width .35s ease}
 .startup__bar[data-done="1"] span{width:34%}.startup__bar[data-done="2"] span{width:67%}.startup__bar[data-done="3"] span{width:100%}
 .startup__status{min-height:1.4em;margin:2rem 0 0;color:#e3ebe4;font-size:1.0625rem}
+/* the start failed (Mytko Workflow): the reason and "try again" */
+.startup__error{display:grid;justify-items:center;gap:0.875rem;margin-top:1.75rem;color:#ffd5cc;font-size:0.9375rem}.startup__error p{margin:0}
+.startup__retry{min-height:2.75rem;padding:0.625rem 1.25rem;border:1px solid #b6ef7466;border-radius:0.6875rem;background:#b6ef741a;color:#eaf7de;font-weight:700}
+.startup__retry:hover{background:#b6ef742e}
+.startup__retry:focus-visible{outline:3px solid #79bf55;outline-offset:3px}
 .startup--leaving{pointer-events:none;animation:startup-leave .45s ease forwards}
 @keyframes startup-leave{to{opacity:0;visibility:hidden}}
 @media(max-width:480px){.startup__tile{width:9.375rem;height:9.375rem}.startup__title{margin-top:1.875rem}.startup__bar{margin-top:2rem}}

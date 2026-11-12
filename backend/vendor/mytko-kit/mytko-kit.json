@@ -1,9 +1,13 @@
 {
   "kit": "mytko-kit",
-  "version": "0.4.0",
-  "commit": "5d8098e72b0dfeb6a29cddd04b2247a594e8bfa9",
+  "version": "0.6.1",
+  "commit": "d7ff48911028c2393a2dc1f315430e19b11501a5",
   "dirty": false,
   "part": "backend",
+  "vendors": [
+    "frontend",
+    "backend"
+  ],
   "synced": "tools/sync.mjs",
   "files": {
     "config.js": "sha256:79f9ef158a9724c1398b96dfb3a75106d110e18f67e93d0b35de27021f9a3dc4",

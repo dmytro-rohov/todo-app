@@ -1,4 +1,4 @@
-import { getSession, renderLogin, ssoNotice, shouldTryMytko, SSO_TRIED } from "./auth/login.js";
+import { getSession, markMytkoUsed, renderLogin, ssoKeys, ssoNotice, shouldTryMytko } from "./auth/login.js";
 
 function shared() {
   try { return localStorage; } catch { return null; }
@@ -27,10 +27,10 @@ async function start() {
   }
   startupStep(1);
   if (!state.authenticated) {
-    // Signed in to Mytko Workflow in this browser? Then this signs in here without a click (once per tab, so a
-    // failure or a logout never loops).
+    // Signed in here with Mytko before, and to Mytko Workflow in this browser? Then this signs in here without a click
+    // (once per tab, so a failure or a logout never loops; auth/login.js).
     if (shouldTryMytko(state, window.location.search, sessionStorage, shared())) {
-      sessionStorage.setItem(SSO_TRIED, "1");
+      sessionStorage.setItem(ssoKeys().tried, "1");
       markWelcome();
       return window.location.assign("/auth/mytko/start");
     }
@@ -41,6 +41,8 @@ async function start() {
     });
     return finishStartup();
   }
+  // a session from "Zaloguj kontem Mytko": this browser may sign in with it on its own next time (auth/login.js)
+  if (state.method === "mytko") markMytkoUsed();
   // Back from Google after connecting a calendar (/auth/google/callback): say how it went.
   const calendar = new URLSearchParams(window.location.search).get("calendar");
   const CALENDAR_NOTICES = {

@@ -46,6 +46,10 @@ function collectExports(source) {
   for (const match of source.matchAll(/export\s+(?:async\s+)?(?:function|const|let|class)\s+([A-Za-z_$][\w$]*)/g)) {
     names.add(match[1]);
   }
+  // export { a, b as c } [from "…"]: the re-exports of the login and dialog modules (the kit's)
+  for (const match of source.matchAll(/export\s*\{([^}]*)\}/g)) {
+    for (const part of match[1].split(",").map(item => item.trim()).filter(Boolean)) names.add(part.split(/\s+as\s+/).pop());
+  }
   return names;
 }
 
