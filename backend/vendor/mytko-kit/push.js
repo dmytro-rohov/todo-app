@@ -159,7 +159,14 @@ function parseSubscription(value, hosts = PUSH_HOSTS) {
 function createPushStore(pool, { maxDevices = MAX_DEVICES } = {}) {
   return {
     // prefs: the device's choice, or null to keep what it had (a device that changes account starts from the defaults).
-    async save(userId, device, prefs = null) {
+    // replaces: the endpoint this device had before the browser renewed it (sw-core.js pushsubscriptionchange) — without
+    // a choice of its own the device keeps the old one's, and the old endpoint goes.
+    async save(userId, device, prefs = null, { replaces = null } = {}) {
+      if (prefs === null && replaces && replaces !== device.endpoint) {
+        const old = (await pool.query("SELECT prefs FROM push_subscriptions WHERE endpoint = $1 AND user_id IS NOT DISTINCT FROM $2::integer",
+          [replaces, userId ?? null])).rows[0];
+        if (old && old.prefs && typeof old.prefs === "object") prefs = old.prefs;
+      }
       const result = await pool.query(
         `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, prefs) VALUES ($1, $2, $3, $4, COALESCE($5::jsonb, '{}'::jsonb))
          ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
@@ -171,6 +178,9 @@ function createPushStore(pool, { maxDevices = MAX_DEVICES } = {}) {
       // the account's oldest devices beyond the cap are forgotten (an old phone, a cleared browser); the device just saved
       // always stays, also an old one turned on again (its row keeps its first id)
       const saved = result.rows[0]?.id ?? null;
+      if (replaces && replaces !== device.endpoint) {
+        await pool.query("DELETE FROM push_subscriptions WHERE endpoint = $1 AND user_id IS NOT DISTINCT FROM $2::integer", [replaces, userId ?? null]);
+      }
       await pool.query(`DELETE FROM push_subscriptions WHERE id IN (SELECT id FROM push_subscriptions
         WHERE user_id IS NOT DISTINCT FROM $1::integer AND id IS DISTINCT FROM $2::integer ORDER BY id DESC OFFSET ${Number(maxDevices) - 1})`, [userId ?? null, saved]);
       return result.rows[0] || null;
@@ -302,13 +312,20 @@ function createPush({ pool, vapid, categories = [], app = { name: "Mytko" }, sto
   };
 }
 
+// A path of this app: one leading "/", no control characters (browsers drop tabs and newlines, so "/\n/x.com" would
+// become "//x.com") and no backslash, and still the app's origin once parsed.
+function appPath(url) {
+  if (typeof url !== "string" || !url.startsWith("/") || /[\u0000-\u001f\u007f\\]/.test(url)) return false;
+  try { return new URL(url, "https://app.invalid").origin === "https://app.invalid"; } catch { return false; }
+}
+
 // The message as the device gets it, checked (push-cli.js uses it too). Throws on a malformed one.
 function notification(message) {
   if (!message || typeof message !== "object") throw new Error("A push message is an object");
   const { title, body = "", url = "/", tag = null, badge = null } = message;
   if (typeof title !== "string" || !title.trim() || title.length > 120) throw new Error("A push message needs a title of at most 120 characters");
   if (typeof body !== "string" || body.length > 600) throw new Error("A push message's body is at most 600 characters");
-  if (typeof url !== "string" || !url.startsWith("/") || url.startsWith("//") || url.includes("\\")) throw new Error("A push message's url is a path of this app (\"/…\")");
+  if (!appPath(url)) throw new Error("A push message's url is a path of this app (\"/…\")");
   if (tag !== null && (typeof tag !== "string" || !TOPIC.test(tag))) throw new Error("A push message's tag is 1–32 letters, digits, - or _");
   if (badge !== null && (!Number.isInteger(badge) || badge < 0)) throw new Error("A push message's badge is a whole number ≥ 0");
   const out = { title: title.trim(), body, url };
@@ -326,7 +343,8 @@ function options(message) {
 
 // ---- API: /api/push (after requireUser, csrf and express.json, like every app router) --------------------------------
 //   GET  /                → { available, publicKey, categories: [{ id, default }] }
-//   PUT  /subscription    { subscription, prefs? } → { prefs }   (this device: saved, or its choice changed)
+//   PUT  /subscription    { subscription, prefs?, replaces? } → { prefs }   (this device: saved, or its choice changed;
+//                         replaces: its endpoint before the browser renewed it — the choice carries over)
 //   POST /unsubscribe     { endpoint } → 204
 //   POST /test            { endpoint } → { sent }
 function createPushRouter({ push, hosts = PUSH_HOSTS }) {
@@ -347,7 +365,7 @@ function createPushRouter({ push, hosts = PUSH_HOSTS }) {
 
   router.put("/subscription", async (req, res) => {
     if (!push.available) return res.status(409).json({ message: "Push notifications are not configured" });
-    const value = body(req, ["subscription", "prefs"]);
+    const value = body(req, ["subscription", "prefs", "replaces"]);
     if (!value) return res.status(400).json({ message: "Invalid request" });
     const device = parseSubscription(value.subscription, hosts);
     if (!device) return res.status(400).json({ message: "This push service is not supported" });
@@ -358,7 +376,10 @@ function createPushRouter({ push, hosts = PUSH_HOSTS }) {
       if (!entries || entries.some(([key, on]) => !known.has(key) || typeof on !== "boolean")) return res.status(400).json({ message: "Invalid request" });
       prefs = Object.fromEntries(entries);
     }
-    const saved = await push.store.save(req.user.id ?? null, device, prefs);
+    // a renewed subscription names the endpoint it replaces (sw-core.js): only a string of an endpoint's size
+    const replaces = value.replaces === undefined ? null : typeof value.replaces === "string" && value.replaces.length <= MAX_ENDPOINT ? value.replaces : undefined;
+    if (replaces === undefined) return res.status(400).json({ message: "Invalid request" });
+    const saved = await push.store.save(req.user.id ?? null, device, prefs, { replaces });
     res.json({ prefs: saved && saved.prefs && typeof saved.prefs === "object" ? saved.prefs : {} });
   });
 

@@ -79,11 +79,16 @@ function mytkoServiceWorker({ prefix, version = "1", releasePage = false, pages 
  * - notificationclick: url is a path of this app only. An open window of the app is focused and gets a message
  *   { type: "mytko:open", url } (push.js listenForPushOpen opens it); without one the app starts at that url.
  * - pushsubscriptionchange (browsers that renew a device's subscription): the new one is saved with the API (api:
- *   the app's path, default "/api/push").
+ *   the app's path, default "/api/push"), naming the old endpoint, so the device keeps its choice of categories.
  */
 // eslint-disable-next-line no-unused-vars
 function mytkoPushHandlers({ icon = "/icons/icon-192.png", api = "/api/push", fallbackTitle = "Mytko" } = {}) {
-  const pathOf = url => (typeof url === "string" && url.startsWith("/") && !url.startsWith("//") && !url.includes("\\") ? url : "/");
+  // a path of this app only: no control characters (browsers drop them: "/\n/x.com" would be "//x.com"), no backslash,
+  // and the app's own origin once parsed
+  const pathOf = url => {
+    if (typeof url !== "string" || !url.startsWith("/") || /[\u0000-\u001f\u007f\\]/.test(url)) return "/";
+    try { return new URL(url, self.location.origin).origin === self.location.origin ? url : "/"; } catch { return "/"; }
+  };
 
   self.addEventListener("push", event => {
     let data = {};
@@ -123,7 +128,8 @@ function mytkoPushHandlers({ icon = "/icons/icon-192.png", api = "/api/push", fa
       .then(subscription => {
         const { endpoint, keys } = subscription.toJSON();
         return fetch(`${api}/subscription`, { method: "PUT", credentials: "same-origin", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ subscription: { endpoint, keys } }) });
+          // the old endpoint: the server carries this device's choice of categories over and forgets the old one
+          body: JSON.stringify({ subscription: { endpoint, keys }, replaces: old.endpoint }) });
       })
       .catch(() => undefined));
   });

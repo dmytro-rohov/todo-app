@@ -53,6 +53,13 @@ export function effectivePrefs(categories, prefs = {}) {
   return Object.fromEntries(categories.map(category => [category.id, typeof prefs[category.id] === "boolean" ? prefs[category.id] : category.default]));
 }
 
+// A path of this app (as the worker and the server check it): one leading "/", no control characters or backslash, the
+// app's origin once parsed.
+function appPath(url, origin = "https://app.invalid") {
+  if (typeof url !== "string" || !url.startsWith("/") || /[\u0000-\u001f\u007f\\]/.test(url)) return false;
+  try { return new URL(url, origin).origin === new URL(origin).origin; } catch { return false; }
+}
+
 // A tapped notification while the app is open: the worker sends { type: "mytko:open", url } (sw-core.js). open: the
 // app's own navigation (default: load that address).
 export function listenForPushOpen(open = url => window.location.assign(url), env = globalThis) {
@@ -60,7 +67,7 @@ export function listenForPushOpen(open = url => window.location.assign(url), env
   if (!worker) return;
   worker.addEventListener("message", event => {
     const url = event.data?.type === "mytko:open" ? event.data.url : null;
-    if (typeof url === "string" && url.startsWith("/") && !url.startsWith("//")) open(url);
+    if (appPath(url, env.location?.origin)) open(url);
   });
 }
 
@@ -148,6 +155,7 @@ export async function mountPushBlock(element, options = {}) {
         subscription = await (await ready()).pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(state.publicKey) });
         const prefs = effectivePrefs(state.categories);
         Object.assign(state, { subscribed: true, prefs: (await api.save(subscriptionJson(subscription), prefs)).prefs || prefs });
+        confirmed = effectivePrefs(state.categories, state.prefs);
         render();
       } else if (button.hasAttribute("data-push-off")) {
         const endpoint = subscription?.endpoint;
@@ -170,19 +178,29 @@ export async function mountPushBlock(element, options = {}) {
   // Choices are saved one after another, each with every choice made so far (a quick second tap never sends the first
   // one's old value); a refused save puts its own switch back.
   let saving = Promise.resolve();
+  // Each category's newest choice wins: a save started earlier is skipped once a newer choice of that category exists,
+  // and a failed save puts back what the server last confirmed — only when no newer choice came meanwhile.
+  const latest = {};
+  let confirmed = effectivePrefs(state.categories, state.prefs);
   element.addEventListener("change", event => {
     const input = event.target.closest('input[name="push-category"]');
     if (!input || !subscription) return;
-    const choice = { [input.value]: input.checked };
-    state.prefs = { ...effectivePrefs(state.categories, state.prefs), ...choice };
+    const id = input.value;
+    const sequence = (latest[id] || 0) + 1;
+    latest[id] = sequence;
+    state.prefs = { ...effectivePrefs(state.categories, state.prefs), [id]: input.checked };
     saving = saving.then(async () => {
+      if (latest[id] !== sequence) return;
       try {
         const saved = (await api.save(subscriptionJson(subscription), state.prefs)).prefs;
+        confirmed = effectivePrefs(state.categories, saved || state.prefs);
         if (saved) state.prefs = { ...saved, ...state.prefs };
         toast(t("settings.saved"));
       } catch (error) {
-        state.prefs = { ...state.prefs, [input.value]: !input.checked };
-        input.checked = !input.checked;
+        if (latest[id] === sequence) {
+          state.prefs = { ...state.prefs, [id]: confirmed[id] };
+          input.checked = confirmed[id];
+        }
         fail(error);
       }
     });

@@ -1,7 +1,7 @@
 {
   "kit": "mytko-kit",
-  "version": "0.10.3",
-  "commit": "faf01afa0331b3311347732608132987cdb1c7a1",
+  "version": "0.11.1",
+  "commit": "af4859dc10d47dda06436ce65d84d3f4f38f1fb6",
   "dirty": false,
   "part": "frontend",
   "vendors": [
@@ -16,7 +16,7 @@
     "js/apps.js": "sha256:d5c9f4eef869c7ec58ae4cbe35081528824c312b9b9b00d46c6472b6bf4794e5",
     "js/boot.js": "sha256:33451e44498191b0ea6ddb97a6d2119e3f9fd6c747405bb234589bd7529a7ec5",
     "js/config.js": "sha256:69489094b982e592e3b5f749a6df5b24ed54cc1a97e2957615157b48577337cd",
-    "js/core.js": "sha256:9006ead3ecf26961dd53f90df6caf8b1b2ed79d9307303303d7a62b1020beeb4",
+    "js/core.js": "sha256:fc2ddddc89461f16e6098497f149823a6fcbf5b8715edfcdc707e6bd09dcf282",
     "js/dialogs.js": "sha256:13f777233ec16c70b4e96e60bb2872f41ca2d8f763ed67ea5ab600a5e8866d07",
     "js/helpers.js": "sha256:69489094b982e592e3b5f749a6df5b24ed54cc1a97e2957615157b48577337cd",
     "js/http.js": "sha256:13de7ea2a58c522b3b937b09bd3a7b53003d6cb0f5338c2340aa4ecece3c9ff8",
@@ -27,11 +27,11 @@
     "js/login.js": "sha256:069d425ec5863b440c76d22f7da841b7652ae22e76260e4a9d6f9b3ffec1b5ac",
     "js/paint.js": "sha256:69489094b982e592e3b5f749a6df5b24ed54cc1a97e2957615157b48577337cd",
     "js/push.d.ts": "sha256:cab68ea4a32b7ca154e0ed5d0da3e88838672378297b1bb582d99a31780e0d38",
-    "js/push.js": "sha256:022cfdf9987120252bc7a442cbe6fb2c7e38a127e8778e556323668c22bea184",
+    "js/push.js": "sha256:2f94ecb9cf086e438a370b24ff3117474b4b3d91a562a4d4cd07de57fe8a83a7",
     "js/settings.js": "sha256:02ca6d01fe63345bf51bf4cb1d262023e3bc648cf9ca6279f6c8133bf90670e0",
     "js/shell.js": "sha256:c1a5ed3676bf7bdde695dbd3468aec1653dee491a4cb24bb360f4ad112490fed",
     "js/startup.js": "sha256:13f777233ec16c70b4e96e60bb2872f41ca2d8f763ed67ea5ab600a5e8866d07",
-    "js/sw-core.js": "sha256:c33916e5bc648b7fbdb4c4ac9dd009a1ebdd688829930116724eac9392ec0e04",
+    "js/sw-core.js": "sha256:ab029c4015bb5a99990e1df50a68cd48c1b8ce56844017bccd1a562b75d281ef",
     "js/toast.js": "sha256:13f777233ec16c70b4e96e60bb2872f41ca2d8f763ed67ea5ab600a5e8866d07",
     "js/ui-scale.js": "sha256:13f777233ec16c70b4e96e60bb2872f41ca2d8f763ed67ea5ab600a5e8866d07",
     "js/ui.js": "sha256:463440f9ff52af13cbdc84a11e005ee7f601a0b7158e69b65fe115281c452083",
@@ -47,7 +47,7 @@
     "styles/_device.scss": "sha256:98e5084a47e07c182c202c9a97fc73859cd76964a094258bd20485ecd85341ec",
     "styles/_index.scss": "sha256:f587e4fad6d91d104da0e6706dd2be71ba92b3dfe136900afb7e890ca011b1ca",
     "styles/_reset.scss": "sha256:707cb8467d77a392982731e1082adc1ba8a8120c0d0326b2c788ae0ba1f250b5",
-    "styles/_shell.scss": "sha256:fc5c4e5fe23277b96c192b94272c265dcf2a339fb6305a509ceab697d11c57ba",
+    "styles/_shell.scss": "sha256:1b905d47c337cf05e85620399bc9908c0643b2555a21a5bca919daca9d25fad7",
     "styles/mytko-kit.scss": "sha256:f94508c91744b1d2d5845ef474f5bb4e601ee38b44de96a3b5b0f310398856c0",
     "styles/tokens.css": "sha256:cb31e6a9783048e619d8fa465da942c627200fcc4554cf80066527172b1cb792"
   }

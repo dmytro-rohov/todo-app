@@ -1,7 +1,7 @@
 {
   "kit": "mytko-kit",
-  "version": "0.10.3",
-  "commit": "faf01afa0331b3311347732608132987cdb1c7a1",
+  "version": "0.11.1",
+  "commit": "af4859dc10d47dda06436ce65d84d3f4f38f1fb6",
   "dirty": false,
   "part": "backend",
   "vendors": [
@@ -25,7 +25,7 @@
     "migrations.js": "sha256:9301e5513bbcb967736d0e0fd983763a04b7a10d9970a2408df152d8a2dfc638",
     "package.json": "sha256:8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a",
     "push-cli.js": "sha256:cff0fb44d9e65041c983a17ce3e54c20994e3d55ec70719c6218b05f234bd89e",
-    "push.js": "sha256:2cc1b51d6e6486e856c20af156c5187f1bc844e9c955dd0c0c7a7cd64c05c652",
+    "push.js": "sha256:2dce10ebe95e3739c9b10249426581b9eaac518cd7cb317167265ed6da5a22d4",
     "routes/auth.js": "sha256:7cb372a8ff64f98de6b85c5e3e6bb6eb89ce883b6f5808460bf4e5f441dbf1a1",
     "routes/me.js": "sha256:35821e8841a16c47a86d12db35a1bdbcb66a7acf2dbccd366091d2071d096982",
     "routes/sso.js": "sha256:88e5d636f8e384c929ced929d199759877e0c8df19b58c5906ee6e00dd5213ac",
