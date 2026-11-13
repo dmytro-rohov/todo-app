@@ -1,0 +1,81 @@
+/* Mytko design tokens: the one source of the Mytko colours, fonts, radii, sizes and shadows. Plain CSS without a cascade
+ * layer, so any app can load it: the vanilla apps from Sass (@layer base { @include kit.tokens; }), Mytko Workflow with
+ * a plain import before its own styles.
+ *
+ * Dark is the default (every Mytko app is dark, Workflow's dark theme is the same palette). [data-theme="light"] on
+ * <html> (or on any element) switches to the light palette, [data-theme="dark"] makes an element a dark island in a
+ * light page (Workflow's sidebar). The light palette comes from Mytko Workflow's light theme; no vanilla app uses it yet.
+ *
+ * Sizes are rem: the vanilla apps scale the whole interface with --ui-scale (html font-size = 16px * --ui-scale, 75% on
+ * computers, 70% on phones). The size tokens below describe what the kit's components draw today (2.75rem buttons, etc.);
+ * new code uses them, the components move to them in later kit versions.
+ */
+:root, [data-theme="dark"] {
+    --bg: #0b110d;
+    --surface: #111813;
+    --surface-2: #151d17;
+    --surface-3: #1b251d;
+    --text: #edf4ee;
+    --muted: #98a49a;
+    --faint: #84918a; /* at least 4.5:1 on every surface (small text, WCAG AA) */
+    --border: #233026;
+    --border-strong: #2f3e31;
+    --accent: #b7e34d;
+    --accent-strong: #c9f27a;
+    --accent-contrast: #142006;
+    --accent-soft: #b7e34d1f;
+    --accent-text: #b7e34d; /* the accent as text (on light surfaces lime is unreadable: a darker green there) */
+    --warning: #f2c463;
+    --warning-soft: #f2c4631c;
+    --success: #8fd65a;
+    --success-soft: #8fd65a1f;
+    --danger: #ff9a89;
+    --danger-soft: #ff9a891a;
+    --radius: 0.75rem;
+    --radius-lg: 1rem;
+    --shadow: 0 1.125rem 3.125rem #00000073;
+    --shadow-color: #00000073; /* the shadow's colour alone, for an app's own shadow shapes */
+    --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-display: Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --tabbar-h: 4.75rem;
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --control-h: 2.75rem;
+    --control-h-sm: 2.25rem;
+    --control-radius: 0.6875rem;
+    --radius-sm: 0.625rem;
+    --sidebar-w: 15.5rem;
+    --sidebar-rail-w: 4.75rem;
+    color-scheme: dark;
+}
+
+[data-theme="light"] {
+    --bg: #f4f5ef;
+    --surface: #ffffff;
+    --surface-2: #f7f8f4;
+    --surface-3: #edf0e8;
+    --text: #19231b;
+    --muted: #6a766c;
+    --faint: #646f66;
+    --border: #e0e4dc;
+    --border-strong: #dce1d8;
+    --accent: #b7e34d;
+    --accent-strong: #c9f27a;
+    --accent-contrast: #17210d;
+    --accent-soft: #b7e34d33;
+    --accent-text: #4f6b12;
+    --warning: #875b05;
+    --warning-soft: #fff0c9;
+    --success: #48630a;
+    --success-soft: #e8f4d0;
+    --danger: #9b3525;
+    --danger-soft: #ffe4de;
+    --shadow: 0 0.875rem 2.375rem #17211712;
+    --shadow-color: #17211712;
+    color-scheme: light;
+}

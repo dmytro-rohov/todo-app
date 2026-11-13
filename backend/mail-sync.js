@@ -4,7 +4,7 @@
 // to clients by the sender's address, then the company domain. Tasks change the mailbox only by marking messages read.
 const { ImapFlow } = require("imapflow");
 const { simpleParser } = require("mailparser");
-const { withTransaction } = require("./db");
+const { withTransaction } = require("./kit");
 const { PUBLIC_DOMAINS } = require("./clients");
 
 const MAX_SOURCE_BYTES = 10 * 1024 * 1024;

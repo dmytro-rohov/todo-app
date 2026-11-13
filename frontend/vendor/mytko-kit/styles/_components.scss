@@ -1,0 +1,146 @@
+// Mytko Kit: the shared components — icon buttons, buttons, form fields, switches, chips, avatars, segmented controls,
+// toasts (toast.js), the language / size cards (settings.js), dialogs (dialogs.js), notes and empty states.
+// The app includes it first in its components layer: @layer components { @include kit.components; …the app's own… }
+// $select-arrow: <select> drawn by the kit (no native look, the kit's chevron; Fitness) — false keeps the browser's own
+// select (Finance).
+@mixin components($select-arrow: true) {
+    .icon-btn {
+        display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; color: var(--muted);
+        &:hover { color: var(--text); background: var(--surface-3); }
+        &--box { flex: none; width: 2.75rem; height: 2.75rem; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); }
+        &--danger:hover { color: var(--danger); background: var(--danger-soft); }
+    }
+
+    .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.75rem; padding: 0 1.125rem;
+        border-radius: 0.6875rem; font-weight: 650; white-space: nowrap;
+        &--primary {
+            color: var(--accent-contrast); background: linear-gradient(90deg, #c3f27f, #b1ea65); box-shadow: 0 0.5rem 1.375rem #a6e45b2e;
+            &:hover { filter: brightness(1.05); }
+            &:disabled { opacity: .6; cursor: default; }
+        }
+        &--ghost { border: 1px solid var(--border-strong); background: var(--surface-2); &:hover { background: var(--surface-3); } }
+        &--danger { color: #2b0d08; background: var(--danger); }
+        &--danger-text { color: var(--danger); border-color: #ff9a8944; &:hover { background: var(--danger-soft); } }
+        &--sm { min-height: 2.25rem; padding: 0 0.75rem; font-size: 0.875rem; border-radius: 0.5625rem; }
+    }
+
+    // ---- forms --------------------------------------------------------------------------------------------------
+    input:not([type=checkbox], [type=radio]), textarea, select {
+        width: 100%; min-height: 2.75rem; padding: 0.625rem 0.875rem; border: 1px solid var(--border-strong); border-radius: 0.6875rem;
+        background: var(--surface-2); font-size: 0.9375rem;
+        &::placeholder { color: var(--faint); }
+        &:focus { border-color: #79bf55; outline: none; box-shadow: 0 0 0 0.1875rem #a6e45b26; }
+    }
+    .field {
+        display: grid; gap: 0.5rem; min-width: 0;
+        > span:first-child { color: var(--muted); font-size: 0.875rem; font-weight: 600; }
+        &__hint { color: var(--faint); font-size: 0.8125rem; line-height: 1.4; }
+    }
+    @if $select-arrow {
+        select {
+            appearance: none; padding-right: 2.25rem; cursor: pointer;
+            background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2398a49a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E") no-repeat right 0.75rem center;
+        }
+    }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.875rem; align-items: start; }
+    .field-error { margin: 0; padding: 0.625rem 0.875rem; border: 1px solid #ff9a8955; border-radius: 0.625rem; background: var(--danger-soft); color: var(--danger); font-size: 0.875rem; }
+    .password-row { display: flex; gap: 0.5rem; align-items: center; input { flex: 1; min-width: 0; letter-spacing: .02em; } }
+
+    .switch {
+        display: inline-flex; align-items: center; gap: 0.75rem; color: var(--text); font-weight: 600; cursor: pointer;
+        input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+        &__track {
+            position: relative; flex: none; width: 2.75rem; height: 1.625rem; border-radius: 6.1875rem; background: #2a352c; transition: background .15s;
+            &::after { content: ""; position: absolute; top: 0.1875rem; left: 0.1875rem; width: 1.25rem; height: 1.25rem; border-radius: 50%; background: #e7efe8; transition: transform .15s; }
+        }
+        input:checked + .switch__track { background: var(--accent); &::after { transform: translateX(1.125rem); background: var(--accent-contrast); } }
+        input:focus-visible + .switch__track { outline: 2px solid var(--accent); outline-offset: 2px; }
+    }
+
+    .check { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--muted); font-size: 0.875rem; cursor: pointer; }
+
+    .chip {
+        display: inline-flex; align-items: center; gap: 0.4375rem; max-width: 100%; min-height: 1.75rem; padding: 0 0.6875rem; border-radius: 6.1875rem;
+        border: 1px solid var(--border-strong); background: var(--surface-3); color: #dfe8e0; font-size: 0.8125rem; font-weight: 600;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        &--stage { border-color: #b7e34d55; background: var(--accent-soft); color: var(--accent); font-size: 0.75rem; letter-spacing: .02em; }
+        &--role { border-color: #b7e34d55; color: var(--accent); }
+        &--danger { border-color: #ff9a8966; background: var(--danger-soft); color: var(--danger); }
+    }
+
+    .avatar {
+        display: inline-grid; place-items: center; flex: 0 0 auto; width: 2.125rem; height: 2.125rem; border-radius: 50%;
+        background: #2c372e; color: #f2f7f2; font-size: 0.8125rem; font-weight: 750; letter-spacing: .02em;
+        &--lime { background: var(--accent); color: var(--accent-contrast); }
+        &--lg { width: 3.25rem; height: 3.25rem; font-size: 1.125rem; }
+    }
+
+    // Segmented control; .seg--tabs: tabs of equal widths.
+    .seg {
+        display: inline-flex; gap: 0.25rem; padding: 0.3125rem; border: 1px solid var(--border); border-radius: 0.875rem; background: var(--surface);
+        button {
+            min-height: 2.5rem; padding: 0 1rem; border-radius: 0.625rem; color: #cfd8d0; font-size: 0.9375rem; font-weight: 600;
+            &:hover { background: var(--surface-3); }
+            &[aria-selected="true"], &[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 750; box-shadow: inset 0 0 0 1px #b7e34d66; }
+        }
+        &--tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: min(100%, 36rem); button { min-height: 2.75rem; } }
+    }
+
+    .toasts { position: fixed; z-index: 90; left: 50%; bottom: 1.5rem; display: grid; gap: 0.5rem; transform: translateX(-50%); width: min(32.5rem, calc(100vw - 2rem)); }
+    .toast {
+        display: flex; align-items: center; gap: 0.875rem; padding: 0.75rem 1rem; border: 1px solid var(--border-strong); border-radius: 0.75rem;
+        background: #18221a; box-shadow: var(--shadow); font-size: 0.875rem; animation: rise .2s ease;
+        span { flex: 1; }
+        button { color: var(--accent); font-weight: 700; padding: 0.25rem 0.5rem; border-radius: 0.4375rem; &:hover { background: var(--accent-soft); } }
+        &--error { border-color: #ff9a8966; background: #2a1916; }
+    }
+    @keyframes rise { from { transform: translateY(0.5rem); opacity: 0; } }
+
+    // one choice per row (language, interface size): a card with a radio dot, the chosen one in the accent
+    .scale-options {
+        display: grid; gap: 0.5rem;
+        .check {
+            display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 3rem; padding: 0.625rem 0.875rem;
+            border: 1px solid var(--border); border-radius: 0.75rem; background: var(--surface-2); color: var(--text);
+            font-size: 0.9375rem; font-weight: 600; transition: border-color .12s, background .12s;
+            &:hover { border-color: var(--border-strong); }
+            &:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+            &:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+        }
+        input[type=radio] {
+            appearance: none; display: grid; place-content: center; flex: none; width: 1.25rem; height: 1.25rem; margin: 0;
+            border: 2px solid var(--border-strong); border-radius: 50%; background: transparent; cursor: pointer;
+            &::before { content: ""; width: 0.5625rem; height: 0.5625rem; border-radius: 50%; background: var(--accent); transform: scale(0); transition: transform .12s; }
+            &:checked { border-color: var(--accent); &::before { transform: scale(1); } }
+            &:focus-visible { outline: none; }
+        }
+        &--row { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+        &__code { margin-left: auto; padding: 0.125rem 0.5rem; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--muted);
+            font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; }
+        .check:has(input:checked) .scale-options__code { border-color: var(--accent); color: var(--accent); }
+    }
+
+    // ---- dialogs (native <dialog>; bottom sheets on phones) ------------------------------------------------------
+    .dialog {
+        margin: auto; width: min(37.5rem, calc(100vw - 1.5rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1px solid var(--border-strong);
+        border-radius: 1.125rem; background: #111913; color: var(--text); box-shadow: var(--shadow);
+        &::backdrop { background: #000000a0; }
+        &__body { display: grid; gap: 1rem; padding: 1.375rem 1.5rem 1.5rem; }
+        &__head { display: flex; align-items: center; justify-content: space-between; h2 { font-size: 1.375rem; font-weight: 800; } }
+        &__actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.625rem; flex-wrap: wrap; }
+        &--confirm { width: min(28.75rem, calc(100vw - 1.5rem)); }
+        &--sheet { width: min(24rem, calc(100vw - 1.5rem)); }
+        &--form { width: min(36rem, calc(100vw - 1.5rem)); }
+        &--narrow { width: min(28rem, calc(100vw - 1.5rem)); }
+        &__message { font-size: 1rem; line-height: 1.55; }
+        &__left { margin-right: auto; }
+    }
+    .soon-note {
+        display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.875rem 1rem; border: 1px solid var(--border); border-radius: var(--radius);
+        background: var(--surface); color: #cfd8d0; font-size: 0.9375rem; line-height: 1.5;
+        .i { color: var(--accent); margin-top: 0.125rem; }
+    }
+
+    .empty { padding: 3rem 1rem; color: var(--faint); text-align: center; }
+}

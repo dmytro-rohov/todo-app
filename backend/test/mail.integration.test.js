@@ -10,8 +10,8 @@ const http = require("node:http");
 const path = require("node:path");
 const { ImapFlow } = require("imapflow");
 
-const { createPool } = require("../db");
-const { runMigrations, listMigrations } = require("../migrations");
+const { createPool } = require("../kit");
+const { runMigrations, listMigrations } = require("../kit");
 const { startApp, SAME_ORIGIN_JSON } = require("./support");
 const { encrypt, parseKey } = require("../secrets");
 

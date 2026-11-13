@@ -3,7 +3,7 @@
 // code (or its link) the space's creator made. Nobody else is ever shown which accounts exist.
 const crypto = require("node:crypto");
 const express = require("express");
-const { withTransaction } = require("../db");
+const { withTransaction } = require("../kit");
 const { defaultSpaces, publicKey, keepOwnReferences } = require("../spaces");
 const { recordTaskChanges } = require("../task-history");
 const { isOwner, userId, own, visibleSpace, inSpace } = require("../access");

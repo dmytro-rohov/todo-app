@@ -1,6 +1,6 @@
 // Keeps calendar_events in step with each connected Google Calendar: every 5 minutes, a window from 60 days back
 // to a year ahead is read and upserted; events gone from Google within the window are removed.
-const { withTransaction } = require("./db");
+const { withTransaction } = require("./kit");
 const { decrypt } = require("./secrets");
 const { matchMeetings } = require("./clients");
 

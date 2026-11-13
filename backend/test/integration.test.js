@@ -11,8 +11,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { spawn } = require("node:child_process");
 
-const { createPool } = require("../db");
-const { runMigrations, listMigrations } = require("../migrations");
+const { createPool } = require("../kit");
+const { runMigrations, listMigrations } = require("../kit");
 const { startApp, AUTH, SAME_ORIGIN_JSON, USERNAME, passwordHashPromise } = require("./support");
 
 const OWNER_URL = process.env.TEST_MIGRATION_DATABASE_URL;

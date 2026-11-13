@@ -12,6 +12,8 @@ WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY frontend/styles/ ./styles/
+# the Mytko Kit partials and tokens the stylesheet @uses (../vendor/mytko-kit/styles)
+COPY frontend/vendor/mytko-kit/styles/ ./vendor/mytko-kit/styles/
 RUN npm run build:css
 
 # ---- backend production dependencies ----------------------------------------
@@ -28,11 +30,17 @@ COPY backend/routes/ backend/routes/
 COPY backend/ai/ backend/ai/
 COPY backend/drizzle/ backend/drizzle/
 COPY backend/scripts/ backend/scripts/
+# the shared Mytko Kit modules (backend/kit.js); express and pg resolve from backend/node_modules
+COPY backend/vendor/ backend/vendor/
 COPY --from=deps /build/backend/node_modules/ backend/node_modules/
 COPY frontend/index.html frontend/privacy.html frontend/
 COPY frontend/js/ frontend/js/
 COPY frontend/icons/ frontend/icons/
 COPY frontend/manifest.webmanifest frontend/sw.js frontend/
+# the Mytko Kit browser modules, texts and images (served under /vendor/mytko-kit/); its SCSS only feeds the css stage
+COPY frontend/vendor/mytko-kit/js/ frontend/vendor/mytko-kit/js/
+COPY frontend/vendor/mytko-kit/locales/ frontend/vendor/mytko-kit/locales/
+COPY frontend/vendor/mytko-kit/assets/ frontend/vendor/mytko-kit/assets/
 COPY --from=css /build/frontend/dist/ frontend/dist/
 # Owned by root, readable by everyone, writable by nobody else: the runtime
 # user cannot modify application code.

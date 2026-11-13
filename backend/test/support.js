@@ -19,7 +19,7 @@ const { hashPassword } = require("../security");
 const ORIGIN = "https://task.mytko.dev";
 const USERNAME = "owner";
 const PASSWORD = "correct horse battery staple";
-const { listMigrations } = require("../migrations");
+const { listMigrations } = require("../kit");
 const MIGRATIONS = listMigrations(require("node:path").join(__dirname, "..", "drizzle")).map(m => m.hash);
 
 // Low scrypt cost keeps tests fast; production hashes use the defaults.

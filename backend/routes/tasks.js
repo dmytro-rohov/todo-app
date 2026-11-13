@@ -1,5 +1,5 @@
 const express = require("express");
-const { withTransaction } = require("../db");
+const { withTransaction } = require("../kit");
 const { defaultSpaces } = require("../spaces");
 const { validateTaskPatch } = require("../task-domain");
 const { taskChanges, recordTaskChanges } = require("../task-history");

@@ -1,7 +1,7 @@
 // Member accounts, managed by the owner (mounted behind ownerOnly). A new member gets an empty board with their own
 // private space; a shared space shows up for them once they are put in it or join it with a code.
 const express = require("express");
-const { withTransaction } = require("../db");
+const { withTransaction } = require("../kit");
 const { hashPassword } = require("../security");
 const { validateUser, USER_COLUMNS, MAX_USERS } = require("../users");
 const { defaultSpaces, keepOwnReferences } = require("../spaces");

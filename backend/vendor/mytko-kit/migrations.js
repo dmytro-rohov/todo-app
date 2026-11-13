@@ -7,7 +7,7 @@ const path = require("node:path");
 
 // Arbitrary constant shared by every migrator for this database. Concurrent
 // migrators serialize on it instead of racing on DDL.
-const MIGRATION_LOCK_ID = 7243917461;
+const MIGRATION_LOCK_ID = 7243917462;
 const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
 const TAG = /^[0-9]{4}_[A-Za-z0-9_]+$/;
 
@@ -23,10 +23,10 @@ function listMigrations(dir) {
   });
 }
 
-async function acquireLock(client, timeoutMs) {
+async function acquireLock(client, timeoutMs, lockId = MIGRATION_LOCK_ID) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [MIGRATION_LOCK_ID]);
+    const result = await client.query("SELECT pg_try_advisory_lock($1) AS locked", [lockId]);
     if (result.rows[0].locked) return;
     if (Date.now() > deadline) {
       throw new Error("Timed out waiting for another migration run to finish");
@@ -47,14 +47,14 @@ async function appliedHistory(client) {
   };
 }
 
-async function runMigrations(pool, { dir, appRole, lockTimeoutMs = 60000, log = console.log }) {
-  const { drizzle } = require("drizzle-orm/node-postgres");
-  const { migrate } = require("drizzle-orm/node-postgres/migrator");
+// lockId: the advisory lock every migrator of this database takes (an app with its own, e.g. Tasks 7243917461, keeps it so
+// an older and a newer release never migrate at the same time).
+async function runMigrations(pool, { dir, appRole, lockTimeoutMs = 60000, log = console.log, lockId = MIGRATION_LOCK_ID }) {
   const migrations = listMigrations(dir);
   const client = await pool.connect();
 
   try {
-    await acquireLock(client, lockTimeoutMs);
+    await acquireLock(client, lockTimeoutMs, lockId);
     const before = (await appliedHistory(client)).hashes;
     const { last } = await appliedHistory(client);
     for (const migration of migrations) {
@@ -70,6 +70,9 @@ async function runMigrations(pool, { dir, appRole, lockTimeoutMs = 60000, log = 
     }
     const pending = migrations.filter(m => !before.has(m.hash));
     if (pending.length) {
+      // Drizzle (the app's own dependency) only when there is something to apply
+      const { drizzle } = require("drizzle-orm/node-postgres");
+      const { migrate } = require("drizzle-orm/node-postgres/migrator");
       pending.forEach(m => log(`applying ${m.version}`));
       await client.query("SET lock_timeout = '10s'");
       await migrate(drizzle({ client }), { migrationsFolder: dir });
@@ -81,7 +84,7 @@ async function runMigrations(pool, { dir, appRole, lockTimeoutMs = 60000, log = 
     log(pending.length === 0 ? "schema up to date" : `applied ${pending.length} migration(s)`);
     return pending.map(m => m.version);
   } finally {
-    await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]).catch(() => {});
+    await client.query("SELECT pg_advisory_unlock($1)", [lockId]).catch(() => {});
     client.release();
   }
 }

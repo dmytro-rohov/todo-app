@@ -1,8 +1,8 @@
 // Mytko Tasks app shell: state, sidebar, header with counters, view tabs, filters, and the active view.
 import { api } from "../api/client.js";
 import { logout, markLoggedOut } from "../auth/login.js";
-import { escapeHtml, safeColor } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml, safeColor, t } from "../../vendor/mytko-kit/js/core.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { counters, filterTasks, isOpen, isoDay, STATUS_LABELS, formatClock, trackedNow } from "./logic.js";
 import { renderBoard, bindBoard, tickTimers, timerData, updatePeek } from "./board.js";
 import { renderList, bindList } from "./list.js";
@@ -18,7 +18,8 @@ import { afterGoalsRender, bindGoals, renderGoals } from "./goals.js";
 import { openAiSettings } from "./ai-settings.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
 import { openNewTask, openManage, confirmDialog, openLanguageDialog, openScaleDialog } from "./dialogs.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
+import { openMore, tabBar } from "../../vendor/mytko-kit/js/shell.js";
 import { LANG } from "../i18n.js";
 
 const PREFS = "mytko-tasks-prefs";
@@ -364,12 +365,16 @@ export function render() {
   const hasDue = store.tasks.some(t => isOpen(t) && t.dueDate && t.dueDate <= isoDay());
   root.querySelector(".bell").classList.toggle("has-dot", hasDue || calendarState.today.length > 0);
   root.querySelector('.menu [data-action="new-meeting"]').hidden = !(calendarState.configured && calendarState.accounts.length);
-  const mailTab = root.querySelector('[data-view="mail"]');
+  const mailTab = root.querySelector('.tabs [data-view="mail"]');
   mailTab.hidden = isMember();
   mailTab.querySelector(".count").hidden = !mailBadge();
   mailTab.querySelector(".count").textContent = String(mailBadge());
   if (store.view === "mail" && isMember()) store.view = "board";
-  for (const tab of root.querySelectorAll("[data-view]")) {
+  const phoneNav = root.querySelector(".phone-nav");
+  phoneNav.innerHTML = phoneNavHtml();
+  const more = phoneNav.querySelector("[data-more]");
+  if (!isMember() && mailBadge()) more.insertAdjacentHTML("beforeend", `<em class="count" aria-label="Poczta: ${mailBadge()}">${mailBadge()}</em>`);
+  for (const tab of root.querySelectorAll(".tabs [data-view]")) {
     tab.classList.toggle("is-active", tab.dataset.view === store.view);
     tab.setAttribute("aria-selected", String(tab.dataset.view === store.view));
   }
@@ -437,8 +442,47 @@ function shellHtml() {
     <div class="filters" id="filters" role="group" aria-label="Filtry"></div>
     <section class="view" aria-live="polite"></section>
   </div>
-  <button type="button" class="fab" data-action="new-task" aria-label="Nowe zadanie">${icon("plus", 26)}</button>
+  <div class="phone-nav"></div>
   <aside class="timer-dock" aria-live="polite" hidden></aside>`;
+}
+
+// ---- phones: the kit's bottom tab bar ---------------------------------------------------------------------------------
+// Tablica, Lista, the big "+" (a new task), Kalendarz and "Więcej": a sheet with the other views and what the sidebar
+// holds on computers (the sidebar itself is the "Przestrzenie i projekty" drawer, also behind the menu button).
+const TAB_BAR = [["board", { icon: "board", label: "nav.board" }], ["list", { icon: "list", label: "nav.list" }], ["calendar", { icon: "calendar", label: "nav.calendar" }]];
+function moreEntries() {
+  const owner = !isMember();
+  return [
+    ["goals", { icon: "star", label: "nav.goals" }],
+    ["archive", { icon: "archive", label: "nav.archive" }],
+    ...(owner ? [["mail", { icon: "mail", label: "nav.mail" }]] : []),
+    ["scope", { icon: "layers", label: "nav.scope" }],
+    ...(owner ? [["accounts", { icon: "lock", label: "nav.accounts" }], ["ai-settings", { icon: "sparkles", label: "nav.ai" }]] : []),
+    ["ui-scale", { icon: "sliders", label: "nav.scale" }],
+    ["language", { icon: "globe", label: "nav.language" }]
+  ];
+}
+const VIEW_NAMES = ["board", "list", "calendar", "goals", "archive", "mail"];
+
+function phoneNavHtml() {
+  return tabBar({ items: TAB_BAR, active: store.view, iconSize: 22, add: { label: t("nav.add"), after: 2 },
+    more: { active: !TAB_BAR.some(([name]) => name === store.view) } });
+}
+
+// The sidebar's own buttons do the rest (accounts, AI and Workflow, interface size, language, logout).
+function sidebarAction(action) {
+  root.querySelector(`.sidebar [data-action="${action}"]`)?.click();
+}
+
+function bindPhoneNav() {
+  root.querySelector(".phone-nav").addEventListener("click", event => {
+    const tab = event.target.closest("[data-view]");
+    if (tab) return showView(tab.dataset.view);
+    if (event.target.closest("[data-add]")) return openNewTask({ status: "todo", dueDate: null }); // as the "+" button before
+    if (!event.target.closest("[data-more]")) return;
+    openMore({ views: moreEntries(), active: store.view, onLogout: () => sidebarAction("logout"),
+      onPick: name => (VIEW_NAMES.includes(name) ? showView(name) : name === "scope" ? toggleSidebar(true) : sidebarAction(name)) });
+  });
 }
 
 function closePopups(except) {
@@ -560,6 +604,16 @@ async function handleAction(target, event) {
   return true;
 }
 
+// The view tabs (computers) and the tab bar / its sheet (phones).
+function showView(name) {
+  store.view = name;
+  savePrefs();
+  writeLink();
+  render();
+  if (store.view === "archive") loadArchive();
+  if (store.view === "mail") loadMail({ quiet: false });
+}
+
 export function startApp(element, session, { notice = null } = {}) {
   root = element;
   store.session = session;
@@ -578,14 +632,9 @@ export function startApp(element, session, { notice = null } = {}) {
   });
   root.querySelector(".tabs").addEventListener("click", event => {
     const tab = event.target.closest("[data-view]");
-    if (!tab) return;
-    store.view = tab.dataset.view;
-    savePrefs();
-    writeLink();
-    render();
-    if (store.view === "archive") loadArchive();
-    if (store.view === "mail") loadMail({ quiet: false });
+    if (tab) showView(tab.dataset.view);
   });
+  bindPhoneNav();
   root.querySelector(".filters").addEventListener("change", event => {
     const key = event.target.dataset.filter;
     if (!key) return;

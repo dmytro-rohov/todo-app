@@ -1,0 +1,179 @@
+// Mytko Kit: the app shell (shell.js, settings.js, accounts.js) — the sidebar on computers, collapsible to a rail;
+// the tab bar on phones (up to 900px wide) with the optional big "+" and the "more" sheet; page heads; "soon" cards;
+// the Settings blocks and the accounts list. In the app's views layer, around the app's own views:
+//
+//   @layer views {
+//       @include kit.shell-frame;
+//       …the app's views…
+//       @include kit.shell-pages;
+//       @media (max-width: 900px) { @include kit.shell-phone; …the app's phone rules… }
+//       @include kit.shell-motion;
+//   }
+
+// The frame: grid, sidebar, nav items, the account at the sidebar's foot, the main column, page heads, the spinner.
+@mixin shell-frame {
+    // ---- shell ------------------------------------------------------------------------------------------------
+    .app { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
+
+    .sidebar {
+        position: sticky; top: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; padding: 1.375rem 0.75rem 1rem;
+        border-right: 1px solid var(--border); background: #090e0b; overflow-x: hidden; overflow-y: auto;
+        scrollbar-width: thin; scrollbar-color: #2f3e31 transparent;
+        &__brand {
+            display: flex; align-items: center; gap: 0.75rem; padding: 0 0.375rem 1.625rem;
+            img { width: 2.75rem; height: 2.75rem; border-radius: 0.75rem; }
+            strong { display: block; font-size: 1.25rem; line-height: 1.1; font-weight: 800; }
+            small { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 650; letter-spacing: .22em; text-transform: uppercase; }
+        }
+        &__collapse { margin-left: auto; color: var(--faint); }
+        &__nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; align-content: start; }
+        &__foot { display: grid; gap: 0.5rem; margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border); }
+    }
+    .nav-item {
+        display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 2.75rem; padding: 0 0.75rem; border: 1px solid transparent;
+        border-radius: 0.625rem; color: #dbe4dc; font-size: 0.9375rem; font-weight: 550; text-align: left;
+        span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .i { color: var(--muted); }
+        &:hover { background: #ffffff0a; }
+        &.is-active { border-color: #b7e34d40; background: var(--accent-soft); color: var(--accent); font-weight: 700; .i { color: var(--accent); } }
+        &--danger, &--danger .i { color: var(--danger); }
+    }
+    .profile {
+        display: flex; align-items: center; gap: 0.625rem; padding: 0.375rem 0.25rem;
+        &__text { flex: 1; min-width: 0; strong, small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            strong { font-size: 0.875rem; } small { color: var(--muted); font-size: 0.7812rem; } }
+    }
+
+    .main { min-width: 0; padding: 1.5rem 2rem 3rem; outline: none; > * { max-width: 78rem; } }
+
+    .page-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem 1.5rem; flex-wrap: wrap; margin: 0.25rem 0 1.5rem;
+        &__title {
+            display: flex; align-items: center; gap: 1.125rem; min-width: 0;
+            h1 { font-size: 2rem; line-height: 1.15; font-weight: 800; letter-spacing: -.01em; }
+            p { margin-top: 2px; color: #cfd8d0; font-size: 1.0625rem; }
+        }
+        &__eyebrow { margin: 0 0 0.125rem !important; color: var(--muted) !important; font-size: 0.9375rem !important; font-weight: 600; }
+        &__icon { display: grid; place-items: center; flex: 0 0 auto; width: 3.625rem; height: 3.625rem; border-radius: 0.875rem; background: var(--accent); color: var(--accent-contrast); }
+        &__actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    }
+
+    .spinner { width: 1.5rem; height: 1.5rem; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+}
+
+// "Soon" cards, Settings blocks, the accounts list, the account card; the tab bar hidden and the collapsed sidebar on
+// computers.
+@mixin shell-pages {
+    // ---- views that arrive in later stages ------------------------------------------------------------------------
+    .soon {
+        display: flex; gap: 1.25rem; align-items: flex-start; max-width: 46rem; padding: 1.5rem; border: 1px solid var(--border); border-radius: 1.25rem;
+        background: var(--surface);
+        &__icon { display: grid; place-items: center; flex: none; width: 3.5rem; height: 3.5rem; border-radius: 1rem; background: var(--accent-soft); color: var(--accent); }
+        &__text { display: grid; gap: 0.5rem; p { color: #cfd8d0; line-height: 1.55; } }
+        &__title { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; color: var(--text) !important; font-size: 1.1875rem; font-weight: 800; }
+    }
+
+    // ---- settings ---------------------------------------------------------------------------------------------
+    .settings { display: grid; gap: 1rem; max-width: 46rem; }
+    .settings-block {
+        display: grid; gap: 0.875rem; padding: 1.25rem 1.375rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);
+        &__title { display: flex; align-items: center; gap: 0.625rem; font-size: 1.125rem; font-weight: 750; .i { color: var(--accent); } }
+        &__note { color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
+        &__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+        &__buttons { display: flex; gap: 0.625rem; flex-wrap: wrap; }
+    }
+
+    // ---- accounts (Settings, administrator) ---------------------------------------------------------------------
+    .accounts { display: grid; gap: 0.5rem; }
+    .accounts__empty { padding: 0.75rem 0.25rem; font-size: 0.9375rem; }
+    .account-row {
+        display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0.625rem 0.875rem; padding: 0.875rem 1rem;
+        border: 1px solid var(--border); border-radius: 0.875rem; background: var(--surface-2);
+        &.is-disabled { opacity: .72; .avatar { filter: grayscale(1); } }
+        &__text { display: grid; gap: 0.25rem; min-width: 0; strong { font-size: 1rem; } small { color: var(--muted); font-size: 0.8125rem; overflow-wrap: anywhere; } }
+        &__me { color: var(--faint); font-weight: 500; }
+        &__chips { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.125rem; .chip { min-height: 1.5rem; font-size: 0.75rem; } }
+        &__actions { grid-column: 2 / -1; display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
+    }
+    .account {
+        display: flex; align-items: center; gap: 0.875rem; flex-wrap: wrap;
+        &__text { flex: 1; min-width: 10rem; display: grid; gap: 0.125rem; strong { font-size: 1.0625rem; } span { color: var(--muted); font-size: 0.875rem; } b { color: var(--text); font-weight: 650; } }
+    }
+
+    @include shell-nav;
+
+    // ---- collapsible sidebar (computers): a rail of icons, the names as tooltips -------------------------------
+    @media (min-width: 901px) {
+        .app.sidebar-collapsed {
+            grid-template-columns: 4.75rem minmax(0, 1fr);
+            .sidebar { padding: 1.125rem 0.625rem 0.875rem; }
+            .sidebar__brand { flex-direction: column; gap: 0.625rem; padding: 0 0 1.125rem; > span { display: none; } }
+            .sidebar__collapse { margin: 0; }
+            .nav-item { justify-content: center; padding: 0; > span { display: none; } }
+            .profile { flex-direction: column; gap: 0.5rem; &__text { display: none; } }
+        }
+    }
+}
+
+// The phone navigation alone (part of shell-pages): the "more" sheet and the tab bar, hidden on computers. For an app
+// with its own Settings and accounts pages (Tasks) that takes the tab bar and the sheet only.
+@mixin shell-nav {
+    // the phone's "more" sheet (shell.js openMore)
+    .sheet-nav { display: grid; gap: 0.25rem; .nav-item { min-height: 3.25rem; font-size: 1rem; } }
+
+    // ---- phone tab bar (hidden on computers) -------------------------------------------------------------------
+    .tabbar { display: none; }
+}
+
+// The phone tab bar alone (part of shell-phone), inside the app's phone @media: for an app with its own phone layout
+// (Mytko Workflow's React shell).
+@mixin shell-tabbar {
+    .tabbar {
+        position: fixed; z-index: 50; inset: auto 0 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end;
+        height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding: 0 max(0.5rem, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(0.5rem, env(safe-area-inset-left));
+        border-top: 1px solid var(--border); background: color-mix(in srgb, #090e0b 94%, transparent); backdrop-filter: blur(0.75rem);
+        &__item {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem; height: var(--tabbar-h);
+            color: var(--faint); font-size: 0.75rem; font-weight: 650;
+            span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            &.is-active { color: var(--accent); }
+        }
+        // the big "+" in the middle (shell.js tabBar({ add }), Finance)
+        &__add {
+            justify-self: center; display: grid; place-items: center; width: 4rem; height: 4rem; margin-bottom: calc(var(--tabbar-h) - 4rem + 1.125rem);
+            border-radius: 1.375rem; color: var(--accent-contrast); background: linear-gradient(135deg, #c9f27a, #a9e25b);
+            box-shadow: 0 0.75rem 1.875rem #000a, 0 0 0 0.3125rem var(--bg), 0 0 1.5rem #b7e34d40;
+            &:active { transform: scale(.96); }
+        }
+    }
+    body:has(dialog[open]) .tabbar { display: none; }
+}
+
+// Phones and small tablets (inside the app's @media (max-width: 900px)): no sidebar, the tab bar, dialogs as bottom
+// sheets.
+@mixin shell-phone {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .sidebar { display: none; }
+    .main { padding: calc(1rem + env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) calc(var(--tabbar-h) + 2rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
+    .page-head { margin: 0.25rem 0 1rem; &__title h1 { font-size: 1.75rem; } &__title p { font-size: 0.9375rem; } &__icon { width: 3rem; height: 3rem; } }
+    .soon { padding: 1.125rem; gap: 1rem; }
+    .field-row { grid-template-columns: 1fr; }
+    .account-row__actions { grid-column: 1 / -1; }
+    .password-row { flex-wrap: wrap; .btn { flex: 1 1 100%; } }
+    .toasts { bottom: calc(var(--tabbar-h) + 1rem + env(safe-area-inset-bottom)); }
+
+    @include shell-tabbar;
+
+    .dialog {
+        width: 100vw; max-width: 100vw; margin: auto 0 0; max-height: 92dvh; border-radius: 1.25rem 1.25rem 0 0; border-bottom: 0;
+        &__body { padding: 1.125rem 1rem calc(1rem + env(safe-area-inset-bottom)); gap: 0.875rem; }
+        &__actions .btn { flex: 1; }
+    }
+}
+
+@mixin shell-motion {
+    @media (prefers-reduced-motion: reduce) {
+        .spinner { animation-duration: 2.4s; }
+    }
+}

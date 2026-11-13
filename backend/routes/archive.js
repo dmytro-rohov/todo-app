@@ -1,6 +1,6 @@
 // The archive: finished tasks moved out of the board by the retention job (retention.js), until they are deleted.
 const express = require("express");
-const { withTransaction } = require("../db");
+const { withTransaction } = require("../kit");
 const { deletionDate } = require("../retention");
 const { taskChanges, recordTaskChanges } = require("../task-history");
 const { statusAssignmentsSql } = require("../task-status");

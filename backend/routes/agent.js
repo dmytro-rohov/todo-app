@@ -8,7 +8,7 @@
 // last contact (shown there as "active").
 const crypto = require("node:crypto");
 const express = require("express");
-const { withTransaction } = require("../db");
+const { withTransaction } = require("../kit");
 const { parseId } = require("../validation");
 const { loadTask } = require("./tasks");
 const { taskChanges, recordTaskChanges } = require("../task-history");

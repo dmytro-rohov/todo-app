@@ -1,12 +1,12 @@
 // Archive view: finished tasks the retention job moved off the board, with when each will be deleted.
 import { api } from "../api/client.js";
-import { escapeHtml } from "../utils/helpers.js";
-import { icon } from "./icons.js";
+import { escapeHtml } from "../../vendor/mytko-kit/js/core.js";
+import { icon } from "../../vendor/mytko-kit/js/icons.js";
 import { inScope } from "./logic.js";
 import { context, reload, render, store } from "./app.js";
 import { chipsHtml } from "./board.js";
 import { confirmDialog } from "./dialogs.js";
-import { toast } from "./toast.js";
+import { toast } from "../../vendor/mytko-kit/js/ui.js";
 import { LOCALE } from "../i18n.js";
 
 const DAY_MS = 86400000;
