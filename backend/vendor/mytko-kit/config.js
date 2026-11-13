@@ -4,6 +4,9 @@ const { isIP } = require("node:net");
 const { parsePasswordHash } = require("./security");
 const { LOGIN } = require("./users");
 const { loadDatabaseConfig } = require("./database-config");
+const { loadPush } = require("./push");
+const { loadAssistant } = require("./assistant");
+const { loadAi } = require("./ai");
 
 // Reads configuration from the environment. Fails fast in production when anything security-relevant is missing
 // instead of falling back to defaults.
@@ -57,6 +60,12 @@ function loadConfig(env = process.env, { app, backendDir, extend = null } = {}) 
   }
 
   const sso = loadSso(env, errors, app.id);
+  // Web Push (push.js): null unless PUSH_VAPID_PUBLIC_KEY and PUSH_VAPID_PRIVATE_KEY are set
+  const push = loadPush(env, errors);
+  // AI (ai/index.js): null without a key — the app works without it; the assistant connector (assistant.js): null unless
+  // ASSISTANT_TOKEN_SHA256 is set
+  const ai = loadAi(env, errors, { isProduction });
+  const assistant = loadAssistant(env, errors);
 
   const numbers = {};
   for (const [name, fallback] of Object.entries({
@@ -90,6 +99,9 @@ function loadConfig(env = process.env, { app, backendDir, extend = null } = {}) 
     trustProxy,
     admin: { login: adminLogin, name: adminName, passwordHash: adminPasswordHash },
     auth: { sessionTtlMs: numbers.SESSION_TTL_HOURS * 3600000, sso },
+    push,
+    ai,
+    assistant,
     rateLimit: {
       windowMs: numbers.RATE_LIMIT_WINDOW_MS,
       max: numbers.RATE_LIMIT_MAX,

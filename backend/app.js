@@ -1,4 +1,6 @@
 const express = require("express");
+const { createTasksAssistant } = require("./assistant");
+const tasksPush = require("./push");
 
 const createTasksRouter = require("./routes/tasks");
 const createCategoriesRouter = require("./routes/categories");
@@ -114,6 +116,10 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
   api.use("/projects", createProjectsRouter(pool));
   api.use("/assignees", createAssigneesRouter(pool));
   api.use("/goals", createGoalsRouter(pool));
+  // Web Push (Mytko Kit): this device's notifications; the morning "Na dziś" (push.js)
+  const push = kit.createPush({ pool, vapid: config.push, categories: tasksPush.CATEGORIES });
+  api.use("/push", kit.createPushRouter({ push }));
+  stoppables.push(tasksPush.pushJob(pool, push));
   api.use("/archive", createArchiveRouter(pool, config.retention));
   // The owner's business tools; member accounts have the task app only.
   api.use("/calendar", ownerOnly, calendarRouter);
@@ -139,6 +145,8 @@ function createApp({ config, pool, migrationVersions = [], ...options }) {
     stoppables.push(...booking.stoppables);
     app.use("/api/public/booking", booking);
   }
+  // Mytko Assistant: its own sign-in with a token, never a session (assistant.js; off without ASSISTANT_TOKEN_SHA256).
+  app.use("/api/assistant", express.json({ limit: "10kb", inflate: false }), createTasksAssistant({ pool, config }));
   app.use("/api", api);
 
   if (google) {

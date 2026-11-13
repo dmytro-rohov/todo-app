@@ -5,6 +5,7 @@ const { createPool } = require("./db");
 const { createSessionStore } = require("./sessions");
 const { loadDatabaseConfig } = require("./database-config");
 const { runMigrations } = require("./migrations");
+const { generateVapidKeys } = require("./push");
 
 // Prints an ADMIN_PASSWORD_HASH value. Reads the password from stdin so it never appears in process arguments or
 // shell history:
@@ -63,4 +64,22 @@ function healthcheckCli() {
   require("./healthcheck");
 }
 
-module.exports = { hashPasswordCli, revokeSessionsCli, migrateCli, healthcheckCli };
+// Prints a new Web Push key pair for the app's environment (push.js), once per app: a new pair makes every device
+// subscribe again.
+//   node backend/scripts/vapid-keys.js
+function vapidKeysCli({ out = console.log } = {}) {
+  const { publicKey, privateKey } = generateVapidKeys();
+  out(`PUSH_VAPID_PUBLIC_KEY=${publicKey}`);
+  out(`PUSH_VAPID_PRIVATE_KEY=${privateKey}`);
+}
+
+// Prints a new token for Mytko Assistant (assistant.js): ASSISTANT_TOKEN goes to the assistant only, ASSISTANT_TOKEN_SHA256
+// to this app's environment (the app never keeps the token itself).
+//   node backend/scripts/assistant-token.js
+function assistantTokenCli({ out = console.log } = {}) {
+  const token = require("node:crypto").randomBytes(32).toString("base64url");
+  out(`ASSISTANT_TOKEN=${token}`);
+  out(`ASSISTANT_TOKEN_SHA256=${require("node:crypto").createHash("sha256").update(token).digest("hex")}`);
+}
+
+module.exports = { hashPasswordCli, revokeSessionsCli, migrateCli, healthcheckCli, vapidKeysCli, assistantTokenCli };

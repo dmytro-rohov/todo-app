@@ -17,9 +17,10 @@ import { renderArchive, bindArchive, loadArchive } from "./archive.js";
 import { afterGoalsRender, bindGoals, renderGoals } from "./goals.js";
 import { openAiSettings } from "./ai-settings.js";
 import { openDrawer, closeDrawer, refreshDrawer } from "./drawer.js";
-import { openNewTask, openManage, confirmDialog, openLanguageDialog, openScaleDialog } from "./dialogs.js";
+import { openNewTask, openManage, confirmDialog, openLanguageDialog, openNotificationsDialog, openScaleDialog } from "./dialogs.js";
 import { toast } from "../../vendor/mytko-kit/js/ui.js";
-import { openMore, tabBar } from "../../vendor/mytko-kit/js/shell.js";
+import { appLinks, openMore, tabBar } from "../../vendor/mytko-kit/js/shell.js";
+import { listenForPushOpen } from "../../vendor/mytko-kit/js/push.js";
 import { LANG } from "../i18n.js";
 
 const PREFS = "mytko-tasks-prefs";
@@ -246,9 +247,11 @@ function sidebarHtml() {
       <button type="button" class="nav-item nav-item--sub" data-action="manage" data-tab="assignees" title="Wykonawcy">${icon("users", 18)}<span>Wykonawcy</span><em>${store.assignees.length}</em></button>
       ${isMember() ? "" : `<button type="button" class="nav-item nav-item--sub" data-action="accounts" title="Konta">${icon("lock", 18)}<span>Konta</span></button>
       <button type="button" class="nav-item nav-item--sub" data-action="ai-settings" title="AI i Workflow">${icon("sparkles", 18)}<span>AI i Workflow</span>${settingsDot()}</button>`}
+      <button type="button" class="nav-item nav-item--sub" data-action="notifications" title="Powiadomienia">${icon("bell", 18)}<span>Powiadomienia</span></button>
       <button type="button" class="nav-item nav-item--sub" data-action="ui-scale" title="Rozmiar interfejsu">${icon("sliders", 18)}<span>Rozmiar interfejsu</span></button>
       <button type="button" class="nav-item nav-item--sub" data-action="language" title="Język">${icon("globe", 18)}<span>Język</span><em translate="no">${LANG === "uk" ? "УКР" : "PL"}</em></button>
     </nav>
+    ${isMember() ? "" : appLinks({ current: "tasks" })}
     <div class="sidebar__foot">
       <div class="profile">
         <button type="button" class="avatar-edit" data-action="avatar" aria-label="Zdjęcie profilowe" title="Zdjęcie profilowe">${avatarHtml(me(), "avatar--lime")}<span class="avatar-edit__badge" aria-hidden="true">${icon("camera", 12)}</span></button>
@@ -458,6 +461,7 @@ function moreEntries() {
     ...(owner ? [["mail", { icon: "mail", label: "nav.mail" }]] : []),
     ["scope", { icon: "layers", label: "nav.scope" }],
     ...(owner ? [["accounts", { icon: "lock", label: "nav.accounts" }], ["ai-settings", { icon: "sparkles", label: "nav.ai" }]] : []),
+    ["notifications", { icon: "bell", label: "nav.notifications" }],
     ["ui-scale", { icon: "sliders", label: "nav.scale" }],
     ["language", { icon: "globe", label: "nav.language" }]
   ];
@@ -480,7 +484,8 @@ function bindPhoneNav() {
     if (tab) return showView(tab.dataset.view);
     if (event.target.closest("[data-add]")) return openNewTask({ status: "todo", dueDate: null }); // as the "+" button before
     if (!event.target.closest("[data-more]")) return;
-    openMore({ views: moreEntries(), active: store.view, onLogout: () => sidebarAction("logout"),
+    // the other Mytko apps (the kit's switcher): the owner's only, a member account has Tasks alone
+    openMore({ views: moreEntries(), active: store.view, onLogout: () => sidebarAction("logout"), apps: isMember() ? null : { current: "tasks" },
       onPick: name => (VIEW_NAMES.includes(name) ? showView(name) : name === "scope" ? toggleSidebar(true) : sidebarAction(name)) });
   });
 }
@@ -543,6 +548,8 @@ async function handleAction(target, event) {
   } else if (action === "client-scope") {
     toggleSidebar(false);
     setFilter({ clientId: Number(target.dataset.client), spaceId: null, projectId: null });
+  } else if (action === "notifications") {
+    openNotificationsDialog();
   } else if (action === "ui-scale") {
     openScaleDialog();
   } else if (action === "ai-settings") {
@@ -621,6 +628,8 @@ export function startApp(element, session, { notice = null } = {}) {
   readLink();
   root.className = "app";
   root.innerHTML = shellHtml();
+  // a tapped notification while Tasks is open (the kit's worker): the board, where today's tasks are
+  listenForPushOpen(() => showView("board"));
 
   root.addEventListener("click", async event => {
     const target = event.target.closest("[data-action]");

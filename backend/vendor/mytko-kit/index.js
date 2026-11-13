@@ -23,6 +23,9 @@ const auth = require("./routes/auth");
 const sso = require("./routes/sso");
 const me = require("./routes/me");
 const accounts = require("./routes/users");
+const push = require("./push");
+const assistant = require("./assistant");
+const ai = require("./ai");
 
 const APP_ID = /^[a-z][a-z0-9-]{1,31}$/;
 const ENV_PREFIX = /^[A-Z][A-Z0-9_]*$/;
@@ -52,6 +55,9 @@ function bindKit(app) {
     ...sso,
     ...me,
     ...accounts,
+    ...push,
+    ...assistant,
+    ...ai,
     ...server,
     ...config, // loadSso, toInt, parseTrustProxy (an app with its own configuration, e.g. Tasks); loadConfig bound below
     // bound to the app
@@ -65,8 +71,12 @@ function bindKit(app) {
     runMigrations: (pool, options = {}) => migrations.runMigrations(pool, { lockId, ...options }),
     revokeSessionsCli: (options = {}) => scripts.revokeSessionsCli({ ...options, app: info }),
     migrateCli: (options = {}) => scripts.migrateCli({ dir: require("node:path").join(info.backendDir, "drizzle"), lockId, ...options, app: info }),
-    healthcheckCli: scripts.healthcheckCli
+    healthcheckCli: scripts.healthcheckCli,
+    vapidKeysCli: scripts.vapidKeysCli,
+    assistantTokenCli: scripts.assistantTokenCli,
+    // Web Push: the app's name is in the test notification
+    createPush: options => push.createPush({ app: info, ...options })
   };
 }
 
-module.exports = { bindKit, security, sessions, db, databaseConfig, config, users, migrations, migrationGrammar, http, server, scripts, routes: { auth, sso, me, users: accounts } };
+module.exports = { bindKit, security, sessions, db, databaseConfig, config, users, migrations, migrationGrammar, http, server, scripts, push, assistant, ai, routes: { auth, sso, me, users: accounts } };
