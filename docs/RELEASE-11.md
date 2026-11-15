@@ -4,7 +4,7 @@ Production runs release 10 (`c5dfd13`). **Migration `0014_push`** (additive: tab
 their indexes and foreign keys; `prefs` is text with JSON so it passes Mytko's migration grammar).
 
 ## What changes
-- Web Push: a device can turn on notifications; the "Na dziś" digest at 8:00 Warsaw. Needs `PUSH_VAPID_PUBLIC_KEY` and
+- Web Push: a device can turn on notifications; the "Na dziś" digest once a day, on the first run from 8:00 Warsaw time (the job runs every 15 minutes, so by 8:15). Needs `PUSH_VAPID_PUBLIC_KEY` and
   `PUSH_VAPID_PRIVATE_KEY` in the production env (already set on mary-vps).
 - The Mytko app switcher.
 - `/api/assistant` tools `tasks.add_task` and `tasks.today` (off until `ASSISTANT_TOKEN_SHA256` is set, for Mytko Home);
