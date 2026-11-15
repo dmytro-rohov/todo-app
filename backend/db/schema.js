@@ -7,7 +7,7 @@
 // no CHECK added to an existing table. Built-in rows (the Praca / Prywatne spaces) are created by the application.
 const { sql } = require("drizzle-orm");
 const {
-  pgTable, serial, bigserial, varchar, text, boolean, integer, bigint, date, timestamp, index, uniqueIndex, check
+  pgTable, serial, bigserial, varchar, text, boolean, integer, bigint, date, timestamp, jsonb, index, uniqueIndex, check
 } = require("drizzle-orm/pg-core");
 
 const timestamptz = name => timestamp(name, { withTimezone: true });
@@ -410,7 +410,36 @@ const avatars = pgTable("avatars", {
   index("avatars_user").on(table.userId),
 ]);
 
+// Web Push (Mytko Kit, docs/push.md): one row per browser that switched notifications on, with its own choice of
+// categories (prefs); user_id NULL is the owner. The kit's push.js reads and writes it.
+const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: ownerColumn(),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  prefs: jsonb("prefs").default(sql`'{}'::jsonb`).notNull(),
+  createdAt: timestamptz("created_at").defaultNow().notNull(),
+  lastOkAt: timestamptz("last_ok_at"),
+}, (table) => [
+  uniqueIndex("push_subscriptions_endpoint").on(table.endpoint),
+  index("push_subscriptions_user").on(table.userId),
+]);
+
+// A notification sent once (push.js): its key names the account and the day ("today:owner:2026-11-12"), so a restart
+// or a second instance never sends it again (the owner's user_id is NULL, so the key alone is unique).
+const pushLog = pgTable("push_log", {
+  id: serial("id").primaryKey(),
+  userId: ownerColumn(),
+  key: varchar("key", { length: 80 }).notNull(),
+  sentAt: timestamptz("sent_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("push_log_key").on(table.key),
+]);
+
 module.exports = {
+  pushSubscriptions,
+  pushLog,
   avatars,
   spaceMembers,
   spaceInvites,

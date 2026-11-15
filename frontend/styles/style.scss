@@ -113,6 +113,8 @@
     // (hidden on computers), the "more" sheet, and on phones the tab bar, room for it under the content and dialogs as
     // bottom sheets.
     @include kit.shell-nav;
+    // the other Mytko apps under the sidebar and in the "more" sheet (shell.js appLinks)
+    @include kit.shell-apps;
     @media (max-width: 900px) {
         @include kit.shell-phone;
     }
@@ -587,6 +589,7 @@
             .nav-item--space .dot { margin: 0; }
             .nav-heading { display: block; height: 1px; margin: 0.75rem 0.625rem; padding: 0; background: var(--border); font-size: 0; .icon-btn { display: none; } }
             .nav-empty { display: none; }
+            .mytko-apps__title { display: none; }
             .profile { flex-direction: column; gap: 0.5rem; &__text { display: none; } }
         }
     }

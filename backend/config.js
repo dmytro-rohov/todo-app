@@ -1,5 +1,6 @@
 const path = require("node:path");
 
+const kit = require("./kit");
 const { parsePasswordHash, loadDatabaseConfig, loadSso: loadKitSso, toInt, parseTrustProxy } = require("./kit");
 const { loadAi } = require("./ai");
 
@@ -49,6 +50,10 @@ function loadConfig(env = process.env) {
   const booking = loadBooking(env, errors, { calendar, isProduction });
   const mail = loadMail(env, errors, { isProduction });
   const ai = loadAi(env, errors, { isProduction });
+  // Mytko Assistant (Mytko Kit assistant.js, ./assistant.js): the SHA-256 of its token; off without it
+  const assistant = kit.loadAssistant(env, errors);
+  // Web Push (Mytko Kit push.js, ./push.js): null unless PUSH_VAPID_PUBLIC_KEY / PUSH_VAPID_PRIVATE_KEY are set
+  const push = kit.loadPush(env, errors);
   // Mytko Workflow ToDo (routes/agent.js): the SHA-256 (hex) of the token Workflow sends; the token itself stays in Workflow.
   const workflowTokenSha256 = (env.WORKFLOW_TOKEN_SHA256 || "").toLowerCase();
   if (workflowTokenSha256 && !/^[0-9a-f]{64}$/.test(workflowTokenSha256)) errors.push("WORKFLOW_TOKEN_SHA256 must be 64 hex characters (sha256 of the token)");
@@ -61,6 +66,8 @@ function loadConfig(env = process.env) {
 
   const database = loadDatabaseConfig(env);
   return {
+    assistant,
+    push,
     database,
     nodeEnv,
     isProduction,
