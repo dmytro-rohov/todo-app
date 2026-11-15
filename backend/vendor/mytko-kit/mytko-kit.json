@@ -1,7 +1,7 @@
 {
   "kit": "mytko-kit",
   "version": "0.13.1",
-  "commit": "82eb0b7428650baa425a9f54bc4811de41b68646",
+  "commit": "703f014f4e01f58715b9ebbaabe8895c06ecbc30",
   "dirty": false,
   "part": "backend",
   "vendors": [
@@ -21,7 +21,7 @@
     "http.js": "sha256:0493e3142dba8c1e722fd6b18131092a456e09ff9c09d79caac9d7d5551ae7fa",
     "index.js": "sha256:7f86dee2cd400b3f55899af82558a526b5aa52786a70e7d732c507bbb9757d91",
     "kit-check.mjs": "sha256:8c29303251dae976ddc5d5ec7b06dd9e06b4d3427d2e0b3856223611e4a8a4f3",
-    "migration-grammar.js": "sha256:a2ea690854f5bcc50f3dc9f2f753950bf50624327988aeb138279845064dada7",
+    "migration-grammar.js": "sha256:d894ad4e2441780ac5c7b1a9b39d3ca3c728e366326d9131ecf7f85772164a07",
     "migrations.js": "sha256:9301e5513bbcb967736d0e0fd983763a04b7a10d9970a2408df152d8a2dfc638",
     "package.json": "sha256:8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a",
     "push-cli.js": "sha256:cff0fb44d9e65041c983a17ce3e54c20994e3d55ec70719c6218b05f234bd89e",

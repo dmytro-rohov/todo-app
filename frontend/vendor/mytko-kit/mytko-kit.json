@@ -1,7 +1,7 @@
 {
   "kit": "mytko-kit",
   "version": "0.13.1",
-  "commit": "82eb0b7428650baa425a9f54bc4811de41b68646",
+  "commit": "703f014f4e01f58715b9ebbaabe8895c06ecbc30",
   "dirty": false,
   "part": "frontend",
   "vendors": [
@@ -27,7 +27,7 @@
     "js/login.js": "sha256:069d425ec5863b440c76d22f7da841b7652ae22e76260e4a9d6f9b3ffec1b5ac",
     "js/paint.js": "sha256:69489094b982e592e3b5f749a6df5b24ed54cc1a97e2957615157b48577337cd",
     "js/push.d.ts": "sha256:cab68ea4a32b7ca154e0ed5d0da3e88838672378297b1bb582d99a31780e0d38",
-    "js/push.js": "sha256:2f94ecb9cf086e438a370b24ff3117474b4b3d91a562a4d4cd07de57fe8a83a7",
+    "js/push.js": "sha256:f642e463ebca74271904016d9794e84b992ed4e35b05820fbec1ecf3ff3c353e",
     "js/settings.js": "sha256:02ca6d01fe63345bf51bf4cb1d262023e3bc648cf9ca6279f6c8133bf90670e0",
     "js/shell.js": "sha256:6d1b185b14c91c93087e46dcdfc4be82092356b89919c43401c46c5a06a4c22c",
     "js/startup.js": "sha256:13f777233ec16c70b4e96e60bb2872f41ca2d8f763ed67ea5ab600a5e8866d07",

@@ -59,7 +59,7 @@ function pushJob(pool, push, { intervalMs = JOB_INTERVAL_MS } = {}) {
   const run = async () => {
     if (running) return;
     running = true;
-    try { await remindToday(pool, push); } catch (error) { console.error(`push job failed: ${error.message}`); } finally { running = false; }
+    try { await remindToday(pool, push); } catch (error) { console.error(`push job failed: ${error.code || error.name}`); } finally { running = false; }
   };
   const first = setTimeout(run, 90 * 1000);
   const timer = setInterval(run, intervalMs);
