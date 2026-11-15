@@ -3,6 +3,8 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const express = require("express");
+// loopback requests stay off any proxy from the environment (Mytko's validation sandbox), as in the other tests
+require("./support");
 
 const { warsawNow, remindToday, todayMessage, CATEGORIES } = require("../push");
 const { createTasksAssistant } = require("../assistant");
