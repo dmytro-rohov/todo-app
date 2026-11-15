@@ -4,7 +4,7 @@ CREATE TABLE "push_subscriptions" (
 	"endpoint" text NOT NULL,
 	"p256dh" text NOT NULL,
 	"auth" text NOT NULL,
-	"prefs" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"prefs" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_ok_at" timestamp with time zone
 );

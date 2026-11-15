@@ -155,6 +155,16 @@ function parseSubscription(value, hosts = PUSH_HOSTS) {
   return { endpoint: value.endpoint, p256dh: keys.p256dh, auth: keys.auth };
 }
 
+// prefs is a text column with the choice as JSON (NULL: the defaults), because the Mytko migration grammar has no jsonb.
+// Anything else in it (an object from an older jsonb column, broken text) reads as that object or as the defaults.
+function readPrefs(value) {
+  let prefs = value;
+  if (typeof value === "string") {
+    try { prefs = JSON.parse(value); } catch { prefs = null; }
+  }
+  return prefs && typeof prefs === "object" && !Array.isArray(prefs) ? prefs : {};
+}
+
 // userId: the account's id; null for an owner without a row (Tasks), compared with IS NOT DISTINCT FROM.
 function createPushStore(pool, { maxDevices = MAX_DEVICES } = {}) {
   return {
@@ -165,14 +175,14 @@ function createPushStore(pool, { maxDevices = MAX_DEVICES } = {}) {
       if (prefs === null && replaces && replaces !== device.endpoint) {
         const old = (await pool.query("SELECT prefs FROM push_subscriptions WHERE endpoint = $1 AND user_id IS NOT DISTINCT FROM $2::integer",
           [replaces, userId ?? null])).rows[0];
-        if (old && old.prefs && typeof old.prefs === "object") prefs = old.prefs;
+        if (old) prefs = readPrefs(old.prefs);
       }
       const result = await pool.query(
-        `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, prefs) VALUES ($1, $2, $3, $4, COALESCE($5::jsonb, '{}'::jsonb))
+        `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, prefs) VALUES ($1, $2, $3, $4, $5::text)
          ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
-           prefs = CASE WHEN $5::jsonb IS NOT NULL THEN $5::jsonb
+           prefs = CASE WHEN $5::text IS NOT NULL THEN $5::text
                         WHEN push_subscriptions.user_id IS NOT DISTINCT FROM EXCLUDED.user_id THEN push_subscriptions.prefs
-                        ELSE '{}'::jsonb END
+                        ELSE NULL END
          RETURNING id, prefs`,
         [userId ?? null, device.endpoint, device.p256dh, device.auth, prefs === null ? null : JSON.stringify(prefs)]);
       // the account's oldest devices beyond the cap are forgotten (an old phone, a cleared browser); the device just saved
@@ -183,13 +193,14 @@ function createPushStore(pool, { maxDevices = MAX_DEVICES } = {}) {
       }
       await pool.query(`DELETE FROM push_subscriptions WHERE id IN (SELECT id FROM push_subscriptions
         WHERE user_id IS NOT DISTINCT FROM $1::integer AND id IS DISTINCT FROM $2::integer ORDER BY id DESC OFFSET ${Number(maxDevices) - 1})`, [userId ?? null, saved]);
-      return result.rows[0] || null;
+      const row = result.rows[0];
+      return row ? { ...row, prefs: readPrefs(row.prefs) } : null;
     },
 
     async devices(userId) {
       const result = await pool.query(`SELECT id, endpoint, p256dh, auth, prefs FROM push_subscriptions
         WHERE user_id IS NOT DISTINCT FROM $1::integer ORDER BY id`, [userId ?? null]);
-      return result.rows;
+      return result.rows.map(row => ({ ...row, prefs: readPrefs(row.prefs) }));
     },
 
     async remove(userId, endpoint) {

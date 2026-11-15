@@ -1,5 +1,5 @@
 {
-  "id": "88beba16-66e2-4102-8535-3a01ab565936",
+  "id": "d7b5e777-c2b9-4a47-a95a-16c809ac6ad8",
   "prevId": "b1c6f869-e582-4b44-ae99-8ca776ff09d1",
   "version": "7",
   "dialect": "postgresql",
@@ -40,10 +40,9 @@
         },
         "prefs": {
           "name": "prefs",
-          "type": "jsonb",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
