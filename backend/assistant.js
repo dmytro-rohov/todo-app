@@ -8,6 +8,7 @@
 const kit = require("./kit");
 const { OWNER, visibleTask } = require("./access");
 const { validateTask } = require("./validation");
+const { validateTaskPatch } = require("./task-domain");
 
 const DAY = "^\\d{4}-\\d{2}-\\d{2}$";
 const LIMIT = 15;
@@ -33,13 +34,19 @@ function createTasksAssistant({ pool, config, now = () => new Date() }) {
     run: async input => {
       const { error, value } = validateTask({ title: input.title, date: input.date || warsawDay(now()) });
       if (error) throw new kit.AssistantError(error);
+      // the deadline, priority and description pass the same checks as the app's own form (routes/tasks.js): a real
+      // day, not a 500 from Postgres for 2026-02-30
+      const extras = Object.fromEntries(["dueDate", "priority", "description"].filter(key => input[key] !== undefined).map(key => [key, input[key]]));
+      const checked = Object.keys(extras).length ? validateTaskPatch(extras) : { value: {} };
+      if (checked.error) throw new kit.AssistantError(checked.error);
+      const extra = { dueDate: checked.value.dueDate ?? null, priority: checked.value.priority ?? "P2", description: checked.value.description ?? "" };
       const row = (await pool.query(
         `WITH next AS (SELECT nextval(pg_get_serial_sequence('tasks', 'id')) AS id)
          INSERT INTO tasks (id, title, completed, date, description, status, priority, due_date, position, user_id)
          SELECT next.id, $1::varchar, false, $2::date, $3::text, 'todo', $4::text, $5::date, next.id, NULL FROM next
          RETURNING id, to_char(date, 'YYYY-MM-DD') AS date`,
-        [value.title, value.date, input.description || "", input.priority || "P2", input.dueDate || null])).rows[0];
-      const summary = `Zadanie: ${value.title} · ${row.date}${input.dueDate ? ` · termin ${input.dueDate}` : ""}${input.priority && input.priority !== "P2" ? ` · ${input.priority}` : ""}`;
+        [value.title, value.date, extra.description, extra.priority, extra.dueDate])).rows[0];
+      const summary = `Zadanie: ${value.title} · ${row.date}${extra.dueDate ? ` · termin ${extra.dueDate}` : ""}${extra.priority !== "P2" ? ` · ${extra.priority}` : ""}`;
       return { summary, undo: { taskId: row.id, title: value.title }, data: { id: row.id, date: row.date } };
     },
     undo: async ({ taskId, title }) => {

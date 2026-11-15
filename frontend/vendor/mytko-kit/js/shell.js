@@ -57,6 +57,19 @@ export function appLinks({ current = appInfo().id, apps = MYTKO_APPS } = {}) {
     </nav>`;
 }
 
+// The same links as a Settings / Profile block (0.11.2): an icon and a heading like the other blocks, no separator —
+// for an app whose phone has no "more" sheet (Fitness). "" when there is no other app.
+export function appsBlock({ current = appInfo().id, apps = MYTKO_APPS } = {}) {
+  const others = otherApps(current, apps);
+  if (!others.length) return "";
+  return `<section class="settings-block">
+        <h2 class="settings-block__title">${icon("layers")}${escapeHtml(t("apps.title"))}</h2>
+        <nav class="mytko-apps mytko-apps--block" aria-label="${escapeHtml(t("apps.title"))}">
+          ${others.map(app => `<a class="nav-item mytko-apps__item" href="${escapeHtml(app.url)}" rel="noopener">${icon(app.icon)}<span>${escapeHtml(app.name)}</span></a>`).join("")}
+        </nav>
+      </section>`;
+}
+
 // views: [[name, view], …] in the main list; foot: [name, view] above the account (the settings / profile view).
 // avatar: HTML of the account's badge (default: initials on lime). apps (0.9.0): true, or appLinks' options — the
 // other Mytko apps under the views (default: none, as before).

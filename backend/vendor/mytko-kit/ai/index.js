@@ -98,11 +98,24 @@ function matches(schema, value) {
   return true;
 }
 
+// Pictures sent with the text (0.12.0): JPEG, PNG, WebP or GIF, base64, each at most MAX_IMAGE_BYTES (a phone photo
+// made small first), at most MAX_IMAGES. Anything else is refused before any request (code "rejected").
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_IMAGES = 4;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+function checkImages(images) {
+  if (!Array.isArray(images) || images.length > MAX_IMAGES) return false;
+  return images.every(image => image && IMAGE_TYPES.includes(image.mediaType) && typeof image.data === "string"
+    && /^[A-Za-z0-9+/]+={0,2}$/.test(image.data) && image.data.length * 0.75 <= MAX_IMAGE_BYTES);
+}
+
 // tool: { name, description, schema } (JSON Schema of the answer; with additionalProperties: false it is sent strict).
+// images: [{ mediaType, data }] pictures the text is about (e.g. a receipt); each provider gets them its own way.
 // effort: this call's own (anthropic), e.g. "low" for a quick classification.
-async function structured(ai, { system, content, tool, maxTokens = 4000, effort = null, fetchImpl = fetch }) {
+async function structured(ai, { system, content, tool, images = [], maxTokens = 4000, effort = null, fetchImpl = fetch }) {
   const provider = PROVIDERS[ai.provider || "anthropic"];
-  const { url, headers, body } = provider.request(ai, { system, content, tool, maxTokens, effort: effort || ai.effort || null });
+  if (!checkImages(images)) throw fail("rejected");
+  const { url, headers, body } = provider.request(ai, { system, content, tool, images, maxTokens, effort: effort || ai.effort || null });
   let response;
   try {
     response = await fetchImpl(url, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(body),
@@ -126,4 +139,17 @@ async function structured(ai, { system, content, tool, maxTokens = 4000, effort 
   return input;
 }
 
-module.exports = { loadAi, structured, matchesSchema: matches, AiError, AI_PROVIDERS: PROVIDERS, AI_MESSAGES: MESSAGES };
+// The models the provider offers for choosing ([{ id, label, cost: low | medium | high }]; none for an OpenAI-compatible
+// service, whose models differ per service: there AI_MODEL alone decides).
+function aiModels(ai) {
+  return (ai && PROVIDERS[ai.provider || "anthropic"]?.models) || [];
+}
+
+// ai with another model, when it is one of aiModels(ai) (e.g. the administrator's choice kept by the app); otherwise ai
+// as it is (the AI_MODEL setting or the provider's default).
+function withModel(ai, model) {
+  if (!ai || !model || model === ai.model || !aiModels(ai).some(item => item.id === model)) return ai;
+  return { ...ai, model };
+}
+
+module.exports = { loadAi, structured, aiModels, withModel, matchesSchema: matches, AI_IMAGE_TYPES: IMAGE_TYPES, AI_MAX_IMAGES: MAX_IMAGES, AI_MAX_IMAGE_BYTES: MAX_IMAGE_BYTES, AiError, AI_PROVIDERS: PROVIDERS, AI_MESSAGES: MESSAGES };

@@ -65,6 +65,7 @@ test("assistant: a private task of the owner, today by default; Cofnij deletes i
     assert.match(insert.sql, /'todo', \$4::text, \$5::date, next\.id, NULL/);
     assert.equal((await ctx.call("/run", { tool: "tasks.add_task", input: { title: "ab" } })).status, 400);
     assert.equal((await ctx.call("/run", { tool: "tasks.add_task", input: { title: "Coś", priority: "P9" } })).status, 400);
+    assert.equal((await ctx.call("/run", { tool: "tasks.add_task", input: { title: "Coś", dueDate: "2026-02-30" } })).status, 400, "a real day, like the form (not a 500 from Postgres)");
     assert.deepEqual(await ctx.call("/undo", { undo: added.body.undo }), { status: 200, body: { summary: "Cofnięto zadanie: Kupić olej" } });
     assert.match(queries.find(q => q.sql.startsWith("DELETE")).sql, /user_id IS NULL AND space_id IS NULL AND project_id IS NULL AND NOT completed/);
     assert.equal((await ctx.call("/undo", { undo: added.body.undo })).status, 409, "changed or gone: no second time");

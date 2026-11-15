@@ -100,7 +100,7 @@ export function pushBlockBody(state) {
   const prefs = effectivePrefs(state.categories, state.prefs);
   const rows = state.categories.map(category => `<label class="switch">
       <input type="checkbox" name="push-category" value="${escapeHtml(category.id)}"${prefs[category.id] ? " checked" : ""}>
-      <span class="switch__track"></span><span>${escapeHtml(categoryLabel(category.id))}</span></label>`).join("");
+      <span class="switch__track" aria-hidden="true"></span><span>${escapeHtml(categoryLabel(category.id))}</span></label>`).join("");
   return `${note("push.on")}
     ${rows ? `<div class="push-block__list">${rows}</div>` : ""}
     <div class="settings-block__buttons">

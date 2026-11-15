@@ -6,12 +6,16 @@ module.exports = {
   // no default: the model is chosen explicitly with AI_MODEL
   defaultModel: null,
 
-  request(ai, { system, content, tool }) {
+  request(ai, { system, content, tool, images = [] }) {
+    // pictures as data: URLs after the text (Chat Completions' image_url parts)
+    const user = images.length
+      ? [{ type: "text", text: content }, ...images.map(image => ({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.data}` } }))]
+      : content;
     return {
       url: `${ai.apiBase}/v1/chat/completions`,
       headers: { authorization: `Bearer ${ai.apiKey}` },
       // no token limit: the answer is one small function call, and limit parameters differ between models and services
-      body: { model: ai.model, messages: [{ role: "system", content: system }, { role: "user", content }],
+      body: { model: ai.model, messages: [{ role: "system", content: system }, { role: "user", content: user }],
         tools: [{ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.schema } }],
         tool_choice: { type: "function", function: { name: tool.name } } }
     };

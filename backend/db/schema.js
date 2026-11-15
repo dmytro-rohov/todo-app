@@ -7,7 +7,7 @@
 // no CHECK added to an existing table. Built-in rows (the Praca / Prywatne spaces) are created by the application.
 const { sql } = require("drizzle-orm");
 const {
-  pgTable, serial, bigserial, varchar, text, boolean, integer, bigint, date, timestamp, jsonb, index, uniqueIndex, check
+  pgTable, serial, bigserial, varchar, text, boolean, integer, bigint, date, timestamp, index, uniqueIndex, check
 } = require("drizzle-orm/pg-core");
 
 const timestamptz = name => timestamp(name, { withTimezone: true });
@@ -418,7 +418,7 @@ const pushSubscriptions = pgTable("push_subscriptions", {
   endpoint: text("endpoint").notNull(),
   p256dh: text("p256dh").notNull(),
   auth: text("auth").notNull(),
-  prefs: jsonb("prefs").default(sql`'{}'::jsonb`).notNull(),
+  prefs: text("prefs"),
   createdAt: timestamptz("created_at").defaultNow().notNull(),
   lastOkAt: timestamptz("last_ok_at"),
 }, (table) => [
