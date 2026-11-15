@@ -55,3 +55,5 @@ usual. The release then contains exactly that `main` plus the Session's own smal
 **Release 9** (Porządek in the new style, a project shows its space; no migration): see [RELEASE-9.md](RELEASE-9.md).
 
 **Release 10** (every account is its own assignee; migration 0013): see [RELEASE-10.md](RELEASE-10.md).
+
+**Release 11** (push notifications, app switcher, Mytko Kit 0.13.1; migration 0014): see [RELEASE-11.md](RELEASE-11.md).
