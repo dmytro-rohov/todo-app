@@ -85,7 +85,9 @@ test("assistant: a task as the app's form makes it (written today, the day said 
       "tasks.restore_task", "tasks.add_note", "tasks.add_subtask", "tasks.set_subtask"]);
     for (const tool of tools.tools) assert.deepEqual(Object.keys(tool), ["name", "description", "schema"], "what Home's planner reads");
     assert.deepEqual(Object.keys(tools.tools[0].schema.properties), ["title", "date", "dueDate", "priority", "description", "space", "project"], "the planner keeps sending the day said");
-    assert.deepEqual(tools.context, { today: "2026-11-12", spaces: ["Praca", "Prywatne", "Dom"], projects: [{ name: "Remont", space: "Dom" }], assignees: ["Ania"] });
+    const { tasks: contextTasks, ...names } = tools.context;
+    assert.deepEqual(names, { today: "2026-11-12", spaces: ["Praca", "Prywatne", "Dom"], projects: [{ name: "Remont", space: "Dom" }], assignees: ["Ania"] });
+    assert.ok(Array.isArray(contextTasks), "the tasks themselves, so the AI picks one by meaning and passes its id");
     const added = await ctx.call("/run", { tool: "tasks.add_task", input: { title: "Kupić olej", date: "2026-11-18", priority: "P1" } });
     assert.equal(added.status, 200, JSON.stringify(added.body));
     assert.equal(added.body.summary, "Zadanie: Kupić olej · 2026-11-18 · P1");

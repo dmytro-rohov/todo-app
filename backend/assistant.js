@@ -273,7 +273,9 @@ function createTasksAssistant({ pool, config, now = () => new Date() }) {
   };
 
   const taskField = { type: "string", minLength: 1, maxLength: 100,
-    description: "The task: its id from tasks.list, or its title or a part of it as the owner says it" };
+    description: "The task's id. Find the task the owner means in the context's tasks by MEANING, not spelling: numbers as digits "
+      + "or words (\"2 paszport\" is \"drugi paszport\"), other word order, other grammatical forms, small typos; pass its id. "
+      + "Only when no task in the context fits, the owner's words (matched by title); when several fit, ask which one." };
 
   const list = {
     name: "tasks.list",
@@ -533,15 +535,21 @@ function createTasksAssistant({ pool, config, now = () => new Date() }) {
 
   // what Home's AI needs to fill the tools in: today's date (Warsaw) and the names it may use for a space, a project or
   // an assignee (the owner's view)
+  // the tasks themselves (open first, then the ones done lately), so Home's AI finds the one the owner means by meaning
+  // and passes its id: "2 paszport" is the task "drugi paszport"
+  const CONTEXT_TASKS = 150;
+  const contextTasks = async () => (await taskRows(pool)).sort((a, b) => (a.status === "done") - (b.status === "done"))
+    .slice(0, CONTEXT_TASKS).map(row => ({ id: String(row.id), title: row.title, status: row.status, ...(row.dueDate ? { due: row.dueDate } : {}) }));
   const context = async () => {
-    const [spaces, projects, assignees] = await Promise.all([
+    const [spaces, projects, assignees, tasks] = await Promise.all([
       pool.query(`SELECT s.name FROM spaces s WHERE ${visibleSpace("s", "$1::integer")} ORDER BY s.position, s.id`, [null]),
       pool.query(`SELECT p.name, s.name AS space FROM projects p JOIN spaces s ON s.id = p.space_id
         WHERE p.archived_at IS NULL AND ${visibleProject("p", "$1::integer")} ORDER BY p.position, p.id`, [null]),
-      pool.query(`SELECT a.name FROM assignees a WHERE ${visibleAssignee("a", "$1::integer")} ORDER BY a.name, a.id`, [null])
+      pool.query(`SELECT a.name FROM assignees a WHERE ${visibleAssignee("a", "$1::integer")} ORDER BY a.name, a.id`, [null]),
+      contextTasks()
     ]);
     return { today: warsawDay(now()), spaces: spaces.rows.map(row => row.name),
-      projects: projects.rows.map(row => ({ name: row.name, space: row.space })), assignees: assignees.rows.map(row => row.name) };
+      projects: projects.rows.map(row => ({ name: row.name, space: row.space })), assignees: assignees.rows.map(row => row.name), tasks };
   };
 
   return kit.createAssistantConnector({ config: config.assistant, owner: async () => OWNER,
