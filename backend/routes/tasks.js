@@ -212,6 +212,46 @@ async function patchTask(pool, user, id, value, { workflowEnabled = true, check 
   });
 }
 
+// A new task as the app's POST /api/tasks makes it, from validateTask's value and validateTaskPatch's extras (domain):
+// placement (no space or project: the account's private space), labels, references, Workflow and the "created" entry
+// of its history. A refused write throws (writeErrorMessage).
+async function createTask(pool, user, value, domain, { workflowEnabled = true } = {}) {
+  const labelIds = domain.labelIds ? [...new Set([value.categoryId, ...domain.labelIds].filter(id => id !== null))] : null;
+  return withTransaction(pool, async client => {
+    await lockDestination(client, domain);
+    const spaces = await defaultSpaces(client, user);
+    await checkReferences(client, user, { ...domain, categoryId: value.categoryId });
+    // Without a space or a project a new task is private.
+    const placementInput = "spaceId" in domain || domain.projectId != null ? domain : { ...domain, spaceId: null };
+    const placement = await resolvePlacement(client, null, placementInput, spaces, user);
+    // Domain rules formerly enforced by a database trigger: status wins over completed, completed mirrors
+    // status, completed_at follows it, and a task without an explicit position gets its own id.
+    const status = value.completed ? "done" : (domain.status || "todo");
+    const inserted = await client.query(
+      `WITH next AS (SELECT nextval(pg_get_serial_sequence('tasks', 'id')) AS id)
+      INSERT INTO tasks
+      (id, title, completed, date, category_id, description, status, priority, due_date, position, completed_at, space_id, project_id,
+       assignee_id, review_requested_at, planned_at, client_id, meeting_id, user_id, mail_id)
+      SELECT next.id, $1::varchar, $2::boolean, $3::date, $4::integer, $5::text, $6::text, $7::text, $8::date,
+        COALESCE($9::bigint, next.id), CASE WHEN $2::boolean THEN now() ELSE NULL END, $10::integer, $11::integer,
+        $12::integer, CASE WHEN $13::boolean THEN now() ELSE NULL END, CASE WHEN $14::boolean THEN now() ELSE NULL END,
+        $15::integer, $16::integer, $17::integer, $18::integer
+      FROM next
+      RETURNING id`,
+      [value.title, status === "done", value.date, labelIds ? labelIds[0] ?? null : value.categoryId, domain.description || "",
+        status === "needs_review" ? "in_progress" : status === "planned" ? "todo" : status, domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null,
+        placement.spaceId ?? null, placement.projectId ?? null, domain.assigneeId ?? null, status === "needs_review", status === "planned",
+        domain.clientId ?? null, domain.meetingId ?? null, userId(user), domain.mailId ?? null]
+    );
+    const id = inserted.rows[0].id;
+    if (labelIds && labelIds.length > 1) await setLabels(client, id, labelIds);
+    if (domain.workflow === true) await setWorkflow(client, id, true, user.actor, { enabled: workflowEnabled });
+    const created = await loadTask(client, id);
+    await recordTaskChanges(client, id, taskChanges(null, created), user.actor);
+    return created;
+  });
+}
+
 module.exports = function createTasksRouter(pool, { settings = null } = {}) {
   // read before a transaction starts: the settings query takes its own pool connection
   const workflowOn = async () => (settings ? settings.workflowEnabled() : true);
@@ -271,42 +311,9 @@ module.exports = function createTasksRouter(pool, { settings = null } = {}) {
     const extraValidation = Object.keys(extras).length ? validateTaskPatch(extras) : { value: {} };
     if (extraValidation.error) return res.status(400).json({ message: extraValidation.error });
     const domain = extraValidation.value;
-    const labelIds = domain.labelIds ? [...new Set([value.categoryId, ...domain.labelIds].filter(id => id !== null))] : null;
     const workflowEnabled = domain.workflow === true ? await workflowOn() : true;
     try {
-      const task = await withTransaction(pool, async client => {
-        await lockDestination(client, domain);
-        const spaces = await defaultSpaces(client, req.user);
-        await checkReferences(client, req.user, { ...domain, categoryId: value.categoryId });
-        // Without a space or a project a new task is private.
-        const placementInput = "spaceId" in domain || domain.projectId != null ? domain : { ...domain, spaceId: null };
-        const placement = await resolvePlacement(client, null, placementInput, spaces, req.user);
-        // Domain rules formerly enforced by a database trigger: status wins over completed, completed mirrors
-        // status, completed_at follows it, and a task without an explicit position gets its own id.
-        const status = value.completed ? "done" : (domain.status || "todo");
-        const inserted = await client.query(
-          `WITH next AS (SELECT nextval(pg_get_serial_sequence('tasks', 'id')) AS id)
-          INSERT INTO tasks
-          (id, title, completed, date, category_id, description, status, priority, due_date, position, completed_at, space_id, project_id,
-           assignee_id, review_requested_at, planned_at, client_id, meeting_id, user_id, mail_id)
-          SELECT next.id, $1::varchar, $2::boolean, $3::date, $4::integer, $5::text, $6::text, $7::text, $8::date,
-            COALESCE($9::bigint, next.id), CASE WHEN $2::boolean THEN now() ELSE NULL END, $10::integer, $11::integer,
-            $12::integer, CASE WHEN $13::boolean THEN now() ELSE NULL END, CASE WHEN $14::boolean THEN now() ELSE NULL END,
-            $15::integer, $16::integer, $17::integer, $18::integer
-          FROM next
-          RETURNING id`,
-          [value.title, status === "done", value.date, labelIds ? labelIds[0] ?? null : value.categoryId, domain.description || "",
-            status === "needs_review" ? "in_progress" : status === "planned" ? "todo" : status, domain.priority || "P2", domain.dueDate ?? null, domain.position ?? null,
-            placement.spaceId ?? null, placement.projectId ?? null, domain.assigneeId ?? null, status === "needs_review", status === "planned",
-            domain.clientId ?? null, domain.meetingId ?? null, userId(req.user), domain.mailId ?? null]
-        );
-        const id = inserted.rows[0].id;
-        if (labelIds && labelIds.length > 1) await setLabels(client, id, labelIds);
-        if (domain.workflow === true) await setWorkflow(client, id, true, req.user.actor, { enabled: workflowEnabled });
-        const created = await loadTask(client, id);
-        await recordTaskChanges(client, id, taskChanges(null, created), req.user.actor);
-        return created;
-      });
+      const task = await createTask(pool, req.user, value, domain, { workflowEnabled });
       res.status(201).json(task);
     } catch (dbError) {
       return sendWriteError(res, dbError);
@@ -423,3 +430,4 @@ module.exports.loadTask = loadTask;
 module.exports.stopTimerUnlessInProgress = stopTimerUnlessInProgress;
 module.exports.patchTask = patchTask;
 module.exports.writeErrorMessage = writeErrorMessage;
+module.exports.createTask = createTask;

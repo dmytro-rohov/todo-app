@@ -3,7 +3,8 @@
 // acts as the owner (user id NULL, access.js) and every change goes through the app's own code (routes/tasks.js,
 // ordering.js, routes/archive.js, routes/task-details.js), so the rules, the history and the timer stay the app's.
 //
-//   tasks.add_task      { title, date?, dueDate?, priority?, description?, space?, project? } → a task in ToDo
+//   tasks.add_task      { title, date?, dueDate?, priority?, description?, space?, project? } → a task in ToDo, the day
+//                       said as its deadline (the app's calendar), as the app's own form makes it
 //   tasks.today         {} → the owner's open tasks for today (date or due date today or earlier)
 //   tasks.list          { date? | from?, to?, status?, space?, project?, query? } → tasks with their ids
 //   tasks.set_status    { task, status } → the task in another board column (the end of it, as the app's status menu)
@@ -25,7 +26,7 @@ const { validateTaskPatch } = require("./task-domain");
 const { STATUSES, statusSql, statusAssignmentsSql } = require("./task-status");
 const { taskChanges, recordTaskChanges } = require("./task-history");
 const { moveTask, boardRows, boardToken } = require("./ordering");
-const { loadTask, patchTask, writeErrorMessage } = require("./routes/tasks");
+const { loadTask, createTask, patchTask, writeErrorMessage } = require("./routes/tasks");
 const { restoreTask } = require("./routes/archive");
 const { ensureSelf } = require("./routes/assignees");
 const details = require("./routes/task-details");
@@ -207,44 +208,43 @@ async function moveOnBoard(pool, taskId, status, { expectStatus = null, beforeId
 function createTasksAssistant({ pool, config, now = () => new Date() }) {
   const addTask = {
     name: "tasks.add_task",
-    description: "Adds a private task of the owner to do, e.g. \"kup olej jutro\" or \"zadzwoń do Ani w piątek, pilne\".",
+    description: "Adds a private task of the owner to do, e.g. \"kup olej jutro\" or \"zadzwoń do Ani w piątek, pilne\". "
+      + "A day the owner names becomes the task's deadline (Termin), as in the app's own form, so it shows in the app's calendar on that day.",
     schema: {
       type: "object", additionalProperties: false, required: ["title"],
       properties: {
         title: { type: "string", minLength: 3, maxLength: 100, description: "What to do, short (3–100 characters), in the owner's words" },
-        date: { type: "string", pattern: DAY, description: "YYYY-MM-DD: the day to do it; today when left out" },
-        dueDate: { type: "string", pattern: DAY, description: "YYYY-MM-DD: a deadline, only when the owner names one" },
+        date: { type: "string", pattern: DAY, description: "YYYY-MM-DD: the day the owner names (\"jutro\", \"na środę\", \"20 listopada\"); left out when no day is said" },
+        dueDate: { type: "string", pattern: DAY, description: "YYYY-MM-DD: a deadline the owner names as one (\"do piątku\"); wins over date when both are said" },
         priority: { type: "string", enum: ["P0", "P1", "P2", "P3"], description: "P0 urgent … P3 someday; P2 when not said" },
         description: { type: "string", maxLength: 2000, description: "More detail, only when given" },
         space: { type: "string", maxLength: 50, description: "A space's name from the context, only when the owner names one; left out: private" },
         project: { type: "string", maxLength: 80, description: "A project's name from the context, only when the owner names one (its space comes with it)" }
       }
     },
+    // the app's own create (routes/tasks.js createTask) as its form sends it: written today, the day said as the deadline
+    // (the calendar shows tasks on their deadline), the "created" history entry
     run: async input => {
-      const { error, value } = validateTask({ title: input.title, date: input.date || warsawDay(now()) });
+      const { error, value } = validateTask({ title: input.title, date: warsawDay(now()) });
       if (error) throw new kit.AssistantError(error);
-      // the deadline, priority and description pass the same checks as the app's own form (routes/tasks.js): a real
-      // day, not a 500 from Postgres for 2026-02-30
-      const extras = Object.fromEntries(["dueDate", "priority", "description"].filter(key => input[key] !== undefined).map(key => [key, input[key]]));
+      // the day, priority and description pass the same checks as the app's own form: a real day, not a 500 from
+      // Postgres for 2026-02-30
+      const extras = { dueDate: input.dueDate ?? input.date, priority: input.priority, description: input.description };
+      for (const key of Object.keys(extras)) if (extras[key] === undefined) delete extras[key];
       const checked = Object.keys(extras).length ? validateTaskPatch(extras) : { value: {} };
       if (checked.error) throw new kit.AssistantError(checked.error);
-      const extra = { dueDate: checked.value.dueDate ?? null, priority: checked.value.priority ?? "P2", description: checked.value.description ?? "" };
-      const { row, place } = await kit.withTransaction(pool, async db => {
-        const place = await destination(db, input);
-        // the space (and so its members) held before the task, as the app's own writes do (routes/tasks.js)
-        if (place.spaceId !== null) await db.query("SELECT 1 FROM spaces WHERE id = $1 FOR SHARE", [place.spaceId]);
-        const row = (await db.query(
-          `WITH next AS (SELECT nextval(pg_get_serial_sequence('tasks', 'id')) AS id)
-           INSERT INTO tasks (id, title, completed, date, description, status, priority, due_date, position, user_id, space_id, project_id)
-           SELECT next.id, $1::varchar, false, $2::date, $3::text, 'todo', $4::text, $5::date, next.id, NULL, $6::integer, $7::integer FROM next
-           RETURNING id, to_char(date, 'YYYY-MM-DD') AS date`,
-          [value.title, value.date, extra.description, extra.priority, extra.dueDate, place.spaceId, place.projectId])).rows[0];
-        return { row, place };
-      });
+      const place = await destination(pool, input);
+      const domain = { ...checked.value, spaceId: place.spaceId, ...(place.projectId !== null ? { projectId: place.projectId } : {}) };
+      let task;
+      try {
+        task = await createTask(pool, OWNER, value, domain);
+      } catch (failure) {
+        throw refusal(failure);
+      }
       const where = place.label ? ` · ${place.label}` : "";
-      const summary = `Zadanie: ${value.title} · ${row.date}${where}${extra.dueDate ? ` · termin ${extra.dueDate}` : ""}${extra.priority !== "P2" ? ` · ${extra.priority}` : ""}`;
-      return { summary, undo: { taskId: row.id, title: value.title, spaceId: place.spaceId, projectId: place.projectId },
-        data: { id: row.id, date: row.date, space: place.space, project: place.project } };
+      const summary = `Zadanie: ${task.title}${task.dueDate ? ` · ${task.dueDate}` : ""}${where}${task.priority !== "P2" ? ` · ${task.priority}` : ""}`;
+      return { summary, undo: { taskId: task.id, title: task.title, spaceId: task.spaceId, projectId: task.projectId },
+        data: { id: task.id, date: task.date, dueDate: task.dueDate, space: place.space, project: place.project } };
     },
     undo: async ({ taskId, title, spaceId = null, projectId = null }) => {
       const deleted = await pool.query(

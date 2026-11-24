@@ -72,6 +72,23 @@ describe("Mytko Assistant: task tools", { skip, concurrency: false }, () => {
   const newTask = async (title, extra = {}) => (await call("/api/tasks", "POST", { title, date: "2026-11-12", ...extra })).body;
   const column = async status => (await call("/api/tasks")).body.filter(t => t.status === status).sort((a, b) => Number(a.position) - Number(b.position) || a.id - b.id).map(t => t.id);
 
+  test("tasks.add_task: the same task as the app's form makes for that day (its deadline, the calendar's day), with its \"created\" entry; Cofnij deletes it", async () => {
+    const space = (await call("/api/spaces", "POST", { name: "Dom", color: "#16a34a" })).body;
+    await call("/api/projects", "POST", { name: "Remont", color: "#16a34a", spaceId: space.id });
+    const form = await newTask("Kupić farbę", { dueDate: "2026-11-18", priority: "P1", spaceId: space.id });
+    const said = await run("tasks.add_task", { title: "Kupić olej", date: "2026-11-18", priority: "P1", space: "dom" });
+    assert.equal(said.status, 200, JSON.stringify(said.body));
+    assert.equal(said.body.summary, "Zadanie: Kupić olej · 2026-11-18 · Dom · P1");
+    const voice = await task(said.body.data.id);
+    for (const key of ["date", "dueDate", "status", "priority", "spaceId", "projectId", "completed", "description"]) assert.deepEqual(voice[key], form[key], key);
+    const history = (await call(`/api/tasks/${voice.id}/history`)).body;
+    assert.deepEqual(history.map(h => [h.field, h.newValue, h.actor]), [["created", "Kupić olej", "owner"]]);
+    assert.deepEqual(await undo(said.body.undo), { status: 200, body: { summary: "Cofnięto zadanie: Kupić olej" } });
+    assert.equal(await task(voice.id), undefined);
+    const plain = await run("tasks.add_task", { title: "Kupić chleb" });
+    assert.deepEqual([(await task(plain.body.data.id)).dueDate, (await task(plain.body.data.id)).date], [null, form.date], "no day said: none, as the form left empty");
+  });
+
   test("tasks.list: open tasks with ids, a day, a range, a column, a project, words", async () => {
     const space = (await call("/api/spaces", "POST", { name: "Dom", color: "#16a34a" })).body;
     const project = (await call("/api/projects", "POST", { name: "Remont", color: "#16a34a", spaceId: space.id })).body;
