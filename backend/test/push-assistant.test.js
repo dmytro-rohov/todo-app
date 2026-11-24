@@ -57,6 +57,7 @@ test("assistant: a task in the owner's private space, today by default; a named 
     if (sql.startsWith("SELECT p.id, p.name")) return { rows: [{ id: 9, name: "Remont", spaceId: 3, spaceName: "Dom" }] };
     if (sql.startsWith("SELECT s.name FROM spaces s")) return { rows: [{ name: "Praca" }, { name: "Prywatne" }, { name: "Dom" }] };
     if (sql.startsWith("SELECT p.name, s.name AS space")) return { rows: [{ name: "Remont", space: "Dom" }] };
+    if (sql.startsWith("SELECT a.name FROM assignees a")) return { rows: [{ name: "Ania" }] };
     if (sql.includes("INSERT INTO tasks")) return { rows: [{ id: 40 + queries.filter(q => q.sql.includes("INSERT INTO tasks")).length, date: params[1] }] };
     if (sql.startsWith("DELETE FROM tasks")) return { rowCount: queries.filter(q => q.sql.startsWith("DELETE")).length === 1 ? 1 : 0 };
     if (sql.includes("FROM tasks t")) return { rows: [{ title: "Olej", priority: "P1" }, { title: "Ania", priority: "P2" }] };
@@ -67,8 +68,10 @@ test("assistant: a task in the owner's private space, today by default; a named 
   const ctx = await assistant(pool);
   try {
     const tools = (await ctx.call("/tools")).body;
-    assert.deepEqual(tools.tools.map(tool => tool.name), ["tasks.add_task", "tasks.today"]);
-    assert.deepEqual(tools.context, { spaces: ["Praca", "Prywatne", "Dom"], projects: [{ name: "Remont", space: "Dom" }] });
+    assert.deepEqual(tools.tools.map(tool => tool.name), ["tasks.add_task", "tasks.today", "tasks.list", "tasks.set_status", "tasks.update_task",
+      "tasks.restore_task", "tasks.add_note", "tasks.add_subtask", "tasks.set_subtask"]);
+    for (const tool of tools.tools) assert.deepEqual(Object.keys(tool), ["name", "description", "schema"], "what Home's planner reads");
+    assert.deepEqual(tools.context, { today: "2026-11-12", spaces: ["Praca", "Prywatne", "Dom"], projects: [{ name: "Remont", space: "Dom" }], assignees: ["Ania"] });
     const added = await ctx.call("/run", { tool: "tasks.add_task", input: { title: "Kupić olej", dueDate: "2026-11-14", priority: "P1" } });
     assert.equal(added.status, 200, JSON.stringify(added.body));
     assert.equal(added.body.summary, "Zadanie: Kupić olej · 2026-11-12 · termin 2026-11-14 · P1");
