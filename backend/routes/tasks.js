@@ -147,18 +147,69 @@ async function setLabels(db, taskId, labelIds) {
   }
 }
 
-function sendWriteError(res, error) {
-  if (error instanceof TaskInputError) return res.status(400).json({ message: error.message });
+// The message of a write refused by the task's rules or a missing reference (a 400), or null for any other error.
+function writeErrorMessage(error) {
+  if (error instanceof TaskInputError) return error.message;
   if (error.code === FOREIGN_KEY_VIOLATION) {
-    const message = /assignee/.test(error.constraint || "") ? "Assignee does not exist"
+    return /assignee/.test(error.constraint || "") ? "Assignee does not exist"
       : /client/.test(error.constraint || "") ? "Client does not exist"
       : /meeting/.test(error.constraint || "") ? "Meeting does not exist"
       : /mail/.test(error.constraint || "") ? "E-mail does not exist"
       : /project/.test(error.constraint || "") ? "Project does not exist"
       : /space/.test(error.constraint || "") ? "Space does not exist" : "Category does not exist";
-    return res.status(400).json({ message });
   }
+  return null;
+}
+
+function sendWriteError(res, error) {
+  const message = writeErrorMessage(error);
+  if (message !== null) return res.status(400).json({ message });
   throw error;
+}
+
+// A partial update of a task (validateTaskPatch's value), as the app's PATCH /api/tasks/:id makes it: placement, labels,
+// status, timer, Workflow, Claude's routing and the history. Null when the account cannot see the task; a refused
+// write throws (writeErrorMessage). `check(before)` sees the task as locked before the change and may throw to refuse it
+// (Mytko Assistant's "Cofnij" changes a task back only while it is as the assistant left it).
+async function patchTask(pool, user, id, value, { workflowEnabled = true, check = null } = {}) {
+  return withTransaction(pool, async client => {
+    await lockDestination(client, value);
+    if (!(await canSeeTask(client, user, id))) return null;
+    const before = await loadTask(client, id, { lock: true });
+    if (!before) return null;
+    if (check) check(before);
+    await checkReferences(client, user, value);
+    const { spaceId, projectId, labelIds, workflow, ...fields } = value;
+    if ("spaceId" in value || "projectId" in value) {
+      const creator = (await client.query("SELECT user_id FROM tasks WHERE id = $1", [id])).rows[0].user_id;
+      Object.assign(fields, await resolvePlacement(client, before, value, await defaultSpaces(client, user), user, creator));
+    }
+    const { status, ...plain } = fields;
+    const columns = { title: "title", description: "description", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", spaceId: "space_id", projectId: "project_id", assigneeId: "assignee_id", clientId: "client_id", meetingId: "meeting_id", mailId: "mail_id" };
+    const params = [];
+    const assignments = Object.entries(plain).map(([key, val]) => {
+      params.push(val); return `${columns[key]} = $${params.length}`;
+    });
+    if (status !== undefined) {
+      params.push(status);
+      assignments.push(...statusAssignmentsSql(`$${params.length}`));
+    }
+    params.push(id);
+    await client.query(`UPDATE tasks SET ${[...assignments, "updated_at = now()"].join(", ")} WHERE id = $${params.length}`, params);
+    if (labelIds) {
+      await setLabels(client, id, labelIds);
+    } else if ("categoryId" in value && value.categoryId !== null) {
+      // The new primary label is no longer an additional one.
+      await client.query("DELETE FROM task_labels WHERE task_id = $1 AND category_id = $2", [id, value.categoryId]);
+    }
+    if (status !== undefined) await stopTimerUnlessInProgress(client, id, status);
+    if (workflow !== undefined) await setWorkflow(client, id, workflow, user.actor, { enabled: workflowEnabled });
+    // a new title or description is looked at by Claude's routing again
+    if ("title" in plain || "description" in plain) await client.query("UPDATE tasks SET ai_checked_at = NULL, ai_coding = NULL, ai_reason = NULL WHERE id = $1", [id]);
+    const after = await loadTask(client, id);
+    await recordTaskChanges(client, id, taskChanges(before, after), user.actor);
+    return after;
+  });
 }
 
 module.exports = function createTasksRouter(pool, { settings = null } = {}) {
@@ -297,43 +348,7 @@ module.exports = function createTasksRouter(pool, { settings = null } = {}) {
     if (error) return res.status(400).json({ message: error });
     const workflowEnabled = value.workflow === true ? await workflowOn() : true;
     try {
-      const task = await withTransaction(pool, async client => {
-        await lockDestination(client, value);
-        if (!(await canSeeTask(client, req.user, id))) return null;
-        const before = await loadTask(client, id, { lock: true });
-        if (!before) return null;
-        await checkReferences(client, req.user, value);
-        const { spaceId, projectId, labelIds, workflow, ...fields } = value;
-        if ("spaceId" in value || "projectId" in value) {
-          const creator = (await client.query("SELECT user_id FROM tasks WHERE id = $1", [id])).rows[0].user_id;
-          Object.assign(fields, await resolvePlacement(client, before, value, await defaultSpaces(client, req.user), req.user, creator));
-        }
-        const { status, ...plain } = fields;
-        const columns = { title: "title", description: "description", priority: "priority", categoryId: "category_id", dueDate: "due_date", position: "position", spaceId: "space_id", projectId: "project_id", assigneeId: "assignee_id", clientId: "client_id", meetingId: "meeting_id", mailId: "mail_id" };
-        const params = [];
-        const assignments = Object.entries(plain).map(([key, val]) => {
-          params.push(val); return `${columns[key]} = $${params.length}`;
-        });
-        if (status !== undefined) {
-          params.push(status);
-          assignments.push(...statusAssignmentsSql(`$${params.length}`));
-        }
-        params.push(id);
-        await client.query(`UPDATE tasks SET ${[...assignments, "updated_at = now()"].join(", ")} WHERE id = $${params.length}`, params);
-        if (labelIds) {
-          await setLabels(client, id, labelIds);
-        } else if ("categoryId" in value && value.categoryId !== null) {
-          // The new primary label is no longer an additional one.
-          await client.query("DELETE FROM task_labels WHERE task_id = $1 AND category_id = $2", [id, value.categoryId]);
-        }
-        if (status !== undefined) await stopTimerUnlessInProgress(client, id, status);
-        if (workflow !== undefined) await setWorkflow(client, id, workflow, req.user.actor, { enabled: workflowEnabled });
-        // a new title or description is looked at by Claude's routing again
-        if ("title" in plain || "description" in plain) await client.query("UPDATE tasks SET ai_checked_at = NULL, ai_coding = NULL, ai_reason = NULL WHERE id = $1", [id]);
-        const after = await loadTask(client, id);
-        await recordTaskChanges(client, id, taskChanges(before, after), req.user.actor);
-        return after;
-      });
+      const task = await patchTask(pool, req.user, id, value, { workflowEnabled });
       if (!task) return res.status(404).json({ message: "Task not found" });
       return res.json(task);
     } catch (error) {
@@ -406,3 +421,5 @@ module.exports.TASK_COLUMNS = TASK_COLUMNS;
 module.exports.setWorkflow = setWorkflow;
 module.exports.loadTask = loadTask;
 module.exports.stopTimerUnlessInProgress = stopTimerUnlessInProgress;
+module.exports.patchTask = patchTask;
+module.exports.writeErrorMessage = writeErrorMessage;

@@ -9,6 +9,24 @@ const { TASK_COLUMNS, loadTask } = require("./tasks");
 const { userId, canSeeTask, visibleTask } = require("../access");
 const { PRIVATE_SPACES } = require("../spaces");
 
+// An archived task back to the board as an open task at the end of ToDo; null when the account cannot see it or it is
+// not archived. `check(before)` sees the task as locked before the change and may throw to refuse it.
+async function restoreTask(pool, user, id, { check = null } = {}) {
+  return withTransaction(pool, async client => {
+    if (!(await canSeeTask(client, user, id))) return null;
+    const before = await loadTask(client, id, { lock: true });
+    if (!before || !before.archivedAt) return null;
+    if (check) check(before);
+    await client.query(
+      `UPDATE tasks SET ${statusAssignmentsSql("$1").join(", ")}, archived_at = NULL, updated_at = now(),
+         position = (SELECT COALESCE(MAX(position) + 1, 0) FROM tasks WHERE archived_at IS NULL AND status = 'todo')
+       WHERE id = $2`, ["todo", id]);
+    const after = await loadTask(client, id);
+    await recordTaskChanges(client, id, taskChanges(before, after), user.actor);
+    return after;
+  });
+}
+
 module.exports = function createArchiveRouter(pool, settings) {
   const router = express.Router();
 
@@ -29,21 +47,11 @@ module.exports = function createArchiveRouter(pool, settings) {
   router.post("/:id/restore", async (req, res) => {
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ message: "Invalid task id" });
-    const task = await withTransaction(pool, async client => {
-      if (!(await canSeeTask(client, req.user, id))) return null;
-      const before = await loadTask(client, id, { lock: true });
-      if (!before || !before.archivedAt) return null;
-      await client.query(
-        `UPDATE tasks SET ${statusAssignmentsSql("$1").join(", ")}, archived_at = NULL, updated_at = now(),
-           position = (SELECT COALESCE(MAX(position) + 1, 0) FROM tasks WHERE archived_at IS NULL AND status = 'todo')
-         WHERE id = $2`, ["todo", id]);
-      const after = await loadTask(client, id);
-      await recordTaskChanges(client, id, taskChanges(before, after), req.user.actor);
-      return after;
-    });
+    const task = await restoreTask(pool, req.user, id);
     if (!task) return res.status(404).json({ message: "Task not found" });
     res.json(task);
   });
 
   return router;
 };
+module.exports.restoreTask = restoreTask;

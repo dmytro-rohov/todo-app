@@ -19,6 +19,52 @@ function isBody(data) {
   return data !== null && typeof data === "object" && !Array.isArray(data);
 }
 
+const isNote = body => validateText(body, { max: MAX_NOTE });
+const isSubtaskTitle = title => validateText(title, { max: MAX_SUBTASK_TITLE });
+
+// The writes below take a task the account can see (checked by the caller) and an input already checked.
+async function addNote(db, taskId, body) {
+  return (await db.query(`INSERT INTO task_notes (task_id, body) VALUES ($1, $2) RETURNING ${NOTE_COLUMNS}`, [taskId, body.trim()])).rows[0];
+}
+
+// The new subtask at the end of the list, or null when the task has MAX_SUBTASKS already.
+async function addSubtask(db, taskId, title) {
+  const result = await db.query(
+    `INSERT INTO task_subtasks (task_id, title, position)
+     SELECT $1::integer, $2::varchar, COALESCE(MAX(position) + 1, 0) FROM task_subtasks WHERE task_id = $1
+     HAVING COUNT(*) < ${MAX_SUBTASKS}
+     RETURNING ${SUBTASK_COLUMNS}`, [taskId, title.trim()]);
+  return result.rows[0] || null;
+}
+
+function isSubtaskPatch(body) {
+  const keys = isBody(body) ? Object.keys(body) : [];
+  return !(!keys.length || keys.some(key => !["title", "done", "position"].includes(key)) ||
+    ("title" in body && !isSubtaskTitle(body.title)) ||
+    ("done" in body && typeof body.done !== "boolean") ||
+    ("position" in body && (!Number.isSafeInteger(body.position) || body.position < 0 || body.position > 2147483647)));
+}
+
+// The subtask as changed, or null when the task has no such subtask. `ifDone` (true / false) changes it only while it is
+// (not) done: Mytko Assistant's "Cofnij" undoes a tick only while the subtask is still as the assistant left it.
+async function updateSubtask(db, taskId, id, body, { ifDone = null } = {}) {
+  const params = [];
+  const assignments = [];
+  if ("title" in body) { params.push(body.title.trim()); assignments.push(`title = $${params.length}`); }
+  if ("position" in body) { params.push(body.position); assignments.push(`position = $${params.length}`); }
+  if ("done" in body) {
+    params.push(body.done);
+    assignments.push(`done = $${params.length}`,
+      body.done ? "completed_at = COALESCE(completed_at, now())" : "completed_at = NULL");
+  }
+  params.push(id, taskId);
+  const condition = typeof ifDone === "boolean" ? ` AND done = ${ifDone}` : "";
+  const result = await db.query(
+    `UPDATE task_subtasks SET ${assignments.join(", ")} WHERE id = $${params.length - 1} AND task_id = $${params.length}${condition} RETURNING ${SUBTASK_COLUMNS}`,
+    params);
+  return result.rows[0] || null;
+}
+
 module.exports = function createTaskDetailsRouter(pool) {
   const router = express.Router();
 
@@ -84,16 +130,14 @@ module.exports = function createTaskDetailsRouter(pool) {
   });
 
   router.post("/:id/notes", async (req, res) => {
-    if (!isBody(req.body) || !validateText(req.body.body, { max: MAX_NOTE })) return res.status(400).json({ message: "Invalid note" });
-    const result = await pool.query(
-      `INSERT INTO task_notes (task_id, body) VALUES ($1, $2) RETURNING ${NOTE_COLUMNS}`, [req.taskId, req.body.body.trim()]);
-    res.status(201).json(result.rows[0]);
+    if (!isBody(req.body) || !isNote(req.body.body)) return res.status(400).json({ message: "Invalid note" });
+    res.status(201).json(await addNote(pool, req.taskId, req.body.body));
   });
 
   router.patch("/:id/notes/:childId", async (req, res) => {
     const id = childId(req, res);
     if (id === null) return;
-    if (!isBody(req.body) || !validateText(req.body.body, { max: MAX_NOTE })) return res.status(400).json({ message: "Invalid note" });
+    if (!isBody(req.body) || !isNote(req.body.body)) return res.status(400).json({ message: "Invalid note" });
     const result = await pool.query(
       `UPDATE task_notes SET body = $1, updated_at = now() WHERE id = $2 AND task_id = $3 RETURNING ${NOTE_COLUMNS}`,
       [req.body.body.trim(), id, req.taskId]);
@@ -117,42 +161,19 @@ module.exports = function createTaskDetailsRouter(pool) {
   });
 
   router.post("/:id/subtasks", async (req, res) => {
-    if (!isBody(req.body) || !validateText(req.body.title, { max: MAX_SUBTASK_TITLE })) return res.status(400).json({ message: "Invalid subtask" });
-    const result = await pool.query(
-      `INSERT INTO task_subtasks (task_id, title, position)
-       SELECT $1::integer, $2::varchar, COALESCE(MAX(position) + 1, 0) FROM task_subtasks WHERE task_id = $1
-       HAVING COUNT(*) < ${MAX_SUBTASKS}
-       RETURNING ${SUBTASK_COLUMNS}`, [req.taskId, req.body.title.trim()]);
-    if (!result.rowCount) return res.status(409).json({ message: "Too many subtasks" });
-    res.status(201).json(result.rows[0]);
+    if (!isBody(req.body) || !isSubtaskTitle(req.body.title)) return res.status(400).json({ message: "Invalid subtask" });
+    const subtask = await addSubtask(pool, req.taskId, req.body.title);
+    if (!subtask) return res.status(409).json({ message: "Too many subtasks" });
+    res.status(201).json(subtask);
   });
 
   router.patch("/:id/subtasks/:childId", async (req, res) => {
     const id = childId(req, res);
     if (id === null) return;
-    const body = req.body;
-    const keys = isBody(body) ? Object.keys(body) : [];
-    if (!keys.length || keys.some(key => !["title", "done", "position"].includes(key)) ||
-      ("title" in body && !validateText(body.title, { max: MAX_SUBTASK_TITLE })) ||
-      ("done" in body && typeof body.done !== "boolean") ||
-      ("position" in body && (!Number.isSafeInteger(body.position) || body.position < 0 || body.position > 2147483647))) {
-      return res.status(400).json({ message: "Invalid subtask" });
-    }
-    const params = [];
-    const assignments = [];
-    if ("title" in body) { params.push(body.title.trim()); assignments.push(`title = $${params.length}`); }
-    if ("position" in body) { params.push(body.position); assignments.push(`position = $${params.length}`); }
-    if ("done" in body) {
-      params.push(body.done);
-      assignments.push(`done = $${params.length}`,
-        body.done ? "completed_at = COALESCE(completed_at, now())" : "completed_at = NULL");
-    }
-    params.push(id, req.taskId);
-    const result = await pool.query(
-      `UPDATE task_subtasks SET ${assignments.join(", ")} WHERE id = $${params.length - 1} AND task_id = $${params.length} RETURNING ${SUBTASK_COLUMNS}`,
-      params);
-    if (!result.rowCount) return res.status(404).json({ message: "Subtask not found" });
-    res.json(result.rows[0]);
+    if (!isSubtaskPatch(req.body)) return res.status(400).json({ message: "Invalid subtask" });
+    const subtask = await updateSubtask(pool, req.taskId, id, req.body);
+    if (!subtask) return res.status(404).json({ message: "Subtask not found" });
+    res.json(subtask);
   });
 
   router.delete("/:id/subtasks/:childId", async (req, res) => {
@@ -165,3 +186,4 @@ module.exports = function createTaskDetailsRouter(pool) {
 
   return router;
 };
+Object.assign(module.exports, { MAX_NOTE, MAX_SUBTASK_TITLE, SUBTASK_COLUMNS, isNote, isSubtaskTitle, addNote, addSubtask, updateSubtask });
