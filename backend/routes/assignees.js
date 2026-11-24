@@ -102,3 +102,4 @@ module.exports = function createAssigneesRouter(pool) {
 
   return router;
 };
+module.exports.ensureSelf = ensureSelf;

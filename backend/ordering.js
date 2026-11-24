@@ -11,6 +11,12 @@ function validateMove(body) {
        new Set(body.expected.map(t => Number(t.id))).size === body.expected.length));
 }
 // The board (and its concurrency token) is the account's own view: its tasks and those in shared spaces.
+async function boardRows(db, user = null) {
+  return (await db.query(`SELECT id, ${statusSql()} AS status, position FROM tasks WHERE archived_at IS NULL AND ${visibleTask('tasks', '$1::integer')} ORDER BY position, id`, [userId(user)])).rows;
+}
+const canonical = list => JSON.stringify(list.map(t => [Number(t.id), t.status, Number(t.position)]).sort((a,b)=>a[0]-b[0]));
+// The `expected` token of a move made on the board as read by boardRows (the board's own token: logic.js boardCanonical).
+const boardToken = rows => crypto.createHash('sha256').update(canonical(rows)).digest('hex');
 async function moveTask(pool, body, user = null) {
   if (!validateMove(body)) return { status: 400, message: 'Invalid move' };
   const client = await pool.connect();
@@ -18,12 +24,9 @@ async function moveTask(pool, body, user = null) {
     await client.query('BEGIN');
     // Conflicts with all concurrent INSERT/UPDATE/DELETE writers, not just moves.
     await client.query('LOCK TABLE tasks IN SHARE ROW EXCLUSIVE MODE');
-    const { rows } = await client.query(`SELECT id, ${statusSql()} AS status, position FROM tasks WHERE archived_at IS NULL AND ${visibleTask('tasks', '$1::integer')} ORDER BY position, id`, [userId(user)]);
-    const canonical = list => JSON.stringify(list.map(t => [Number(t.id), t.status, Number(t.position)]).sort((a,b)=>a[0]-b[0]));
-    const expected = typeof body.expected === 'string'
-      ? crypto.createHash('sha256').update(canonical(rows)).digest('hex')
-      : canonical(body.expected);
-    const currentToken = crypto.createHash('sha256').update(canonical(rows)).digest('hex');
+    const rows = await boardRows(client, user);
+    const expected = typeof body.expected === 'string' ? boardToken(rows) : canonical(body.expected);
+    const currentToken = boardToken(rows);
     if (typeof body.expected === 'string' ? body.expected !== currentToken : expected !== canonical(rows)) { await client.query('ROLLBACK'); return { status: 409, message: 'Board changed; refresh and retry' }; }
     const task = rows.find(t=>t.id===Number(body.id));
     if (!task || Number(body.beforeId)===task.id) { await client.query('ROLLBACK'); return { status: 400, message: 'Invalid move target' }; }
@@ -52,4 +55,4 @@ async function moveTask(pool, body, user = null) {
   } catch(error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }
 }
-module.exports = { moveTask, validateMove };
+module.exports = { moveTask, validateMove, boardRows, boardToken };
